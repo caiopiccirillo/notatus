@@ -171,8 +171,8 @@ mod gpui_shell {
         WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowOptions, canvas, div,
         point, px, rgb, size,
     };
+    use gpui_component::{Root, TitleBar};
 
-    const CLIENT_TITLEBAR_HEIGHT: Pixels = px(36.0);
     const CLIENT_RESIZE_EDGE: Pixels = px(8.0);
 
     struct NotatusWindow {
@@ -186,32 +186,10 @@ mod gpui_shell {
             Self { state }
         }
 
-        fn client_titlebar(&self) -> impl IntoElement {
-            div()
-                .id("notatus-client-titlebar")
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_between()
-                .h(CLIENT_TITLEBAR_HEIGHT)
-                .px_3()
-                .border_b_1()
-                .border_color(rgb(0xd6d9de))
+        fn app_titlebar(&self) -> impl IntoElement {
+            TitleBar::new()
                 .bg(rgb(0xf9fafb))
-                .on_mouse_down(MouseButton::Left, |event, window, cx| {
-                    if event.click_count >= 2 {
-                        window.zoom_window();
-                    } else {
-                        window.start_window_move();
-                    }
-                    cx.stop_propagation();
-                })
-                .on_click(|event, window, cx| {
-                    if event.is_right_click() {
-                        window.show_window_menu(event.position());
-                        cx.stop_propagation();
-                    }
-                })
+                .border_color(rgb(0xd6d9de))
                 .child(
                     div()
                         .flex()
@@ -229,21 +207,6 @@ mod gpui_shell {
                                 .text_color(rgb(0x6b7280))
                                 .child("visual annotation"),
                         ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(titlebar_button("window-minimize", "_", |window, _| {
-                            window.minimize_window();
-                        }))
-                        .child(titlebar_button("window-maximize", "[]", |window, _| {
-                            window.zoom_window();
-                        }))
-                        .child(titlebar_button("window-close", "X", |window, _| {
-                            window.remove_window();
-                        })),
                 )
         }
 
@@ -396,14 +359,14 @@ mod gpui_shell {
                 ))
         }
 
-        fn app_frame(&self, app_chrome: bool) -> impl IntoElement {
+        fn app_frame(&self) -> impl IntoElement {
             div()
                 .size_full()
                 .flex()
                 .flex_col()
                 .text_color(rgb(0x111827))
                 .bg(rgb(0xf3f4f6))
-                .when(app_chrome, |frame| frame.child(self.client_titlebar()))
+                .child(self.app_titlebar())
                 .child(self.toolbar())
                 .child(
                     div()
@@ -441,7 +404,7 @@ mod gpui_shell {
                             }
                         })
                 })
-                .child(self.app_frame(app_chrome))
+                .child(self.app_frame())
         }
     }
 
@@ -467,33 +430,6 @@ mod gpui_shell {
         )
         .size_full()
         .absolute()
-    }
-
-    fn titlebar_button(
-        id: &'static str,
-        label: &'static str,
-        on_click: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> impl IntoElement {
-        div()
-            .id(id)
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(34.0))
-            .h(px(24.0))
-            .rounded_sm()
-            .text_xs()
-            .cursor_pointer()
-            .hover(|button| button.bg(rgb(0xe5e7eb)))
-            .active(|button| button.bg(rgb(0xd1d5db)))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
-            })
-            .on_click(move |_, window, cx| {
-                on_click(window, cx);
-                cx.stop_propagation();
-            })
-            .child(label)
     }
 
     fn section_title(title: &'static str) -> impl IntoElement {
@@ -565,6 +501,8 @@ mod gpui_shell {
 
     pub fn launch_gpui() {
         Application::new().run(|cx: &mut App| {
+            gpui_component::init(cx);
+
             cx.on_window_closed(|cx| {
                 if cx.windows().is_empty() {
                     cx.quit();
@@ -576,19 +514,21 @@ mod gpui_shell {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitleBar::title_bar_options()),
                     window_background: WindowBackgroundAppearance::Opaque,
                     window_decorations: requested_window_decorations(),
                     window_min_size: Some(size(px(720.0), px(460.0))),
                     ..Default::default()
                 },
                 |window, cx| {
-                    cx.new(|cx| {
+                    let view = cx.new(|cx| {
                         cx.observe_window_appearance(window, |_, window, _| {
                             window.refresh();
                         })
                         .detach();
                         NotatusWindow::new(window, cx)
-                    })
+                    });
+                    cx.new(|cx| Root::new(view, window, cx))
                 },
             )
             .unwrap();
