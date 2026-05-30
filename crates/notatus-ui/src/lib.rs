@@ -166,9 +166,14 @@ mod gpui_shell {
     use super::{AnnotationTool, UiState};
     use gpui::prelude::*;
     use gpui::{
-        App, Application, Bounds, Context, FontWeight, IntoElement, Render, Window, WindowBounds,
-        WindowOptions, div, px, rgb, size,
+        App, Application, Bounds, Context, CursorStyle, Decorations, FontWeight, HitboxBehavior,
+        IntoElement, MouseButton, Pixels, Point, Render, ResizeEdge, Size, Window,
+        WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowOptions, canvas, div,
+        point, px, rgb, size,
     };
+
+    const CLIENT_TITLEBAR_HEIGHT: Pixels = px(36.0);
+    const CLIENT_RESIZE_EDGE: Pixels = px(8.0);
 
     struct NotatusWindow {
         state: UiState,
@@ -181,8 +186,70 @@ mod gpui_shell {
             Self { state }
         }
 
+        fn client_titlebar(&self) -> impl IntoElement {
+            div()
+                .id("notatus-client-titlebar")
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_between()
+                .h(CLIENT_TITLEBAR_HEIGHT)
+                .px_3()
+                .border_b_1()
+                .border_color(rgb(0xd6d9de))
+                .bg(rgb(0xf9fafb))
+                .on_mouse_down(MouseButton::Left, |event, window, cx| {
+                    if event.click_count >= 2 {
+                        window.zoom_window();
+                    } else {
+                        window.start_window_move();
+                    }
+                    cx.stop_propagation();
+                })
+                .on_click(|event, window, cx| {
+                    if event.is_right_click() {
+                        window.show_window_menu(event.position());
+                        cx.stop_propagation();
+                    }
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Notatus"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(0x6b7280))
+                                .child("visual annotation"),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(titlebar_button("window-minimize", "_", |window, _| {
+                            window.minimize_window();
+                        }))
+                        .child(titlebar_button("window-maximize", "[]", |window, _| {
+                            window.zoom_window();
+                        }))
+                        .child(titlebar_button("window-close", "X", |window, _| {
+                            window.remove_window();
+                        })),
+                )
+        }
+
         fn toolbar(&self) -> impl IntoElement {
             div()
+                .flex_none()
                 .flex()
                 .items_center()
                 .justify_between()
@@ -243,6 +310,7 @@ mod gpui_shell {
             };
 
             div()
+                .flex_none()
                 .w(px(240.0))
                 .h_full()
                 .flex()
@@ -267,14 +335,14 @@ mod gpui_shell {
             div()
                 .flex_1()
                 .size_full()
+                .p_6()
                 .flex()
                 .items_center()
                 .justify_center()
                 .bg(rgb(0xf3f4f6))
                 .child(
                     div()
-                        .w(px(560.0))
-                        .h(px(360.0))
+                        .size_full()
                         .flex()
                         .flex_col()
                         .items_center()
@@ -295,6 +363,7 @@ mod gpui_shell {
 
         fn inspector(&self) -> impl IntoElement {
             div()
+                .flex_none()
                 .w(px(280.0))
                 .h_full()
                 .flex()
@@ -326,26 +395,105 @@ mod gpui_shell {
                         .to_string(),
                 ))
         }
-    }
 
-    impl Render for NotatusWindow {
-        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        fn app_frame(&self, app_chrome: bool) -> impl IntoElement {
             div()
                 .size_full()
                 .flex()
                 .flex_col()
                 .text_color(rgb(0x111827))
                 .bg(rgb(0xf3f4f6))
+                .when(app_chrome, |frame| frame.child(self.client_titlebar()))
                 .child(self.toolbar())
                 .child(
                     div()
                         .flex()
                         .flex_1()
+                        .overflow_hidden()
                         .child(self.sidebar())
                         .child(self.canvas_placeholder())
                         .child(self.inspector()),
                 )
         }
+    }
+
+    impl Render for NotatusWindow {
+        fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            let app_chrome = should_use_app_chrome(window.window_decorations());
+            if app_chrome {
+                window.set_client_inset(CLIENT_RESIZE_EDGE);
+            }
+
+            div()
+                .id("notatus-window")
+                .size_full()
+                .bg(rgb(0xf3f4f6))
+                .when(app_chrome, |root| {
+                    root.child(resize_cursor_layer())
+                        .on_mouse_move(|_, window, _| window.refresh())
+                        .on_mouse_down(MouseButton::Left, |event, window, cx| {
+                            let size = window.window_bounds().get_bounds().size;
+                            if let Some(edge) =
+                                resize_edge(event.position, CLIENT_RESIZE_EDGE, size)
+                            {
+                                window.start_window_resize(edge);
+                                cx.stop_propagation();
+                            }
+                        })
+                })
+                .child(self.app_frame(app_chrome))
+        }
+    }
+
+    fn resize_cursor_layer() -> impl IntoElement {
+        canvas(
+            |_bounds, window, _cx| {
+                window.insert_hitbox(
+                    Bounds::new(
+                        point(px(0.0), px(0.0)),
+                        window.window_bounds().get_bounds().size,
+                    ),
+                    HitboxBehavior::Normal,
+                )
+            },
+            |_bounds, hitbox, window, _cx| {
+                let size = window.window_bounds().get_bounds().size;
+                let Some(edge) = resize_edge(window.mouse_position(), CLIENT_RESIZE_EDGE, size)
+                else {
+                    return;
+                };
+                window.set_cursor_style(cursor_for_resize_edge(edge), &hitbox);
+            },
+        )
+        .size_full()
+        .absolute()
+    }
+
+    fn titlebar_button(
+        id: &'static str,
+        label: &'static str,
+        on_click: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> impl IntoElement {
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .justify_center()
+            .w(px(34.0))
+            .h(px(24.0))
+            .rounded_sm()
+            .text_xs()
+            .cursor_pointer()
+            .hover(|button| button.bg(rgb(0xe5e7eb)))
+            .active(|button| button.bg(rgb(0xd1d5db)))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
+            .on_click(move |_, window, cx| {
+                on_click(window, cx);
+                cx.stop_propagation();
+            })
+            .child(label)
     }
 
     fn section_title(title: &'static str) -> impl IntoElement {
@@ -366,15 +514,82 @@ mod gpui_shell {
             .child(div().font_weight(FontWeight::SEMIBOLD).child(value))
     }
 
+    fn cursor_for_resize_edge(edge: ResizeEdge) -> CursorStyle {
+        match edge {
+            ResizeEdge::Top | ResizeEdge::Bottom => CursorStyle::ResizeUpDown,
+            ResizeEdge::Left | ResizeEdge::Right => CursorStyle::ResizeLeftRight,
+            ResizeEdge::TopLeft | ResizeEdge::BottomRight => CursorStyle::ResizeUpLeftDownRight,
+            ResizeEdge::TopRight | ResizeEdge::BottomLeft => CursorStyle::ResizeUpRightDownLeft,
+        }
+    }
+
+    fn resize_edge(
+        pos: Point<Pixels>,
+        edge_size: Pixels,
+        size: Size<Pixels>,
+    ) -> Option<ResizeEdge> {
+        let edge = if pos.y < edge_size && pos.x < edge_size {
+            ResizeEdge::TopLeft
+        } else if pos.y < edge_size && pos.x > size.width - edge_size {
+            ResizeEdge::TopRight
+        } else if pos.y < edge_size {
+            ResizeEdge::Top
+        } else if pos.y > size.height - edge_size && pos.x < edge_size {
+            ResizeEdge::BottomLeft
+        } else if pos.y > size.height - edge_size && pos.x > size.width - edge_size {
+            ResizeEdge::BottomRight
+        } else if pos.y > size.height - edge_size {
+            ResizeEdge::Bottom
+        } else if pos.x < edge_size {
+            ResizeEdge::Left
+        } else if pos.x > size.width - edge_size {
+            ResizeEdge::Right
+        } else {
+            return None;
+        };
+        Some(edge)
+    }
+
+    fn should_use_app_chrome(decorations: Decorations) -> bool {
+        cfg!(any(target_os = "linux", target_os = "freebsd"))
+            || matches!(decorations, Decorations::Client { .. })
+    }
+
+    fn requested_window_decorations() -> Option<WindowDecorations> {
+        if cfg!(any(target_os = "linux", target_os = "freebsd")) {
+            Some(WindowDecorations::Client)
+        } else {
+            None
+        }
+    }
+
     pub fn launch_gpui() {
         Application::new().run(|cx: &mut App| {
+            cx.on_window_closed(|cx| {
+                if cx.windows().is_empty() {
+                    cx.quit();
+                }
+            })
+            .detach();
+
             let bounds = Bounds::centered(None, size(px(1200.0), px(760.0)), cx);
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_background: WindowBackgroundAppearance::Opaque,
+                    window_decorations: requested_window_decorations(),
+                    window_min_size: Some(size(px(720.0), px(460.0))),
                     ..Default::default()
                 },
-                |window, cx| cx.new(|cx| NotatusWindow::new(window, cx)),
+                |window, cx| {
+                    cx.new(|cx| {
+                        cx.observe_window_appearance(window, |_, window, _| {
+                            window.refresh();
+                        })
+                        .detach();
+                        NotatusWindow::new(window, cx)
+                    })
+                },
             )
             .unwrap();
             cx.activate(true);
