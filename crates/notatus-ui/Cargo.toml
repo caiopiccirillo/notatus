@@ -1,0 +1,18 @@
+[package]
+name = "notatus-ui"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+gpui-ui = ["dep:gpui"]
+
+[dependencies]
+notatus-core.workspace = true
+notatus-export.workspace = true
+notatus-infer.workspace = true
+notatus-storage.workspace = true
+gpui = { version = "0.2", optional = true }
