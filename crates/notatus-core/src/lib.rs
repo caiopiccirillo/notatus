@@ -9,9 +9,9 @@ mod geometry;
 mod ids;
 
 pub use dataset::{
-    AnnotationRecord, AnnotationSource, AssetKind, AssetLocation, AssetRecord, Dataset,
-    DatasetSplit, ImportProvenance, Label, Metadata, ModelProvenance, ProjectManifest,
-    ProjectMetadata, ReviewState, ValidationError, CURRENT_SCHEMA_VERSION,
+    AnnotationRecord, AnnotationSource, AssetKind, AssetLocation, AssetRecord,
+    CURRENT_SCHEMA_VERSION, Dataset, DatasetSplit, ImportProvenance, Label, Metadata,
+    ModelProvenance, ProjectManifest, ProjectMetadata, ReviewState, ValidationError,
 };
 pub use geometry::{
     AnnotationGeometry, BoundingBox, GeometryError, ImageDimensions, Point, Polygon,

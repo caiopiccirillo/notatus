@@ -48,6 +48,8 @@ They are never silently treated as accepted ground truth.
 
 ## Development
 
+Requires Rust 1.96.0 or newer.
+
 Run the non-GPUI core checks:
 
 ```sh

@@ -166,8 +166,8 @@ mod gpui_shell {
     use super::{AnnotationTool, UiState};
     use gpui::prelude::*;
     use gpui::{
-        div, px, rgb, size, App, Application, Bounds, Context, FontWeight, IntoElement, Render,
-        Window, WindowBounds, WindowOptions,
+        App, Application, Bounds, Context, FontWeight, IntoElement, Render, Window, WindowBounds,
+        WindowOptions, div, px, rgb, size,
     };
 
     struct NotatusWindow {
@@ -219,10 +219,12 @@ mod gpui_shell {
 
         fn sidebar(&self) -> impl IntoElement {
             let labels = if self.state.dataset.labels.is_empty() {
-                vec![div()
-                    .text_sm()
-                    .text_color(rgb(0x6b7280))
-                    .child("No labels yet")]
+                vec![
+                    div()
+                        .text_sm()
+                        .text_color(rgb(0x6b7280))
+                        .child("No labels yet"),
+                ]
             } else {
                 self.state
                     .dataset

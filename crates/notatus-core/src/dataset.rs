@@ -157,13 +157,13 @@ impl Dataset {
                     label_id: annotation.label_id,
                 });
             }
-            if let Some(confidence) = annotation.confidence {
-                if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
-                    return Err(ValidationError::InvalidConfidence {
-                        annotation_id: annotation.id,
-                        confidence,
-                    });
-                }
+            if let Some(confidence) = annotation.confidence
+                && (!confidence.is_finite() || !(0.0..=1.0).contains(&confidence))
+            {
+                return Err(ValidationError::InvalidConfidence {
+                    annotation_id: annotation.id,
+                    confidence,
+                });
             }
 
             let asset = self
