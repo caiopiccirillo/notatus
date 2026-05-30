@@ -171,7 +171,10 @@ mod gpui_shell {
         WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowOptions, canvas, div,
         point, px, rgb, size,
     };
-    use gpui_component::{Root, TitleBar};
+    use gpui_component::{
+        Root, TitleBar,
+        resizable::{h_resizable, resizable_panel},
+    };
 
     const CLIENT_RESIZE_EDGE: Pixels = px(8.0);
 
@@ -273,8 +276,7 @@ mod gpui_shell {
             };
 
             div()
-                .flex_none()
-                .w(px(240.0))
+                .size_full()
                 .h_full()
                 .flex()
                 .flex_col()
@@ -296,7 +298,6 @@ mod gpui_shell {
 
         fn canvas_placeholder(&self) -> impl IntoElement {
             div()
-                .flex_1()
                 .size_full()
                 .p_6()
                 .flex()
@@ -326,8 +327,7 @@ mod gpui_shell {
 
         fn inspector(&self) -> impl IntoElement {
             div()
-                .flex_none()
-                .w(px(280.0))
+                .size_full()
                 .h_full()
                 .flex()
                 .flex_col()
@@ -369,13 +369,26 @@ mod gpui_shell {
                 .child(self.app_titlebar())
                 .child(self.toolbar())
                 .child(
-                    div()
-                        .flex()
-                        .flex_1()
-                        .overflow_hidden()
-                        .child(self.sidebar())
-                        .child(self.canvas_placeholder())
-                        .child(self.inspector()),
+                    div().flex_1().overflow_hidden().child(
+                        h_resizable("notatus-annotation-panels")
+                            .child(
+                                resizable_panel()
+                                    .size(px(240.0))
+                                    .size_range(px(180.0)..px(380.0))
+                                    .child(self.sidebar()),
+                            )
+                            .child(
+                                resizable_panel()
+                                    .size_range(px(320.0)..Pixels::MAX)
+                                    .child(self.canvas_placeholder()),
+                            )
+                            .child(
+                                resizable_panel()
+                                    .size(px(280.0))
+                                    .size_range(px(220.0)..px(420.0))
+                                    .child(self.inspector()),
+                            ),
+                    ),
                 )
         }
     }
