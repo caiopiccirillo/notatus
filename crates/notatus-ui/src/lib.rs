@@ -172,8 +172,9 @@ mod gpui_shell {
         point, px, rgb, size,
     };
     use gpui_component::{
-        Root, TitleBar,
+        IconName, Root, TitleBar,
         resizable::{h_resizable, resizable_panel},
+        sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
     };
 
     const CLIENT_RESIZE_EDGE: Pixels = px(8.0);
@@ -251,49 +252,64 @@ mod gpui_shell {
         }
 
         fn sidebar(&self) -> impl IntoElement {
-            let labels = if self.state.dataset.labels.is_empty() {
-                vec![
-                    div()
-                        .text_sm()
-                        .text_color(rgb(0x6b7280))
-                        .child("No labels yet"),
-                ]
+            let label_items: Vec<_> = if self.state.dataset.labels.is_empty() {
+                vec![SidebarMenuItem::new("No labels yet").disable(true)]
             } else {
                 self.state
                     .dataset
                     .labels
                     .iter()
                     .map(|label| {
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .h(px(28.0))
-                            .child(label.name.clone())
-                            .child(div().text_xs().text_color(rgb(0x6b7280)).child("0"))
+                        SidebarMenuItem::new(label.name.clone()).suffix(sidebar_count("0"))
                     })
                     .collect()
             };
 
-            div()
-                .size_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .gap_4()
-                .p_4()
-                .border_r_1()
-                .border_color(rgb(0xd6d9de))
-                .bg(rgb(0xffffff))
-                .child(section_title("Assets"))
-                .child(
+            Sidebar::left()
+                .collapsible(false)
+                .w_full()
+                .header(
                     div()
-                        .text_sm()
-                        .text_color(rgb(0x4b5563))
-                        .child(format!("{} images", self.state.dataset.assets.len())),
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(self.state.dataset.manifest.project.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(0x6b7280))
+                                        .child("local project"),
+                                ),
+                        )
+                        .child(sidebar_count(self.state.dataset.assets.len().to_string())),
                 )
-                .child(section_title("Labels"))
-                .children(labels)
+                .child(
+                    SidebarMenu::new()
+                        .child(
+                            SidebarMenuItem::new("Assets")
+                                .icon(IconName::GalleryVerticalEnd)
+                                .active(true)
+                                .suffix(sidebar_count(self.state.dataset.assets.len().to_string())),
+                        )
+                        .child(
+                            SidebarMenuItem::new("Labels")
+                                .icon(IconName::CaseSensitive)
+                                .default_open(true)
+                                .children(label_items),
+                        ),
+                )
         }
 
         fn canvas_placeholder(&self) -> impl IntoElement {
@@ -443,6 +459,22 @@ mod gpui_shell {
         )
         .size_full()
         .absolute()
+    }
+
+    fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .min_w(px(24.0))
+            .h(px(20.0))
+            .px_1()
+            .rounded_sm()
+            .text_xs()
+            .text_color(rgb(0x4b5563))
+            .bg(rgb(0xf3f4f6))
+            .child(value.into())
     }
 
     fn section_title(title: &'static str) -> impl IntoElement {
