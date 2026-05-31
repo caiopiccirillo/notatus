@@ -167,33 +167,63 @@ mod gpui_shell {
     use gpui::prelude::*;
     use gpui::{
         App, Application, Bounds, Context, CursorStyle, Decorations, FontWeight, HitboxBehavior,
-        IntoElement, MouseButton, Pixels, Point, Render, ResizeEdge, Size, Window,
-        WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowOptions, canvas, div,
-        point, px, rgb, size,
+        IntoElement, MouseButton, ObjectFit, PathPromptOptions, Pixels, Point, Render, ResizeEdge,
+        SharedString, Size, WeakEntity, Window, WindowBackgroundAppearance, WindowBounds,
+        WindowDecorations, WindowOptions, canvas, div, img, point, px, rgb, size,
     };
     use gpui_component::{
-        IconName, Root, TitleBar,
+        Icon, IconName, Root, Sizable as _,
+        button::{Button, ButtonVariants as _},
         resizable::{h_resizable, resizable_panel},
         sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
     };
+    use notatus_core::{AssetLocation, AssetRecord};
+    use std::path::{Path, PathBuf};
 
+    const CLIENT_TITLEBAR_HEIGHT: Pixels = px(36.0);
     const CLIENT_RESIZE_EDGE: Pixels = px(8.0);
 
     struct NotatusWindow {
         state: UiState,
+        import_status: Option<String>,
     }
 
     impl NotatusWindow {
         fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
             let mut state = UiState::new_project("Untitled dataset");
             state.set_tool(AnnotationTool::DrawBox);
-            Self { state }
+            Self {
+                state,
+                import_status: None,
+            }
         }
 
         fn app_titlebar(&self) -> impl IntoElement {
-            TitleBar::new()
+            div()
+                .id("notatus-client-titlebar")
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_between()
+                .h(CLIENT_TITLEBAR_HEIGHT)
+                .pl_3()
                 .bg(rgb(0xf9fafb))
+                .border_b_1()
                 .border_color(rgb(0xd6d9de))
+                .on_mouse_down(MouseButton::Left, |event, window, cx| {
+                    if event.click_count >= 2 {
+                        window.zoom_window();
+                    } else {
+                        window.start_window_move();
+                    }
+                    cx.stop_propagation();
+                })
+                .on_click(|event, window, cx| {
+                    if event.is_right_click() {
+                        window.show_window_menu(event.position());
+                        cx.stop_propagation();
+                    }
+                })
                 .child(
                     div()
                         .flex()
@@ -212,9 +242,17 @@ mod gpui_shell {
                                 .child("visual annotation"),
                         ),
                 )
+                .child(titlebar_controls())
         }
 
-        fn toolbar(&self) -> impl IntoElement {
+        fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+            let view = cx.weak_entity();
+            let asset_count = self.state.dataset.assets.len();
+            let selected_asset = self
+                .selected_asset()
+                .map(asset_display_name)
+                .unwrap_or_else(|| "No image selected".to_string());
+
             div()
                 .flex_none()
                 .flex()
@@ -234,24 +272,70 @@ mod gpui_shell {
                             div()
                                 .text_lg()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .child("Notatus"),
+                                .child(self.state.dataset.manifest.project.name.clone()),
                         )
                         .child(
                             div()
                                 .text_sm()
                                 .text_color(rgb(0x4b5563))
-                                .child(self.state.dataset.manifest.project.name.clone()),
+                                .child(format!("{asset_count} images")),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0x4b5563))
+                                .child(selected_asset),
                         ),
                 )
                 .child(
                     div()
-                        .text_sm()
-                        .text_color(rgb(0x166534))
-                        .child("local project"),
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .when_some(self.import_status.clone(), |bar, status| {
+                            bar.child(div().text_sm().text_color(rgb(0x4b5563)).child(status))
+                        })
+                        .child(
+                            Button::new("choose-images")
+                                .primary()
+                                .small()
+                                .icon(IconName::Plus)
+                                .label("Add images")
+                                .on_click(move |_, _, cx| {
+                                    open_image_picker(view.clone(), cx);
+                                }),
+                        ),
                 )
         }
 
-        fn sidebar(&self) -> impl IntoElement {
+        fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+            let view = cx.weak_entity();
+            let asset_items: Vec<_> = if self.state.dataset.assets.is_empty() {
+                vec![SidebarMenuItem::new("No images yet").disable(true)]
+            } else {
+                self.state
+                    .dataset
+                    .assets
+                    .iter()
+                    .map(|asset| {
+                        let asset_id = asset.id;
+                        let view = view.clone();
+                        SidebarMenuItem::new(asset_display_name(asset))
+                            .icon(IconName::File)
+                            .active(self.state.selected_asset == Some(asset_id))
+                            .suffix(sidebar_count(asset_dimensions_label(asset)))
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |window, cx| {
+                                    if let Err(error) = window.state.select_asset(asset_id) {
+                                        window.import_status = Some(error.to_string());
+                                    }
+                                    cx.notify();
+                                });
+                            })
+                    })
+                    .collect()
+            };
+
             let label_items: Vec<_> = if self.state.dataset.labels.is_empty() {
                 vec![SidebarMenuItem::new("No labels yet").disable(true)]
             } else {
@@ -298,10 +382,11 @@ mod gpui_shell {
                 .child(
                     SidebarMenu::new()
                         .child(
-                            SidebarMenuItem::new("Assets")
+                            SidebarMenuItem::new("Images")
                                 .icon(IconName::GalleryVerticalEnd)
-                                .active(true)
-                                .suffix(sidebar_count(self.state.dataset.assets.len().to_string())),
+                                .default_open(true)
+                                .suffix(sidebar_count(self.state.dataset.assets.len().to_string()))
+                                .children(asset_items),
                         )
                         .child(
                             SidebarMenuItem::new("Labels")
@@ -313,6 +398,8 @@ mod gpui_shell {
         }
 
         fn canvas_placeholder(&self) -> impl IntoElement {
+            let selected_asset = self.selected_asset();
+
             div()
                 .size_full()
                 .p_6()
@@ -331,13 +418,20 @@ mod gpui_shell {
                         .border_1()
                         .border_color(rgb(0xcbd5e1))
                         .bg(rgb(0xffffff))
-                        .child(div().text_lg().child("Image canvas"))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0x4b5563))
-                                .child("Bounding-box drawing will attach here"),
-                        ),
+                        .overflow_hidden()
+                        .when_some(selected_asset, |canvas, asset| {
+                            canvas.child(image_canvas_content(asset))
+                        })
+                        .when(selected_asset.is_none(), |canvas| {
+                            canvas
+                                .child(div().text_lg().child("Choose images to start"))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(0x4b5563))
+                                        .child("Use Add images in the command bar"),
+                                )
+                        }),
                 )
         }
 
@@ -358,6 +452,12 @@ mod gpui_shell {
                     format!("{:?}", self.state.active_tool),
                 ))
                 .child(metric(
+                    "Image",
+                    self.selected_asset()
+                        .map(asset_display_name)
+                        .unwrap_or_else(|| "None".to_string()),
+                ))
+                .child(metric(
                     "Annotations",
                     self.state.dataset.annotations.len().to_string(),
                 ))
@@ -375,15 +475,21 @@ mod gpui_shell {
                 ))
         }
 
-        fn app_frame(&self) -> impl IntoElement {
+        fn selected_asset(&self) -> Option<&AssetRecord> {
+            self.state
+                .selected_asset
+                .and_then(|asset_id| self.state.dataset.asset_by_id(asset_id))
+        }
+
+        fn app_frame(&self, app_chrome: bool, cx: &mut Context<Self>) -> impl IntoElement {
             div()
                 .size_full()
                 .flex()
                 .flex_col()
                 .text_color(rgb(0x111827))
                 .bg(rgb(0xf3f4f6))
-                .child(self.app_titlebar())
-                .child(self.toolbar())
+                .when(app_chrome, |frame| frame.child(self.app_titlebar()))
+                .child(self.toolbar(cx))
                 .child(
                     div().flex_1().overflow_hidden().child(
                         h_resizable("notatus-annotation-panels")
@@ -391,7 +497,7 @@ mod gpui_shell {
                                 resizable_panel()
                                     .size(px(240.0))
                                     .size_range(px(180.0)..px(380.0))
-                                    .child(self.sidebar()),
+                                    .child(self.sidebar(cx)),
                             )
                             .child(
                                 resizable_panel()
@@ -410,7 +516,7 @@ mod gpui_shell {
     }
 
     impl Render for NotatusWindow {
-        fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let app_chrome = should_use_app_chrome(window.window_decorations());
             if app_chrome {
                 window.set_client_inset(CLIENT_RESIZE_EDGE);
@@ -433,7 +539,7 @@ mod gpui_shell {
                             }
                         })
                 })
-                .child(self.app_frame())
+                .child(self.app_frame(app_chrome, cx))
         }
     }
 
@@ -461,6 +567,200 @@ mod gpui_shell {
         .absolute()
     }
 
+    fn titlebar_controls() -> impl IntoElement {
+        div()
+            .flex()
+            .items_center()
+            .h_full()
+            .child(titlebar_button(
+                "window-minimize",
+                IconName::WindowMinimize,
+                rgb(0xe5e7eb),
+                |window, _| window.minimize_window(),
+            ))
+            .child(titlebar_button(
+                "window-maximize",
+                IconName::WindowMaximize,
+                rgb(0xe5e7eb),
+                |window, _| window.zoom_window(),
+            ))
+            .child(titlebar_button(
+                "window-close",
+                IconName::WindowClose,
+                rgb(0xdc2626),
+                |window, _| window.remove_window(),
+            ))
+    }
+
+    fn titlebar_button(
+        id: &'static str,
+        icon: IconName,
+        hover_color: impl Into<gpui::Hsla>,
+        on_click: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> impl IntoElement {
+        let hover_color = hover_color.into();
+
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .justify_center()
+            .w(CLIENT_TITLEBAR_HEIGHT)
+            .h_full()
+            .text_color(rgb(0x111827))
+            .hover(move |button| button.bg(hover_color).text_color(rgb(0xffffff)))
+            .active(|button| button.bg(rgb(0xd1d5db)))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
+            .on_click(move |_, window, cx| {
+                on_click(window, cx);
+                cx.stop_propagation();
+            })
+            .child(Icon::new(icon).small())
+    }
+
+    fn open_image_picker(view: WeakEntity<NotatusWindow>, cx: &mut App) {
+        let _ = view.update(cx, |window, cx| {
+            window.import_status = Some("Waiting for image selection".to_string());
+            cx.notify();
+        });
+
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some(SharedString::from("Add images")),
+        });
+
+        cx.spawn(async move |cx| match paths.await {
+            Ok(Ok(Some(paths))) => {
+                let imported = inspect_image_paths(paths);
+                let _ = view.update(cx, |window, cx| {
+                    window.apply_image_import(imported);
+                    cx.notify();
+                });
+            }
+            Ok(Ok(None)) => {
+                let _ = view.update(cx, |window, cx| {
+                    window.import_status = Some("Image import cancelled".to_string());
+                    cx.notify();
+                });
+            }
+            Ok(Err(error)) => {
+                let _ = view.update(cx, |window, cx| {
+                    window.import_status = Some(format!("Image picker failed: {error}"));
+                    cx.notify();
+                });
+            }
+            Err(_) => {
+                let _ = view.update(cx, |window, cx| {
+                    window.import_status = Some("Image picker closed unexpectedly".to_string());
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    struct ImageImport {
+        candidates: Vec<ImageCandidate>,
+        failures: Vec<String>,
+    }
+
+    struct ImageCandidate {
+        path: PathBuf,
+        width: u32,
+        height: u32,
+    }
+
+    fn inspect_image_paths(paths: Vec<PathBuf>) -> ImageImport {
+        let mut candidates = Vec::new();
+        let mut failures = Vec::new();
+
+        for path in paths {
+            match image::image_dimensions(&path) {
+                Ok((width, height)) => candidates.push(ImageCandidate {
+                    path,
+                    width,
+                    height,
+                }),
+                Err(error) => failures.push(format!("{}: {error}", path.display())),
+            }
+        }
+
+        ImageImport {
+            candidates,
+            failures,
+        }
+    }
+
+    impl NotatusWindow {
+        fn apply_image_import(&mut self, imported: ImageImport) {
+            let mut added = 0;
+            let mut failed = imported.failures;
+
+            for candidate in imported.candidates {
+                let path = candidate.path.to_string_lossy().into_owned();
+                match self
+                    .state
+                    .add_local_image_asset(path, candidate.width, candidate.height)
+                {
+                    Ok(_) => added += 1,
+                    Err(error) => failed.push(error.to_string()),
+                }
+            }
+
+            self.import_status = Some(import_summary(added, failed.len()));
+        }
+    }
+
+    fn import_summary(added: usize, failed: usize) -> String {
+        match (added, failed) {
+            (0, 0) => "No images selected".to_string(),
+            (0, failed) => format!("Skipped {failed} invalid image{}", plural(failed)),
+            (added, 0) => format!("Imported {added} image{}", plural(added)),
+            (added, failed) => format!("Imported {added} image{}; skipped {failed}", plural(added)),
+        }
+    }
+
+    fn plural(count: usize) -> &'static str {
+        if count == 1 { "" } else { "s" }
+    }
+
+    fn image_canvas_content(asset: &AssetRecord) -> impl IntoElement {
+        match &asset.location {
+            AssetLocation::LocalPath { path } => div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    img(PathBuf::from(path))
+                        .size_full()
+                        .object_fit(ObjectFit::Contain)
+                        .with_loading(|| canvas_message("Loading image").into_any_element())
+                        .with_fallback(|| {
+                            canvas_message("Unable to load selected image").into_any_element()
+                        }),
+                ),
+            AssetLocation::S3Object { .. } => {
+                canvas_message("Remote image preview is not implemented yet")
+            }
+        }
+    }
+
+    fn canvas_message(message: &'static str) -> gpui::Div {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_sm()
+            .text_color(rgb(0x4b5563))
+            .child(message)
+    }
+
     fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
         div()
             .flex_none()
@@ -475,6 +775,19 @@ mod gpui_shell {
             .text_color(rgb(0x4b5563))
             .bg(rgb(0xf3f4f6))
             .child(value.into())
+    }
+
+    fn asset_display_name(asset: &AssetRecord) -> String {
+        let display_path = asset.location.display_path();
+        Path::new(display_path.as_ref())
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(display_path.as_ref())
+            .to_string()
+    }
+
+    fn asset_dimensions_label(asset: &AssetRecord) -> String {
+        format!("{}x{}", asset.dimensions.width, asset.dimensions.height)
     }
 
     fn section_title(title: &'static str) -> impl IntoElement {
@@ -559,7 +872,6 @@ mod gpui_shell {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(TitleBar::title_bar_options()),
                     window_background: WindowBackgroundAppearance::Opaque,
                     window_decorations: requested_window_decorations(),
                     window_min_size: Some(size(px(720.0), px(460.0))),
