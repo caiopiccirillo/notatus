@@ -172,7 +172,7 @@ mod gpui_shell {
         WindowDecorations, WindowOptions, canvas, div, img, point, px, rgb, size,
     };
     use gpui_component::{
-        Icon, IconName, Root, Sizable as _,
+        Root, Sizable as _,
         button::{Button, ButtonVariants as _},
         resizable::{h_resizable, resizable_panel},
         sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
@@ -250,7 +250,7 @@ mod gpui_shell {
             let asset_count = self.state.dataset.assets.len();
             let selected_asset = self
                 .selected_asset()
-                .map(asset_display_name)
+                .map(compact_asset_name)
                 .unwrap_or_else(|| "No image selected".to_string());
 
             div()
@@ -266,22 +266,30 @@ mod gpui_shell {
                 .child(
                     div()
                         .flex()
+                        .flex_1()
+                        .min_w_0()
                         .items_center()
                         .gap_3()
+                        .overflow_hidden()
                         .child(
                             div()
+                                .flex_none()
                                 .text_lg()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(self.state.dataset.manifest.project.name.clone()),
                         )
                         .child(
                             div()
+                                .flex_none()
                                 .text_sm()
                                 .text_color(rgb(0x4b5563))
                                 .child(format!("{asset_count} images")),
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
                                 .text_sm()
                                 .text_color(rgb(0x4b5563))
                                 .child(selected_asset),
@@ -289,18 +297,28 @@ mod gpui_shell {
                 )
                 .child(
                     div()
+                        .flex_none()
                         .flex()
                         .items_center()
                         .gap_3()
+                        .max_w(px(420.0))
+                        .overflow_hidden()
                         .when_some(self.import_status.clone(), |bar, status| {
-                            bar.child(div().text_sm().text_color(rgb(0x4b5563)).child(status))
+                            bar.child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(rgb(0x4b5563))
+                                    .child(status),
+                            )
                         })
                         .child(
                             Button::new("choose-images")
                                 .primary()
                                 .small()
-                                .icon(IconName::Plus)
-                                .label("Add images")
+                                .label("+ Add images")
                                 .on_click(move |_, _, cx| {
                                     open_image_picker(view.clone(), cx);
                                 }),
@@ -320,10 +338,8 @@ mod gpui_shell {
                     .map(|asset| {
                         let asset_id = asset.id;
                         let view = view.clone();
-                        SidebarMenuItem::new(asset_display_name(asset))
-                            .icon(IconName::File)
+                        SidebarMenuItem::new(compact_asset_name(asset))
                             .active(self.state.selected_asset == Some(asset_id))
-                            .suffix(sidebar_count(asset_dimensions_label(asset)))
                             .on_click(move |_, _, cx| {
                                 let _ = view.update(cx, |window, cx| {
                                     if let Err(error) = window.state.select_asset(asset_id) {
@@ -349,52 +365,20 @@ mod gpui_shell {
                     .collect()
             };
 
-            Sidebar::left()
-                .collapsible(false)
-                .w_full()
-                .header(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(self.state.dataset.manifest.project.name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(0x6b7280))
-                                        .child("local project"),
-                                ),
-                        )
-                        .child(sidebar_count(self.state.dataset.assets.len().to_string())),
-                )
-                .child(
-                    SidebarMenu::new()
-                        .child(
-                            SidebarMenuItem::new("Images")
-                                .icon(IconName::GalleryVerticalEnd)
-                                .default_open(true)
-                                .suffix(sidebar_count(self.state.dataset.assets.len().to_string()))
-                                .children(asset_items),
-                        )
-                        .child(
-                            SidebarMenuItem::new("Labels")
-                                .icon(IconName::CaseSensitive)
-                                .default_open(true)
-                                .children(label_items),
-                        ),
-                )
+            Sidebar::left().collapsible(false).w_full().child(
+                SidebarMenu::new()
+                    .child(
+                        SidebarMenuItem::new("Images")
+                            .default_open(true)
+                            .suffix(sidebar_count(self.state.dataset.assets.len().to_string()))
+                            .children(asset_items),
+                    )
+                    .child(
+                        SidebarMenuItem::new("Labels")
+                            .default_open(true)
+                            .children(label_items),
+                    ),
+            )
         }
 
         fn canvas_placeholder(&self) -> impl IntoElement {
@@ -454,8 +438,14 @@ mod gpui_shell {
                 .child(metric(
                     "Image",
                     self.selected_asset()
-                        .map(asset_display_name)
+                        .map(compact_asset_name)
                         .unwrap_or_else(|| "None".to_string()),
+                ))
+                .child(metric(
+                    "Dimensions",
+                    self.selected_asset()
+                        .map(asset_dimensions_label)
+                        .unwrap_or_else(|| "-".to_string()),
                 ))
                 .child(metric(
                     "Annotations",
@@ -570,23 +560,24 @@ mod gpui_shell {
     fn titlebar_controls() -> impl IntoElement {
         div()
             .flex()
+            .flex_none()
             .items_center()
             .h_full()
             .child(titlebar_button(
                 "window-minimize",
-                IconName::WindowMinimize,
+                "-",
                 rgb(0xe5e7eb),
                 |window, _| window.minimize_window(),
             ))
             .child(titlebar_button(
                 "window-maximize",
-                IconName::WindowMaximize,
+                "[]",
                 rgb(0xe5e7eb),
                 |window, _| window.zoom_window(),
             ))
             .child(titlebar_button(
                 "window-close",
-                IconName::WindowClose,
+                "X",
                 rgb(0xdc2626),
                 |window, _| window.remove_window(),
             ))
@@ -594,7 +585,7 @@ mod gpui_shell {
 
     fn titlebar_button(
         id: &'static str,
-        icon: IconName,
+        label: &'static str,
         hover_color: impl Into<gpui::Hsla>,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
     ) -> impl IntoElement {
@@ -610,6 +601,8 @@ mod gpui_shell {
             .text_color(rgb(0x111827))
             .hover(move |button| button.bg(hover_color).text_color(rgb(0xffffff)))
             .active(|button| button.bg(rgb(0xd1d5db)))
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
             .on_mouse_down(MouseButton::Left, |_, _, cx| {
                 cx.stop_propagation();
             })
@@ -617,7 +610,7 @@ mod gpui_shell {
                 on_click(window, cx);
                 cx.stop_propagation();
             })
-            .child(Icon::new(icon).small())
+            .child(label)
     }
 
     fn open_image_picker(view: WeakEntity<NotatusWindow>, cx: &mut App) {
@@ -702,6 +695,11 @@ mod gpui_shell {
 
             for candidate in imported.candidates {
                 let path = candidate.path.to_string_lossy().into_owned();
+                if dataset_has_local_path(&self.state, &path) {
+                    failed.push(format!("{path}: already imported"));
+                    continue;
+                }
+
                 match self
                     .state
                     .add_local_image_asset(path, candidate.width, candidate.height)
@@ -786,8 +784,41 @@ mod gpui_shell {
             .to_string()
     }
 
+    fn compact_asset_name(asset: &AssetRecord) -> String {
+        compact_text(&asset_display_name(asset), 36)
+    }
+
     fn asset_dimensions_label(asset: &AssetRecord) -> String {
         format!("{}x{}", asset.dimensions.width, asset.dimensions.height)
+    }
+
+    fn compact_text(value: &str, max_chars: usize) -> String {
+        let char_count = value.chars().count();
+        if char_count <= max_chars || max_chars < 8 {
+            return value.to_string();
+        }
+
+        let head_count = (max_chars - 3) * 2 / 3;
+        let tail_count = max_chars - 3 - head_count;
+        let head: String = value.chars().take(head_count).collect();
+        let tail: String = value
+            .chars()
+            .rev()
+            .take(tail_count)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        format!("{head}...{tail}")
+    }
+
+    fn dataset_has_local_path(state: &UiState, path: &str) -> bool {
+        state.dataset.assets.iter().any(|asset| {
+            matches!(
+                &asset.location,
+                AssetLocation::LocalPath { path: existing } if existing == path
+            )
+        })
     }
 
     fn section_title(title: &'static str) -> impl IntoElement {
