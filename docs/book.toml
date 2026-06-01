@@ -1,0 +1,10 @@
+[book]
+title = "Notatus Implementation Guide"
+authors = ["Caio Piccirillo"]
+description = "Architecture and implementation documentation for Notatus."
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/caio/notatus"
+edit-url-template = ""

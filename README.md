@@ -68,6 +68,12 @@ Run the GPUI shell when the native GPUI dependency is available:
 cargo run -p notatus-ui --features gpui-ui
 ```
 
+Build or serve the implementation guide with mdBook:
+
+```sh
+mdbook serve docs
+```
+
 ## Near-Term Roadmap
 
 - Build the GPUI canvas and project navigation around `notatus-ui::UiState`.
