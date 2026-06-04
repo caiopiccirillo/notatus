@@ -81,8 +81,9 @@ Contains:
 The GPUI shell currently includes:
 
 - `gpui-component` title bar and Linux client-side window border
-- command bar
-- image picker
-- resizable asset/canvas/inspector layout
+- titlebar dropdown menus for project, media, labels, and export commands
+- bottom-bar dock buttons for Project, Media, Labels, Annotations, and Info
+- left docks for datasets, media rows, nested annotation rows, and label editing
+- resizable left-dock/canvas/right-dock layout
 - component sidebar navigation
 - selected-image preview

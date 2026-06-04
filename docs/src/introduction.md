@@ -21,8 +21,9 @@ parallel representations.
 - YOLO detection export and import.
 - COCO detection export.
 - External JSON-lines protocol for model pre-annotation.
-- GPUI desktop shell with a component title bar on Linux, resizable panels,
-  image selection, asset navigation, selected-image preview, and an inspector.
+- GPUI desktop shell with a component title bar on Linux, titlebar menus,
+  bottom dock navigation, resizable panels, media navigation, selected-image
+  preview, and right-side annotation/info docks.
 
 ## Current Limitations
 

@@ -14,6 +14,7 @@ The crate has two layers:
 - active annotation tool
 - selected asset
 - selected annotation
+- selected label
 - dirty flag
 
 Implemented mutations:
@@ -23,6 +24,9 @@ Implemented mutations:
 - set active tool
 - mark saved
 - add label
+- select label
+- update label name
+- update label color
 - add local image asset
 - select asset
 - add human bounding-box annotation
@@ -47,7 +51,7 @@ The feature enables:
 
 The `image` crate is used to probe dimensions for selected image files before
 adding them as assets. The `gpui-component-assets` crate provides the SVG icons
-used by component controls such as the titlebar buttons.
+used by component controls such as the titlebar and dock buttons.
 
 ## Window Chrome
 
@@ -64,55 +68,59 @@ border:
 - right-click window menu
 - resize edges
 
-## Command Bar
+## Titlebar Menus
 
-The command bar shows:
+Global commands live in classical titlebar menus:
 
-- project name
-- image count
-- selected image
-- import status
-- `+ Add images` command
+- Project
+- Media
+- Labels
+- Export
 
-Long selected-image names are truncated so the command bar remains usable on
-narrow windows.
+The menu triggers open dropdown menus below the titlebar button. Current actions
+include opening the relevant dock, importing media, creating labels, and export
+placeholders.
 
-## Image Import
+## Media Import
 
-`+ Add images` opens the platform file picker through GPUI:
+The Media titlebar menu has an Import media command. It opens a file picker and
+currently accepts image files by probing dimensions with the `image` crate.
 
-```rust
-cx.prompt_for_paths(PathPromptOptions {
-    files: true,
-    directories: false,
-    multiple: true,
-    prompt: Some("Add images".into()),
-})
-```
+Unsupported files are skipped and reported through the Info dock status field.
+The command is media-oriented so video and folder import can be added without
+changing the left dock structure.
 
-For selected paths, the shell:
+## Left Docks
 
-1. Reads image dimensions with `image::image_dimensions`.
-2. Skips invalid images.
-3. Skips duplicate local paths already in the dataset.
-4. Adds valid images through `UiState::add_local_image_asset`.
-5. Selects the most recently imported image.
-6. Updates the import status text.
+The left panel is switched by bottom-bar dock buttons.
 
-## Sidebar
+It contains separate docks for:
 
-The left sidebar uses `gpui-component` sidebar/menu primitives.
+- Project: datasets available to work on
+- Media: media rows with nested annotation rows
+- Labels: label list and label customization
 
-It contains:
+Media rows show their asset type and annotation count. Each media row can expand
+to show its annotations, including label, review state, and geometry type. Media
+rows are selectable and update `UiState::selected_asset`.
 
-- Images section
-- imported image rows
-- Labels section
-
-Image rows are selectable and update `UiState::selected_asset`.
+Label rows show their color swatch and annotation count. They are selectable and
+update `UiState::selected_label`.
 
 Long filenames are shortened with a middle truncation helper before rendering.
 This keeps repeated screenshot-style filenames readable in a narrow panel.
+
+## Bottom Bar
+
+The bottom bar is the persistent dock switcher:
+
+- Project
+- Media
+- Labels
+- Annotations
+- Info
+
+The left group controls the left dock. The right group controls the right dock.
 
 ## Canvas Area
 
@@ -126,25 +134,27 @@ The center panel previews the selected image with GPUI's `img` element:
 The canvas does not yet implement interactive drawing. The next major UI step is
 to add coordinate mapping and bounding-box creation on top of this preview.
 
-## Inspector
+## Right Docks
 
-The right inspector shows:
+The right panel is split into:
 
-- active tool
-- selected image
-- selected image dimensions
-- annotation count
-- draft review queue count
+- Annotations
+- Info
 
-This is intentionally simple while the annotation workflow is still being built.
+The Annotations dock lists annotations for the selected media. The Info dock
+shows dataset, selection, status, count, review queue, and selected-media
+metadata.
+
+Label customization lives in the Labels left dock.
 
 ## Layout
 
 The main workspace uses `gpui-component` resizable panels:
 
-- left asset/navigation panel
+- left dock panel
 - center canvas
-- right inspector
+- right dock panel
+- bottom dock switcher
 
 The panel group stores its state by element ID, so resizing is handled by the
 component library.
