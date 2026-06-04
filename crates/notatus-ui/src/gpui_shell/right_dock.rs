@@ -2,7 +2,7 @@ use super::helpers::*;
 use super::*;
 
 impl NotatusWindow {
-    pub(super) fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn right_panel(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .h_full()
@@ -11,7 +11,6 @@ impl NotatusWindow {
             .border_l_1()
             .border_color(rgb(0xd6d9de))
             .bg(rgb(0xffffff))
-            .child(self.right_panel_header(cx))
             .child(
                 div()
                     .flex_1()
@@ -24,54 +23,6 @@ impl NotatusWindow {
                         RightDock::MediaInfo => self.media_info_panel_content().into_any_element(),
                     }),
             )
-    }
-
-    fn right_panel_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .border_b_1()
-            .border_color(rgb(0xe5e7eb))
-            .child(self.right_dock_button(
-                "right-annotations",
-                IconName::Frame,
-                "Annotations",
-                RightDock::Annotations,
-                cx,
-            ))
-            .child(self.right_dock_button(
-                "right-media-info",
-                IconName::Info,
-                "Info",
-                RightDock::MediaInfo,
-                cx,
-            ))
-    }
-
-    fn right_dock_button(
-        &self,
-        id: &'static str,
-        icon: IconName,
-        label: &'static str,
-        dock: RightDock,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let view = cx.weak_entity();
-        Button::new(id)
-            .small()
-            .icon(Icon::new(icon))
-            .label(label)
-            .selected(self.right_dock == dock)
-            .on_click(move |_, _, cx| {
-                let _ = view.update(cx, |notatus, cx| {
-                    notatus.right_dock = dock;
-                    cx.notify();
-                });
-            })
     }
 
     fn annotations_panel_content(&self) -> gpui::Div {
