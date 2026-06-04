@@ -42,16 +42,19 @@ The feature enables:
 
 - `gpui`
 - `gpui-component`
+- `gpui-component-assets`
 - `image`
 
 The `image` crate is used to probe dimensions for selected image files before
-adding them as assets.
+adding them as assets. The `gpui-component-assets` crate provides the SVG icons
+used by component controls such as the titlebar buttons.
 
 ## Window Chrome
 
-Linux and FreeBSD use client-side window decorations.
+Linux uses client-side window decorations.
 
-The current shell uses a custom title bar for reliability:
+The current shell uses `gpui-component::TitleBar` with the component window
+border:
 
 - visible minimize button
 - visible maximize button
@@ -60,9 +63,6 @@ The current shell uses a custom title bar for reliability:
 - double-click maximize
 - right-click window menu
 - resize edges
-
-The titlebar uses text-based controls because the current `gpui-component` SVG
-window icons did not render reliably in this environment.
 
 ## Command Bar
 

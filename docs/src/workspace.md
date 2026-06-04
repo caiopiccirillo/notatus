@@ -80,7 +80,7 @@ Contains:
 
 The GPUI shell currently includes:
 
-- custom Linux client-side title bar controls
+- `gpui-component` title bar and Linux client-side window border
 - command bar
 - image picker
 - resizable asset/canvas/inspector layout
