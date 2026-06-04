@@ -5,7 +5,7 @@ The UI implementation lives in `crates/notatus-ui`.
 The crate has two layers:
 
 - `UiState`, which is renderer-independent and testable.
-- `gpui_shell`, which is compiled only with the `gpui-ui` feature.
+- `gpui_shell`, which is compiled by default through the `gpui-ui` feature.
 
 ## UI State
 
@@ -32,10 +32,10 @@ annotation schema.
 
 ## GPUI Feature
 
-The native desktop shell is behind:
+The native desktop shell runs by default:
 
 ```sh
-cargo run -p notatus-ui --features gpui-ui
+cargo run -p notatus-ui
 ```
 
 The feature enables:

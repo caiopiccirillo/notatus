@@ -50,7 +50,7 @@ They are never silently treated as accepted ground truth.
 
 Requires Rust 1.96.0 or newer.
 
-Run the non-GPUI core checks:
+Run all tests with default features:
 
 ```sh
 cargo test --workspace
@@ -59,13 +59,13 @@ cargo test --workspace
 Run the UI binary shell without GPUI:
 
 ```sh
-cargo run -p notatus-ui
+cargo run -p notatus-ui --no-default-features
 ```
 
-Run the GPUI shell when the native GPUI dependency is available:
+Run the GPUI shell:
 
 ```sh
-cargo run -p notatus-ui --features gpui-ui
+cargo run -p notatus-ui
 ```
 
 Build or serve the implementation guide with mdBook:

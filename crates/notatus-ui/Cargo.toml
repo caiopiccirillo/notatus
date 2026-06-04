@@ -7,7 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
-default = []
+default = ["gpui-ui"]
 gpui-ui = ["dep:gpui", "dep:gpui-component", "dep:image"]
 
 [dependencies]

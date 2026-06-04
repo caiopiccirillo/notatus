@@ -76,7 +76,7 @@ Contains:
 
 - renderer-independent `UiState`
 - mutation helpers for labels, assets, selected asset, and bounding boxes
-- optional GPUI application shell behind the `gpui-ui` feature
+- default GPUI application shell through the `gpui-ui` feature
 
 The GPUI shell currently includes:
 

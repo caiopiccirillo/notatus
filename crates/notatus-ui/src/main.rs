@@ -6,5 +6,5 @@ fn main() {
 #[cfg(not(feature = "gpui-ui"))]
 fn main() {
     eprintln!("notatus-ui was built without the gpui-ui feature.");
-    eprintln!("Run with: cargo run -p notatus-ui --features gpui-ui");
+    eprintln!("Run with default features enabled: cargo run -p notatus-ui");
 }

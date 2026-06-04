@@ -8,7 +8,7 @@
 
 ## Common Commands
 
-Run all non-GPUI tests:
+Run all tests with default features:
 
 ```sh
 cargo test --workspace
@@ -17,19 +17,19 @@ cargo test --workspace
 Run the UI crate without GPUI:
 
 ```sh
-cargo run -p notatus-ui
+cargo run -p notatus-ui --no-default-features
 ```
 
 Run the GPUI desktop shell:
 
 ```sh
-cargo run -p notatus-ui --features gpui-ui
+cargo run -p notatus-ui
 ```
 
 Check the GPUI desktop shell:
 
 ```sh
-cargo check -p notatus-ui --features gpui-ui
+cargo check -p notatus-ui
 ```
 
 Run Clippy for the default workspace:
@@ -38,10 +38,10 @@ Run Clippy for the default workspace:
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Run Clippy for the GPUI shell:
+Run Clippy for just the UI package:
 
 ```sh
-cargo clippy -p notatus-ui --features gpui-ui -- -D warnings
+cargo clippy -p notatus-ui -- -D warnings
 ```
 
 ## Formatting
@@ -86,6 +86,6 @@ The current tests focus on the stable domain and adapter layers:
 - inference protocol roundtrip
 - UI state mutation
 
-The GPUI shell is currently verified by compiling the `gpui-ui` feature. Future
+The GPUI shell is currently verified by compiling the default UI package. Future
 interactive canvas work should add more focused tests around coordinate mapping
 and annotation creation.
