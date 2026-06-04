@@ -1,142 +1,326 @@
-
 use super::{AnnotationTool, UiState};
 use gpui::prelude::*;
 use gpui::{
     App, Application, Bounds, Context, FontWeight, IntoElement, ObjectFit, PathPromptOptions,
-    Pixels, Render, SharedString, WeakEntity, Window, WindowBackgroundAppearance, WindowBounds,
+    Pixels, Render, SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds,
     WindowDecorations, WindowOptions, div, img, px, rgb, size,
 };
 use gpui_component::{
-    Root, Sizable as _, TitleBar,
-    button::{Button, ButtonVariants as _},
+    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
+    button::Button,
+    input::{Input, InputEvent, InputState},
+    menu::{DropdownMenu, PopupMenuItem},
     resizable::{h_resizable, resizable_panel},
-    sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
+    sidebar::{SidebarMenu, SidebarMenuItem},
 };
-use notatus_core::{AssetLocation, AssetRecord};
+use notatus_core::{
+    AnnotationGeometry, AnnotationRecord, AssetKind, AssetLocation, AssetRecord, Label, LabelId,
+};
 use std::path::{Path, PathBuf};
+
+const DEFAULT_LABEL_COLOR: &str = "#2563eb";
+const LABEL_COLORS: [&str; 8] = [
+    "#2563eb", "#16a34a", "#dc2626", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#4b5563",
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LeftDock {
+    Project,
+    Media,
+    Labels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RightDock {
+    Annotations,
+    MediaInfo,
+}
 
 struct NotatusWindow {
     state: UiState,
-    import_status: Option<String>,
+    left_dock: LeftDock,
+    right_dock: RightDock,
+    status_message: Option<String>,
+    label_name_input: gpui::Entity<InputState>,
+    syncing_label_input: bool,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl NotatusWindow {
-    fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut state = UiState::new_project("Untitled dataset");
         state.set_tool(AnnotationTool::DrawBox);
+        let label_name_input = cx.new(|cx| InputState::new(window, cx));
+        let _subscriptions = vec![cx.subscribe_in(
+            &label_name_input,
+            window,
+            |this, input, event: &InputEvent, _window, cx| {
+                if matches!(event, InputEvent::Change)
+                    && !this.syncing_label_input
+                    && let Some(label_id) = this.state.selected_label
+                {
+                    let value = input.read(cx).value().to_string();
+                    match this.state.update_label_name(label_id, value) {
+                        Ok(()) => this.status_message = None,
+                        Err(error) => this.status_message = Some(error.to_string()),
+                    }
+                    cx.notify();
+                }
+            },
+        )];
+
         Self {
             state,
-            import_status: None,
+            left_dock: LeftDock::Media,
+            right_dock: RightDock::Annotations,
+            status_message: None,
+            label_name_input,
+            syncing_label_input: false,
+            _subscriptions,
         }
     }
 
-    fn app_titlebar(&self) -> impl IntoElement {
+    fn app_titlebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         TitleBar::new().child(
             div()
                 .flex()
+                .w_full()
                 .items_center()
-                .gap_2()
+                .justify_between()
+                .gap_3()
                 .min_w_0()
                 .child(
                     div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Notatus"),
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .min_w_0()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Notatus"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(0x6b7280))
+                                .child("visual annotation"),
+                        ),
                 )
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(0x6b7280))
-                        .child("visual annotation"),
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(self.title_project_menu(cx))
+                        .child(self.title_media_menu(cx))
+                        .child(self.title_labels_menu(cx))
+                        .child(self.title_export_menu(cx)),
                 ),
         )
     }
 
-    fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn title_project_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();
-        let asset_count = self.state.dataset.assets.len();
-        let selected_asset = self
-            .selected_asset()
-            .map(compact_asset_name)
-            .unwrap_or_else(|| "No image selected".to_string());
+        Button::new("title-project-menu")
+            .small()
+            .label("Project")
+            .dropdown_caret(true)
+            .selected(self.left_dock == LeftDock::Project)
+            .dropdown_menu(move |menu, _, _| {
+                menu.item(PopupMenuItem::new("Show datasets").on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.left_dock = LeftDock::Project;
+                            cx.notify();
+                        });
+                    }
+                }))
+                .item(PopupMenuItem::separator())
+                .item(PopupMenuItem::new("New dataset").disabled(true))
+                .item(PopupMenuItem::new("Open dataset").disabled(true))
+            })
+    }
 
+    fn title_media_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.weak_entity();
+        let import_view = cx.weak_entity();
+        Button::new("title-media-menu")
+            .small()
+            .label("Media")
+            .dropdown_caret(true)
+            .selected(self.left_dock == LeftDock::Media)
+            .dropdown_menu(move |menu, _, _| {
+                menu.item(PopupMenuItem::new("Show media").on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.left_dock = LeftDock::Media;
+                            cx.notify();
+                        });
+                    }
+                }))
+                .item(PopupMenuItem::new("Import media").on_click({
+                    let import_view = import_view.clone();
+                    move |_, _, cx| {
+                        open_media_picker(import_view.clone(), cx);
+                    }
+                }))
+            })
+    }
+
+    fn title_labels_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.weak_entity();
+        let label_view = cx.weak_entity();
+        Button::new("title-labels-menu")
+            .small()
+            .label("Labels")
+            .dropdown_caret(true)
+            .selected(self.left_dock == LeftDock::Labels)
+            .dropdown_menu(move |menu, _, _| {
+                menu.item(PopupMenuItem::new("Show labels").on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.left_dock = LeftDock::Labels;
+                            cx.notify();
+                        });
+                    }
+                }))
+                .item(PopupMenuItem::new("Add label").on_click({
+                    let label_view = label_view.clone();
+                    move |_, window, cx| {
+                        let _ = label_view.update(cx, |notatus, cx| {
+                            notatus.create_label(window, cx);
+                        });
+                    }
+                }))
+            })
+    }
+
+    fn title_export_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.weak_entity();
+        Button::new("title-export-menu")
+            .small()
+            .label("Export")
+            .dropdown_caret(true)
+            .dropdown_menu(move |menu, _, _| {
+                menu.item(PopupMenuItem::new("Export dataset").on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.status_message =
+                                Some("Export is not implemented yet".to_string());
+                            notatus.right_dock = RightDock::MediaInfo;
+                            cx.notify();
+                        });
+                    }
+                }))
+                .item(PopupMenuItem::new("Export annotations").disabled(true))
+            })
+    }
+
+    fn left_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_between()
-            .h(px(48.0))
-            .px_4()
-            .border_b_1()
+            .size_full()
+            .border_r_1()
             .border_color(rgb(0xd6d9de))
-            .bg(rgb(0xf7f8fa))
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_w_0()
-                    .items_center()
-                    .gap_3()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(self.state.dataset.manifest.project.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_sm()
-                            .text_color(rgb(0x4b5563))
-                            .child(format!("{asset_count} images")),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .text_color(rgb(0x4b5563))
-                            .child(selected_asset),
-                    ),
-            )
+            .bg(rgb(0xffffff))
+            .overflow_hidden()
+            .child(match self.left_dock {
+                LeftDock::Project => self.project_dock().into_any_element(),
+                LeftDock::Media => self.media_dock(cx).into_any_element(),
+                LeftDock::Labels => self.labels_dock(cx).into_any_element(),
+            })
+    }
+
+    fn project_dock(&self) -> gpui::Div {
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
             .child(
                 div()
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap_3()
-                    .max_w(px(420.0))
+                    .justify_between()
+                    .gap_2()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(0xe5e7eb))
+                    .child(section_title("Datasets"))
+                    .child(sidebar_count("1")),
+            )
+            .child(
+                div()
+                    .flex_1()
                     .overflow_hidden()
-                    .when_some(self.import_status.clone(), |bar, status| {
-                        bar.child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_sm()
-                                .text_color(rgb(0x4b5563))
-                                .child(status),
-                        )
-                    })
-                    .child(
-                        Button::new("choose-images")
-                            .primary()
-                            .small()
-                            .label("+ Add images")
-                            .on_click(move |_, _, cx| {
-                                open_image_picker(view.clone(), cx);
-                            }),
-                    ),
+                    .p_2()
+                    .child(SidebarMenu::new().children(self.dataset_items())),
             )
     }
 
-    fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
-        let asset_items: Vec<_> = if self.state.dataset.assets.is_empty() {
-            vec![SidebarMenuItem::new("No images yet").disable(true)]
+        let asset_items = self.asset_items(view);
+
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(0xe5e7eb))
+                    .child(section_title("Media"))
+                    .child(sidebar_count(self.state.dataset.assets.len().to_string())),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .p_2()
+                    .child(SidebarMenu::new().children(asset_items)),
+            )
+    }
+
+    fn dataset_items(&self) -> Vec<SidebarMenuItem> {
+        let dataset_name = self.state.dataset.manifest.project.name.clone();
+        let summary = self.project_summary();
+
+        vec![
+            SidebarMenuItem::new(dataset_name)
+                .suffix(sidebar_count(if self.state.dirty {
+                    "Unsaved"
+                } else {
+                    "Saved"
+                }))
+                .default_open(true)
+                .active(true)
+                .children(vec![
+                    SidebarMenuItem::new(summary).disable(true),
+                    SidebarMenuItem::new(dataset_created_label(&self.state.dataset)).disable(true),
+                ]),
+        ]
+    }
+
+    fn asset_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
+        if self.state.dataset.assets.is_empty() {
+            vec![SidebarMenuItem::new("No media yet").disable(true)]
         } else {
             self.state
                 .dataset
@@ -144,46 +328,121 @@ impl NotatusWindow {
                 .iter()
                 .map(|asset| {
                     let asset_id = asset.id;
+                    let annotation_count = self
+                        .state
+                        .dataset
+                        .annotations
+                        .iter()
+                        .filter(|annotation| annotation.asset_id == asset_id)
+                        .count();
+                    let annotation_items = annotation_items_for_asset(&self.state, asset);
                     let view = view.clone();
                     SidebarMenuItem::new(compact_asset_name(asset))
+                        .suffix(media_asset_meta(&asset.kind, annotation_count))
+                        .default_open(self.state.selected_asset == Some(asset_id))
+                        .children(annotation_items)
                         .active(self.state.selected_asset == Some(asset_id))
                         .on_click(move |_, _, cx| {
                             let _ = view.update(cx, |window, cx| {
                                 if let Err(error) = window.state.select_asset(asset_id) {
-                                    window.import_status = Some(error.to_string());
+                                    window.status_message = Some(error.to_string());
                                 }
                                 cx.notify();
                             });
                         })
                 })
                 .collect()
-        };
+        }
+    }
 
-        let label_items: Vec<_> = if self.state.dataset.labels.is_empty() {
+    fn labels_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let view = cx.weak_entity();
+        let label_items = self.label_items(view.clone());
+        let selected_label = self.selected_label();
+
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(0xe5e7eb))
+                    .child(section_title("Labels"))
+                    .child(sidebar_count(self.state.dataset.labels.len().to_string())),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .p_2()
+                    .child(SidebarMenu::new().children(label_items)),
+            )
+            .when_some(selected_label, |panel, label| {
+                panel.child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_hidden()
+                        .border_t_1()
+                        .border_color(rgb(0xe5e7eb))
+                        .p_4()
+                        .child(self.label_editor(label, view)),
+                )
+            })
+            .when(selected_label.is_none(), |panel| {
+                panel.child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .p_4()
+                        .text_sm()
+                        .text_color(rgb(0x6b7280))
+                        .child("Select a label"),
+                )
+            })
+    }
+
+    fn label_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
+        if self.state.dataset.labels.is_empty() {
             vec![SidebarMenuItem::new("No labels yet").disable(true)]
         } else {
             self.state
                 .dataset
                 .labels
                 .iter()
-                .map(|label| SidebarMenuItem::new(label.name.clone()).suffix(sidebar_count("0")))
+                .map(|label| {
+                    let label_id = label.id;
+                    let annotation_count = self
+                        .state
+                        .dataset
+                        .annotations
+                        .iter()
+                        .filter(|annotation| annotation.label_id == label_id)
+                        .count();
+                    let label_name = label.name.clone();
+                    let label_color = label.color.clone();
+                    let view = view.clone();
+                    SidebarMenuItem::new(label_name)
+                        .suffix(label_asset_meta(label_color.as_deref(), annotation_count))
+                        .active(self.state.selected_label == Some(label_id))
+                        .on_click(move |_, window, cx| {
+                            let _ = view.update(cx, |notatus, cx| {
+                                notatus.select_label(label_id, window, cx);
+                            });
+                        })
+                })
                 .collect()
-        };
-
-        Sidebar::left().collapsible(false).w_full().child(
-            SidebarMenu::new()
-                .child(
-                    SidebarMenuItem::new("Images")
-                        .default_open(true)
-                        .suffix(sidebar_count(self.state.dataset.assets.len().to_string()))
-                        .children(asset_items),
-                )
-                .child(
-                    SidebarMenuItem::new("Labels")
-                        .default_open(true)
-                        .children(label_items),
-                ),
-        )
+        }
     }
 
     fn canvas_placeholder(&self) -> impl IntoElement {
@@ -218,62 +477,426 @@ impl NotatusWindow {
                                 div()
                                     .text_sm()
                                     .text_color(rgb(0x4b5563))
-                                    .child("Use Add images in the command bar"),
+                                    .child("No media selected"),
                             )
                     }),
             )
     }
 
-    fn inspector(&self) -> impl IntoElement {
+    fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .h_full()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
             .border_l_1()
             .border_color(rgb(0xd6d9de))
             .bg(rgb(0xffffff))
-            .child(section_title("Selection"))
+            .child(self.right_panel_header(cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(match self.right_dock {
+                        RightDock::Annotations => {
+                            self.annotations_panel_content().into_any_element()
+                        }
+                        RightDock::MediaInfo => self.media_info_panel_content().into_any_element(),
+                    }),
+            )
+    }
+
+    fn right_panel_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .border_b_1()
+            .border_color(rgb(0xe5e7eb))
+            .child(self.right_dock_button(
+                "right-annotations",
+                IconName::Frame,
+                "Annotations",
+                RightDock::Annotations,
+                cx,
+            ))
+            .child(self.right_dock_button(
+                "right-media-info",
+                IconName::Info,
+                "Info",
+                RightDock::MediaInfo,
+                cx,
+            ))
+    }
+
+    fn right_dock_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        label: &'static str,
+        dock: RightDock,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let view = cx.weak_entity();
+        Button::new(id)
+            .small()
+            .icon(Icon::new(icon))
+            .label(label)
+            .selected(self.right_dock == dock)
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |notatus, cx| {
+                    notatus.right_dock = dock;
+                    cx.notify();
+                });
+            })
+    }
+
+    fn annotations_panel_content(&self) -> gpui::Div {
+        if let Some(asset) = self.selected_asset() {
+            let annotations = self.annotations_for_asset(asset);
+
+            div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .p_4()
+                .overflow_hidden()
+                .child(section_title("Annotations"))
+                .child(metric(
+                    "Media",
+                    compact_text(&asset_display_name(asset), 28),
+                ))
+                .child(metric("Total", annotation_count_label(annotations.len())))
+                .child(div().flex_1().min_h_0().overflow_hidden().child(
+                    SidebarMenu::new().children(annotation_items_for_asset(&self.state, asset)),
+                ))
+        } else {
+            empty_panel("No media selected")
+        }
+    }
+
+    fn media_info_panel_content(&self) -> gpui::Div {
+        let selected_media = self
+            .selected_asset()
+            .map(compact_asset_name)
+            .unwrap_or_else(|| "None".to_string());
+        let active_label = self
+            .selected_label()
+            .map(|label| label.name.clone())
+            .unwrap_or_else(|| "None".to_string());
+        let review_queue = self
+            .state
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.review_state == notatus_core::ReviewState::Draft)
+            .count();
+
+        let panel = div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_4()
+            .overflow_hidden()
+            .child(section_title("Info"))
+            .child(metric(
+                "Dataset",
+                compact_text(&self.state.dataset.manifest.project.name, 28),
+            ))
             .child(metric(
                 "Active tool",
                 format!("{:?}", self.state.active_tool),
             ))
+            .child(metric("Active label", active_label))
+            .child(metric("Selected media", selected_media))
             .child(metric(
-                "Image",
-                self.selected_asset()
-                    .map(compact_asset_name)
-                    .unwrap_or_else(|| "None".to_string()),
-            ))
-            .child(metric(
-                "Dimensions",
-                self.selected_asset()
-                    .map(asset_dimensions_label)
-                    .unwrap_or_else(|| "-".to_string()),
+                "Media",
+                media_count_label(self.state.dataset.assets.len()),
             ))
             .child(metric(
                 "Annotations",
-                self.state.dataset.annotations.len().to_string(),
+                annotation_count_label(self.state.dataset.annotations.len()),
             ))
             .child(metric(
-                "Review queue",
-                self.state
-                    .dataset
-                    .annotations
-                    .iter()
-                    .filter(|annotation| {
-                        annotation.review_state == notatus_core::ReviewState::Draft
-                    })
-                    .count()
-                    .to_string(),
+                "Labels",
+                label_count_label(self.state.dataset.labels.len()),
             ))
+            .child(metric("Review queue", review_queue.to_string()))
+            .child(metric(
+                "State",
+                if self.state.dirty { "Unsaved" } else { "Saved" }.to_string(),
+            ))
+            .when_some(self.status_message.clone(), |panel, status| {
+                panel.child(metric("Status", status))
+            });
+
+        if let Some(asset) = self.selected_asset() {
+            let annotation_count = self.annotations_for_asset(asset).len();
+
+            panel
+                .child(section_title("Media"))
+                .child(metric("Name", compact_text(&asset_display_name(asset), 28)))
+                .child(metric("Type", asset_kind_label(&asset.kind).to_string()))
+                .child(metric("Dimensions", asset_dimensions_label(asset)))
+                .child(metric(
+                    "Annotations",
+                    annotation_count_label(annotation_count),
+                ))
+                .child(metric(
+                    "Split",
+                    dataset_split_label(&asset.split).to_string(),
+                ))
+                .child(metric(
+                    "Location",
+                    compact_text(asset.location.display_path().as_ref(), 30),
+                ))
+        } else {
+            panel
+                .child(section_title("Media"))
+                .child(metric("Name", "None".to_string()))
+        }
+    }
+
+    fn bottom_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex_none()
+            .h(px(40.0))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_3()
+            .border_t_1()
+            .border_color(rgb(0xd6d9de))
+            .bg(rgb(0xf8fafc))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_w_0()
+                    .child(self.bottom_left_dock_button(
+                        "bottom-project",
+                        IconName::LayoutDashboard,
+                        "Project",
+                        LeftDock::Project,
+                        cx,
+                    ))
+                    .child(self.bottom_left_dock_button(
+                        "bottom-media",
+                        IconName::GalleryVerticalEnd,
+                        "Media",
+                        LeftDock::Media,
+                        cx,
+                    ))
+                    .child(self.bottom_left_dock_button(
+                        "bottom-labels",
+                        IconName::Palette,
+                        "Labels",
+                        LeftDock::Labels,
+                        cx,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_w_0()
+                    .child(self.bottom_right_dock_button(
+                        "bottom-annotations",
+                        IconName::Frame,
+                        "Annotations",
+                        RightDock::Annotations,
+                        cx,
+                    ))
+                    .child(self.bottom_right_dock_button(
+                        "bottom-info",
+                        IconName::Info,
+                        "Info",
+                        RightDock::MediaInfo,
+                        cx,
+                    )),
+            )
+    }
+
+    fn bottom_left_dock_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        tooltip: &'static str,
+        dock: LeftDock,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let view = cx.weak_entity();
+        Button::new(id)
+            .small()
+            .icon(Icon::new(icon))
+            .tooltip(tooltip)
+            .selected(self.left_dock == dock)
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |notatus, cx| {
+                    notatus.left_dock = dock;
+                    cx.notify();
+                });
+            })
+    }
+
+    fn bottom_right_dock_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        tooltip: &'static str,
+        dock: RightDock,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let view = cx.weak_entity();
+        Button::new(id)
+            .small()
+            .icon(Icon::new(icon))
+            .tooltip(tooltip)
+            .selected(self.right_dock == dock)
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |notatus, cx| {
+                    notatus.right_dock = dock;
+                    cx.notify();
+                });
+            })
     }
 
     fn selected_asset(&self) -> Option<&AssetRecord> {
         self.state
             .selected_asset
             .and_then(|asset_id| self.state.dataset.asset_by_id(asset_id))
+    }
+
+    fn selected_label(&self) -> Option<&notatus_core::Label> {
+        self.state
+            .selected_label
+            .and_then(|label_id| self.state.dataset.label_by_id(label_id))
+    }
+
+    fn annotations_for_asset(&self, asset: &AssetRecord) -> Vec<&AnnotationRecord> {
+        self.state
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.asset_id == asset.id)
+            .collect()
+    }
+
+    fn project_summary(&self) -> String {
+        format!(
+            "{} · {} · {}",
+            media_count_label(self.state.dataset.assets.len()),
+            annotation_count_label(self.state.dataset.annotations.len()),
+            label_count_label(self.state.dataset.labels.len())
+        )
+    }
+
+    fn label_editor(
+        &self,
+        label: &Label,
+        view: gpui::WeakEntity<NotatusWindow>,
+    ) -> impl IntoElement {
+        let selected_color = label.color.as_deref().unwrap_or(DEFAULT_LABEL_COLOR);
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(metric("Editing", "Label".to_string()))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(section_title("Name"))
+                    .child(Input::new(&self.label_name_input).small().w_full()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(section_title("Color"))
+                    .child(div().flex().flex_wrap().gap_2().children(
+                        LABEL_COLORS.iter().enumerate().map(|(color_ix, color)| {
+                            label_color_button(
+                                color_ix,
+                                *color,
+                                *color == selected_color,
+                                view.clone(),
+                            )
+                        }),
+                    )),
+            )
+            .child(metric(
+                "Annotations",
+                self.state
+                    .dataset
+                    .annotations
+                    .iter()
+                    .filter(|annotation| annotation.label_id == label.id)
+                    .count()
+                    .to_string(),
+            ))
+    }
+
+    fn create_label(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let label_number = self.state.dataset.labels.len() + 1;
+        let label_id = self.state.add_label(format!("Label {label_number}"));
+        let color = LABEL_COLORS[(label_number - 1) % LABEL_COLORS.len()].to_string();
+        self.left_dock = LeftDock::Labels;
+        if let Err(error) = self.state.update_label_color(label_id, Some(color)) {
+            self.status_message = Some(error.to_string());
+        } else {
+            self.status_message = Some("Created label".to_string());
+        }
+        self.sync_label_name_input(window, cx);
+        cx.notify();
+    }
+
+    fn select_label(&mut self, label_id: LabelId, window: &mut Window, cx: &mut Context<Self>) {
+        match self.state.select_label(label_id) {
+            Ok(()) => {
+                self.left_dock = LeftDock::Labels;
+                self.status_message = None;
+                self.sync_label_name_input(window, cx);
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    fn update_selected_label_color(&mut self, color: &'static str, cx: &mut Context<Self>) {
+        if let Some(label_id) = self.state.selected_label {
+            match self
+                .state
+                .update_label_color(label_id, Some(color.to_string()))
+            {
+                Ok(()) => self.status_message = None,
+                Err(error) => self.status_message = Some(error.to_string()),
+            }
+            cx.notify();
+        }
+    }
+
+    fn sync_label_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self
+            .selected_label()
+            .map(|label| label.name.clone())
+            .unwrap_or_default();
+        self.syncing_label_input = true;
+        self.label_name_input.update(cx, |input, cx| {
+            input.set_value(name, window, cx);
+        });
+        self.syncing_label_input = false;
     }
 
     fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -283,16 +906,15 @@ impl NotatusWindow {
             .flex_col()
             .text_color(rgb(0x111827))
             .bg(rgb(0xf3f4f6))
-            .child(self.app_titlebar())
-            .child(self.toolbar(cx))
+            .child(self.app_titlebar(cx))
             .child(
                 div().flex_1().overflow_hidden().child(
                     h_resizable("notatus-annotation-panels")
                         .child(
                             resizable_panel()
-                                .size(px(240.0))
-                                .size_range(px(180.0)..px(380.0))
-                                .child(self.sidebar(cx)),
+                                .size(px(304.0))
+                                .size_range(px(228.0)..px(420.0))
+                                .child(self.left_panel(cx)),
                         )
                         .child(
                             resizable_panel()
@@ -301,12 +923,13 @@ impl NotatusWindow {
                         )
                         .child(
                             resizable_panel()
-                                .size(px(280.0))
+                                .size(px(304.0))
                                 .size_range(px(220.0)..px(420.0))
-                                .child(self.inspector()),
+                                .child(self.right_panel(cx)),
                         ),
                 ),
             )
+            .child(self.bottom_bar(cx))
     }
 }
 
@@ -320,9 +943,9 @@ impl Render for NotatusWindow {
     }
 }
 
-fn open_image_picker(view: WeakEntity<NotatusWindow>, cx: &mut App) {
+fn open_media_picker(view: gpui::WeakEntity<NotatusWindow>, cx: &mut App) {
     let _ = view.update(cx, |window, cx| {
-        window.import_status = Some("Waiting for image selection".to_string());
+        window.status_message = Some("Waiting for media selection".to_string());
         cx.notify();
     });
 
@@ -330,32 +953,32 @@ fn open_image_picker(view: WeakEntity<NotatusWindow>, cx: &mut App) {
         files: true,
         directories: false,
         multiple: true,
-        prompt: Some(SharedString::from("Add images")),
+        prompt: Some(SharedString::from("Import media")),
     });
 
     cx.spawn(async move |cx| match paths.await {
         Ok(Ok(Some(paths))) => {
-            let imported = inspect_image_paths(paths);
+            let imported = inspect_media_paths(paths);
             let _ = view.update(cx, |window, cx| {
-                window.apply_image_import(imported);
+                window.apply_media_import(imported);
                 cx.notify();
             });
         }
         Ok(Ok(None)) => {
             let _ = view.update(cx, |window, cx| {
-                window.import_status = Some("Image import cancelled".to_string());
+                window.status_message = Some("Media import cancelled".to_string());
                 cx.notify();
             });
         }
         Ok(Err(error)) => {
             let _ = view.update(cx, |window, cx| {
-                window.import_status = Some(format!("Image picker failed: {error}"));
+                window.status_message = Some(format!("Media picker failed: {error}"));
                 cx.notify();
             });
         }
         Err(_) => {
             let _ = view.update(cx, |window, cx| {
-                window.import_status = Some("Image picker closed unexpectedly".to_string());
+                window.status_message = Some("Media picker closed unexpectedly".to_string());
                 cx.notify();
             });
         }
@@ -363,24 +986,24 @@ fn open_image_picker(view: WeakEntity<NotatusWindow>, cx: &mut App) {
     .detach();
 }
 
-struct ImageImport {
-    candidates: Vec<ImageCandidate>,
+struct MediaImport {
+    candidates: Vec<MediaCandidate>,
     failures: Vec<String>,
 }
 
-struct ImageCandidate {
+struct MediaCandidate {
     path: PathBuf,
     width: u32,
     height: u32,
 }
 
-fn inspect_image_paths(paths: Vec<PathBuf>) -> ImageImport {
+fn inspect_media_paths(paths: Vec<PathBuf>) -> MediaImport {
     let mut candidates = Vec::new();
     let mut failures = Vec::new();
 
     for path in paths {
         match image::image_dimensions(&path) {
-            Ok((width, height)) => candidates.push(ImageCandidate {
+            Ok((width, height)) => candidates.push(MediaCandidate {
                 path,
                 width,
                 height,
@@ -389,14 +1012,14 @@ fn inspect_image_paths(paths: Vec<PathBuf>) -> ImageImport {
         }
     }
 
-    ImageImport {
+    MediaImport {
         candidates,
         failures,
     }
 }
 
 impl NotatusWindow {
-    fn apply_image_import(&mut self, imported: ImageImport) {
+    fn apply_media_import(&mut self, imported: MediaImport) {
         let mut added = 0;
         let mut failed = imported.failures;
 
@@ -416,16 +1039,24 @@ impl NotatusWindow {
             }
         }
 
-        self.import_status = Some(import_summary(added, failed.len()));
+        if added > 0 {
+            self.left_dock = LeftDock::Media;
+        }
+        self.status_message = Some(media_import_summary(added, failed.len()));
     }
 }
 
-fn import_summary(added: usize, failed: usize) -> String {
+fn media_import_summary(added: usize, failed: usize) -> String {
     match (added, failed) {
-        (0, 0) => "No images selected".to_string(),
-        (0, failed) => format!("Skipped {failed} invalid image{}", plural(failed)),
-        (added, 0) => format!("Imported {added} image{}", plural(added)),
-        (added, failed) => format!("Imported {added} image{}; skipped {failed}", plural(added)),
+        (0, 0) => "No media selected".to_string(),
+        (0, failed) => format!("Skipped {failed} unsupported file{}", plural(failed)),
+        (added, 0) => format!("Imported {added} media item{}", plural(added)),
+        (added, failed) => {
+            format!(
+                "Imported {added} media item{}; skipped {failed}",
+                plural(added)
+            )
+        }
     }
 }
 
@@ -466,6 +1097,18 @@ fn canvas_message(message: &'static str) -> gpui::Div {
         .child(message)
 }
 
+fn empty_panel(message: &'static str) -> gpui::Div {
+    div()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .text_sm()
+        .text_color(rgb(0x6b7280))
+        .child(message)
+}
+
 fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
     div()
         .flex_none()
@@ -480,6 +1123,138 @@ fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
         .text_color(rgb(0x4b5563))
         .bg(rgb(0xf3f4f6))
         .child(value.into())
+}
+
+fn media_asset_meta(kind: &AssetKind, annotation_count: usize) -> impl IntoElement {
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(0x6b7280))
+                .child(asset_kind_label(kind)),
+        )
+        .child(sidebar_count(annotation_count.to_string()))
+}
+
+fn label_asset_meta(color: Option<&str>, annotation_count: usize) -> impl IntoElement {
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(label_swatch(color.unwrap_or(DEFAULT_LABEL_COLOR), false))
+        .child(sidebar_count(annotation_count.to_string()))
+}
+
+fn label_color_button(
+    color_ix: usize,
+    color: &'static str,
+    selected: bool,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    div()
+        .id(("label-color", color_ix))
+        .flex_none()
+        .size(px(28.0))
+        .rounded_sm()
+        .border_1()
+        .border_color(if selected {
+            rgb(0x111827)
+        } else {
+            rgb(0xd1d5db)
+        })
+        .p(px(3.0))
+        .hover(|swatch| swatch.border_color(rgb(0x6b7280)))
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |notatus, cx| {
+                notatus.update_selected_label_color(color, cx);
+            });
+        })
+        .child(label_swatch(color, true))
+}
+
+fn label_swatch(color: &str, fill_parent: bool) -> impl IntoElement {
+    div()
+        .flex_none()
+        .when(fill_parent, |swatch| swatch.size_full())
+        .when(!fill_parent, |swatch| swatch.size(px(12.0)))
+        .rounded_sm()
+        .bg(hex_color(color))
+}
+
+fn annotation_items_for_asset(state: &UiState, asset: &AssetRecord) -> Vec<SidebarMenuItem> {
+    let items: Vec<_> = state
+        .dataset
+        .annotations
+        .iter()
+        .filter(|annotation| annotation.asset_id == asset.id)
+        .map(|annotation| {
+            SidebarMenuItem::new(annotation_item_label(state, annotation))
+                .suffix(sidebar_count(annotation_geometry_label(
+                    &annotation.geometry,
+                )))
+                .active(state.selected_annotation == Some(annotation.id))
+        })
+        .collect();
+
+    if items.is_empty() {
+        vec![SidebarMenuItem::new("No annotations").disable(true)]
+    } else {
+        items
+    }
+}
+
+fn annotation_item_label(state: &UiState, annotation: &AnnotationRecord) -> String {
+    let label = state
+        .dataset
+        .label_by_id(annotation.label_id)
+        .map(|label| label.name.as_str())
+        .unwrap_or("Unknown label");
+
+    compact_text(&format!("{label} · {:?}", annotation.review_state), 34)
+}
+
+fn annotation_geometry_label(geometry: &AnnotationGeometry) -> &'static str {
+    match geometry {
+        AnnotationGeometry::Bbox(_) => "Box",
+        AnnotationGeometry::Polygon(_) => "Poly",
+    }
+}
+
+fn media_count_label(count: usize) -> String {
+    format!("{count} media")
+}
+
+fn annotation_count_label(count: usize) -> String {
+    format!("{count} annotation{}", plural(count))
+}
+
+fn label_count_label(count: usize) -> String {
+    format!("{count} label{}", plural(count))
+}
+
+fn dataset_created_label(dataset: &notatus_core::Dataset) -> String {
+    format!("Created {}", dataset.manifest.project.created_at.date())
+}
+
+fn asset_kind_label(kind: &AssetKind) -> &'static str {
+    match kind {
+        AssetKind::Image => "Image",
+        AssetKind::Video => "Video",
+    }
+}
+
+fn dataset_split_label(split: &notatus_core::DatasetSplit) -> &'static str {
+    match split {
+        notatus_core::DatasetSplit::Train => "Train",
+        notatus_core::DatasetSplit::Validation => "Validation",
+        notatus_core::DatasetSplit::Test => "Test",
+        notatus_core::DatasetSplit::Unassigned => "Unassigned",
+    }
 }
 
 fn asset_display_name(asset: &AssetRecord) -> String {
@@ -517,6 +1292,14 @@ fn compact_text(value: &str, max_chars: usize) -> String {
         .rev()
         .collect();
     format!("{head}...{tail}")
+}
+
+fn hex_color(value: &str) -> gpui::Hsla {
+    let hex = value.strip_prefix('#').unwrap_or(value);
+    u32::from_str_radix(hex, 16)
+        .map(rgb)
+        .unwrap_or_else(|_| rgb(0x2563eb))
+        .into()
 }
 
 fn dataset_has_local_path(state: &UiState, path: &str) -> bool {

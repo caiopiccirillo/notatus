@@ -18,6 +18,7 @@ pub struct UiState {
     pub active_tool: AnnotationTool,
     pub selected_asset: Option<AssetId>,
     pub selected_annotation: Option<AnnotationId>,
+    pub selected_label: Option<LabelId>,
     pub dirty: bool,
 }
 
@@ -28,6 +29,7 @@ impl UiState {
             active_tool: AnnotationTool::Select,
             selected_asset: None,
             selected_annotation: None,
+            selected_label: None,
             dirty: false,
         }
     }
@@ -39,6 +41,7 @@ impl UiState {
             active_tool: AnnotationTool::Select,
             selected_asset: None,
             selected_annotation: None,
+            selected_label: None,
             dirty: false,
         })
     }
@@ -53,8 +56,56 @@ impl UiState {
 
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
         let label_id = self.dataset.add_label(name);
+        self.selected_label = Some(label_id);
         self.dirty = true;
         label_id
+    }
+
+    pub fn select_label(&mut self, label_id: LabelId) -> Result<(), UiMutationError> {
+        if self.dataset.label_by_id(label_id).is_none() {
+            return Err(UiMutationError::MissingLabel { label_id });
+        }
+
+        self.selected_label = Some(label_id);
+        self.selected_annotation = None;
+        Ok(())
+    }
+
+    pub fn update_label_name(
+        &mut self,
+        label_id: LabelId,
+        name: impl Into<String>,
+    ) -> Result<(), UiMutationError> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            return Err(UiMutationError::EmptyLabelName { label_id });
+        }
+
+        let label = self
+            .dataset
+            .labels
+            .iter_mut()
+            .find(|label| label.id == label_id)
+            .ok_or(UiMutationError::MissingLabel { label_id })?;
+        label.name = name;
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn update_label_color(
+        &mut self,
+        label_id: LabelId,
+        color: Option<String>,
+    ) -> Result<(), UiMutationError> {
+        let label = self
+            .dataset
+            .labels
+            .iter_mut()
+            .find(|label| label.id == label_id)
+            .ok_or(UiMutationError::MissingLabel { label_id })?;
+        label.color = color;
+        self.dirty = true;
+        Ok(())
     }
 
     pub fn add_local_image_asset(
@@ -77,6 +128,7 @@ impl UiState {
 
         self.selected_asset = Some(asset_id);
         self.selected_annotation = None;
+        self.selected_label = None;
         Ok(())
     }
 
@@ -116,6 +168,7 @@ pub enum UiMutationError {
     Validation(ValidationError),
     MissingAsset { asset_id: AssetId },
     MissingLabel { label_id: LabelId },
+    EmptyLabelName { label_id: LabelId },
 }
 
 impl fmt::Display for UiMutationError {
@@ -125,6 +178,7 @@ impl fmt::Display for UiMutationError {
             Self::Validation(source) => write!(f, "{source}"),
             Self::MissingAsset { asset_id } => write!(f, "missing asset {asset_id}"),
             Self::MissingLabel { label_id } => write!(f, "missing label {label_id}"),
+            Self::EmptyLabelName { label_id } => write!(f, "label {label_id} needs a name"),
         }
     }
 }
@@ -134,7 +188,9 @@ impl Error for UiMutationError {
         match self {
             Self::Geometry(source) => Some(source),
             Self::Validation(source) => Some(source),
-            Self::MissingAsset { .. } | Self::MissingLabel { .. } => None,
+            Self::MissingAsset { .. } | Self::MissingLabel { .. } | Self::EmptyLabelName { .. } => {
+                None
+            }
         }
     }
 }
@@ -174,5 +230,34 @@ mod tests {
         assert_eq!(state.selected_annotation, Some(annotation_id));
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn customizes_selected_label() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+
+        state.select_label(label_id).unwrap();
+        state.update_label_name(label_id, "car").unwrap();
+        state
+            .update_label_color(label_id, Some("#dc2626".to_string()))
+            .unwrap();
+
+        let label = state.dataset.label_by_id(label_id).unwrap();
+        assert_eq!(state.selected_label, Some(label_id));
+        assert_eq!(label.name, "car");
+        assert_eq!(label.color.as_deref(), Some("#dc2626"));
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn rejects_empty_label_name() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+
+        let error = state.update_label_name(label_id, " ").unwrap_err();
+
+        assert!(matches!(error, UiMutationError::EmptyLabelName { .. }));
+        assert_eq!(state.dataset.label_by_id(label_id).unwrap().name, "vehicle");
     }
 }
