@@ -2,8 +2,8 @@ use super::{AnnotationTool, UiState};
 use gpui::prelude::*;
 use gpui::{
     App, Application, Bounds, Context, FontWeight, IntoElement, ObjectFit, PathPromptOptions,
-    Pixels, Render, SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowDecorations, WindowOptions, div, img, px, rgb, size,
+    Pixels, Point, Render, SharedString, Subscription, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowDecorations, WindowOptions, div, img, px, rgb, size,
 };
 use gpui_component::{
     Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
@@ -14,9 +14,12 @@ use gpui_component::{
     sidebar::{SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
-    AnnotationGeometry, AnnotationRecord, AssetKind, AssetLocation, AssetRecord, Label, LabelId,
+    AnnotationGeometry, AnnotationRecord, AssetKind, AssetLocation, AssetRecord,
+    BoundingBox, Label, LabelId,
 };
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 mod bottom_bar;
 mod canvas;
@@ -46,6 +49,14 @@ enum RightDock {
     MediaInfo,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct DrawingState {
+    start_image_pos: (f64, f64),
+    current_image_pos: (f64, f64),
+}
+
+type SharedImageBounds = Rc<RefCell<Option<Bounds<Pixels>>>>;
+
 struct NotatusWindow {
     state: UiState,
     left_dock: LeftDock,
@@ -53,6 +64,8 @@ struct NotatusWindow {
     status_message: Option<String>,
     label_name_input: gpui::Entity<InputState>,
     syncing_label_input: bool,
+    drawing: Option<DrawingState>,
+    canvas_image_bounds: SharedImageBounds,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -86,6 +99,8 @@ impl NotatusWindow {
             status_message: None,
             label_name_input,
             syncing_label_input: false,
+            drawing: None,
+            canvas_image_bounds: Rc::new(RefCell::new(None)),
             _subscriptions,
         }
     }
@@ -171,7 +186,7 @@ impl NotatusWindow {
         self.syncing_label_input = false;
     }
 
-    fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn app_frame(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .flex()
@@ -191,7 +206,7 @@ impl NotatusWindow {
                         .child(
                             resizable_panel()
                                 .size_range(px(320.0)..Pixels::MAX)
-                                .child(self.canvas_placeholder()),
+                                .child(self.canvas_area(window, cx)),
                         )
                         .child(
                             resizable_panel()
@@ -206,12 +221,12 @@ impl NotatusWindow {
 }
 
 impl Render for NotatusWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("notatus-window")
             .size_full()
             .bg(rgb(0xf3f4f6))
-            .child(self.app_frame(cx))
+            .child(self.app_frame(window, cx))
     }
 }
 

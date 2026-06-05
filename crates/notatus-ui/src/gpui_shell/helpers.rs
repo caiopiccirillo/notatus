@@ -4,28 +4,6 @@ pub(super) fn plural(count: usize) -> &'static str {
     if count == 1 { "" } else { "s" }
 }
 
-pub(super) fn image_canvas_content(asset: &AssetRecord) -> impl IntoElement {
-    match &asset.location {
-        AssetLocation::LocalPath { path } => div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                img(PathBuf::from(path))
-                    .size_full()
-                    .object_fit(ObjectFit::Contain)
-                    .with_loading(|| canvas_message("Loading image").into_any_element())
-                    .with_fallback(|| {
-                        canvas_message("Unable to load selected image").into_any_element()
-                    }),
-            ),
-        AssetLocation::S3Object { .. } => {
-            canvas_message("Remote image preview is not implemented yet")
-        }
-    }
-}
-
 pub(super) fn canvas_message(message: &'static str) -> gpui::Div {
     div()
         .size_full()
