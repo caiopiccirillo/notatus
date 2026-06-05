@@ -2,7 +2,7 @@ use super::helpers::*;
 use super::*;
 use gpui::{
     MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    bounds, fill, outline, px, rgba,
+    bounds, fill, outline, px,
 };
 use notatus_core::AnnotationGeometry;
 
@@ -25,6 +25,11 @@ impl NotatusWindow {
             })
             .collect();
         let active_tool = self.state.active_tool;
+        let preview_color = self
+            .selected_label()
+            .and_then(|l| l.color.as_deref())
+            .unwrap_or(DEFAULT_LABEL_COLOR)
+            .to_string();
         let view = cx.weak_entity();
 
         div()
@@ -53,6 +58,7 @@ impl NotatusWindow {
                                 canvas_image_bounds,
                                 &state_labels,
                                 active_tool,
+                                preview_color.clone(),
                                 window,
                                 cx,
                             )
@@ -79,6 +85,7 @@ fn interactive_image_canvas(
     shared_img_bounds: SharedImageBounds,
     annotations: &[(AnnotationGeometry, String, bool)],
     active_tool: AnnotationTool,
+    preview_color: String,
     _window: &mut Window,
     _cx: &mut Context<NotatusWindow>,
 ) -> impl IntoElement {
@@ -127,24 +134,17 @@ fn interactive_image_canvas(
                                 bbox.width,
                                 bbox.height,
                             );
-                            let border_color = if *selected {
-                                rgba(0xFF0000FF)
-                            } else {
-                                hex_to_rgba(color)
-                            };
-                            let bg_color = if *selected {
-                                rgba(0xFF000020)
-                            } else {
-                                rgba_with_alpha(color, 0.15)
-                            };
+                            let border_color = hex_to_rgba(color);
+                            let bg_color = rgba_with_alpha(color, 0.08);
+                            let border_width = if *selected { 3.0 } else { 2.0 };
                             window.paint_quad(fill(screen_rect, bg_color));
                             window.paint_quad(
                                 outline(screen_rect, border_color, gpui::BorderStyle::Solid)
                                     .border_widths(gpui::Edges {
-                                        top: px(2.0),
-                                        right: px(2.0),
-                                        bottom: px(2.0),
-                                        left: px(2.0),
+                                        top: px(border_width),
+                                        right: px(border_width),
+                                        bottom: px(border_width),
+                                        left: px(border_width),
                                     }),
                             );
                         }
@@ -165,11 +165,11 @@ fn interactive_image_canvas(
                             w,
                             h,
                         );
-                        let preview_color = rgba(0x2563EB80);
-                        let preview_bg = rgba(0x2563EB20);
+                        let preview_border = hex_to_rgba(&preview_color);
+                        let preview_bg = rgba_with_alpha(&preview_color, 0.08);
                         window.paint_quad(fill(screen_rect, preview_bg));
                         window.paint_quad(
-                            outline(screen_rect, preview_color, gpui::BorderStyle::Solid)
+                            outline(screen_rect, preview_border, gpui::BorderStyle::Solid)
                                 .border_widths(gpui::Edges {
                                     top: px(2.0),
                                     right: px(2.0),
@@ -345,12 +345,12 @@ fn image_bbox_to_screen(
 fn hex_to_rgba(hex: &str) -> gpui::Rgba {
     let h = hex.strip_prefix('#').unwrap_or(hex);
     let val = u32::from_str_radix(h, 16).unwrap_or(0x2563EB);
-    gpui::rgba(val | 0xFF000000)
+    gpui::rgba((val << 8) | 0xFF)
 }
 
 fn rgba_with_alpha(hex: &str, alpha: f32) -> gpui::Rgba {
     let h = hex.strip_prefix('#').unwrap_or(hex);
     let val = u32::from_str_radix(h, 16).unwrap_or(0x2563EB);
     let a = (alpha * 255.0) as u32;
-    gpui::rgba((val & 0x00FFFFFF) | (a << 24))
+    gpui::rgba((val << 8) | a)
 }
