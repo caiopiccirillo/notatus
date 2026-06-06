@@ -1,51 +1,16 @@
-use super::*;
+use super::super::*;
 
-#[derive(Clone)]
-pub(super) struct CanvasToolDefinition {
-    pub(super) tool: AnnotationTool,
-    pub(super) id: &'static str,
-    pub(super) label: &'static str,
-    pub(super) tooltip: &'static str,
-    pub(super) icon: IconName,
-}
-
-pub(super) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
-    [
-        CanvasToolDefinition {
-            tool: AnnotationTool::DrawBox,
-            id: "tool-draw-box",
-            label: "Draw Box",
-            tooltip: "Draw bounding boxes",
-            icon: IconName::Frame,
-        },
-        CanvasToolDefinition {
-            tool: AnnotationTool::Select,
-            id: "tool-select",
-            label: "Select",
-            tooltip: "Select annotations",
-            icon: IconName::Inspector,
-        },
-        CanvasToolDefinition {
-            tool: AnnotationTool::Pan,
-            id: "tool-pan",
-            label: "Pan/Zoom",
-            tooltip: "Pan and zoom the canvas",
-            icon: IconName::Map,
-        },
-    ]
+#[derive(Clone, Copy, Debug)]
+pub(in crate::gpui_shell) struct DrawingState {
+    pub(in crate::gpui_shell) start_image_pos: (f64, f64),
+    pub(in crate::gpui_shell) current_image_pos: (f64, f64),
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct DrawingState {
-    pub(super) start_image_pos: (f64, f64),
-    pub(super) current_image_pos: (f64, f64),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct CanvasViewport {
-    pub(super) zoom: f32,
-    pub(super) pan_x: f32,
-    pub(super) pan_y: f32,
+pub(in crate::gpui_shell) struct CanvasViewport {
+    pub(in crate::gpui_shell) zoom: f32,
+    pub(in crate::gpui_shell) pan_x: f32,
+    pub(in crate::gpui_shell) pan_y: f32,
 }
 
 impl Default for CanvasViewport {
@@ -62,15 +27,15 @@ impl CanvasViewport {
     const MIN_ZOOM: f32 = 0.25;
     const MAX_ZOOM: f32 = 8.0;
 
-    pub(super) fn reset(&mut self) {
+    pub(in crate::gpui_shell) fn reset(&mut self) {
         *self = Self::default();
     }
 
-    pub(super) fn zoom_by(&mut self, factor: f32) {
+    pub(in crate::gpui_shell) fn zoom_by(&mut self, factor: f32) {
         self.zoom = (self.zoom * factor).clamp(Self::MIN_ZOOM, Self::MAX_ZOOM);
     }
 
-    pub(super) fn zoom_at(
+    pub(in crate::gpui_shell) fn zoom_at(
         &mut self,
         screen_pos: Point<Pixels>,
         fit_bounds: Bounds<Pixels>,
@@ -108,32 +73,32 @@ impl CanvasViewport {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct PanState {
+pub(in crate::gpui_shell) struct PanState {
     start_screen_pos: Point<Pixels>,
     start_pan_x: f32,
     start_pan_y: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct ToolInteractionState {
-    pub(super) draw_box: Option<DrawingState>,
-    pub(super) pan: Option<PanState>,
-    pub(super) viewport: CanvasViewport,
+pub(in crate::gpui_shell) struct ToolInteractionState {
+    pub(in crate::gpui_shell) draw_box: Option<DrawingState>,
+    pub(in crate::gpui_shell) pan: Option<PanState>,
+    pub(in crate::gpui_shell) viewport: CanvasViewport,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct DrawBoxCompletion {
-    pub(super) bbox: Option<BoundingBox>,
+pub(in crate::gpui_shell) struct DrawBoxCompletion {
+    pub(in crate::gpui_shell) bbox: Option<BoundingBox>,
 }
 
 impl ToolInteractionState {
-    pub(super) fn fit_canvas_to_view(&mut self) {
+    pub(in crate::gpui_shell) fn fit_canvas_to_view(&mut self) {
         self.draw_box = None;
         self.pan = None;
         self.viewport.reset();
     }
 
-    pub(super) fn clear_for_tool(&mut self, tool: AnnotationTool) {
+    pub(in crate::gpui_shell) fn clear_for_tool(&mut self, tool: AnnotationTool) {
         if !matches!(tool, AnnotationTool::DrawBox) {
             self.draw_box = None;
         }
@@ -142,20 +107,20 @@ impl ToolInteractionState {
         }
     }
 
-    pub(super) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
+    pub(in crate::gpui_shell) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
         self.draw_box = Some(DrawingState {
             start_image_pos: image_pos,
             current_image_pos: image_pos,
         });
     }
 
-    pub(super) fn update_draw_box(&mut self, image_pos: (f64, f64)) {
+    pub(in crate::gpui_shell) fn update_draw_box(&mut self, image_pos: (f64, f64)) {
         if let Some(ref mut drawing) = self.draw_box {
             drawing.current_image_pos = image_pos;
         }
     }
 
-    pub(super) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
+    pub(in crate::gpui_shell) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
         let drawing = self.draw_box.take()?;
         let (x1, y1) = drawing.start_image_pos;
         let (x2, y2) = drawing.current_image_pos;
@@ -172,7 +137,7 @@ impl ToolInteractionState {
         Some(DrawBoxCompletion { bbox })
     }
 
-    pub(super) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
+    pub(in crate::gpui_shell) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
         self.pan = Some(PanState {
             start_screen_pos: screen_pos,
             start_pan_x: self.viewport.pan_x,
@@ -180,7 +145,7 @@ impl ToolInteractionState {
         });
     }
 
-    pub(super) fn update_pan(&mut self, screen_pos: Point<Pixels>) {
+    pub(in crate::gpui_shell) fn update_pan(&mut self, screen_pos: Point<Pixels>) {
         let Some(pan) = self.pan else {
             return;
         };
@@ -190,98 +155,14 @@ impl ToolInteractionState {
         self.viewport.pan_y = pan.start_pan_y + dy;
     }
 
-    pub(super) fn finish_pan(&mut self) {
+    pub(in crate::gpui_shell) fn finish_pan(&mut self) {
         self.pan = None;
-    }
-}
-
-impl NotatusWindow {
-    pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
-        self.tools.fit_canvas_to_view();
-        self.status_message = Some("Fit image to canvas".to_string());
-        cx.notify();
-    }
-
-    pub(super) fn set_canvas_tool(&mut self, tool: AnnotationTool, cx: &mut Context<Self>) {
-        self.tools.clear_for_tool(tool);
-        self.state.set_tool(tool);
-        self.status_message = None;
-        cx.notify();
-    }
-
-    pub(super) fn canvas_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let view = cx.weak_entity();
-
-        div()
-            .absolute()
-            .top_3()
-            .left_3()
-            .flex()
-            .items_center()
-            .gap_1()
-            .rounded_sm()
-            .border_1()
-            .border_color(rgb(0xd1d5db))
-            .bg(rgb(0xffffff))
-            .p_1()
-            .children(
-                canvas_tool_definitions()
-                    .into_iter()
-                    .map(|definition| self.canvas_tool_button(definition, view.clone())),
-            )
-            .child(
-                Button::new("tool-fit-canvas")
-                    .small()
-                    .icon(Icon::new(IconName::Maximize))
-                    .tooltip("Fit image to canvas")
-                    .on_click(move |_, _, cx| {
-                        let _ = view.update(cx, |notatus, cx| {
-                            notatus.fit_canvas_to_view(cx);
-                        });
-                    }),
-            )
-    }
-
-    fn canvas_tool_button(
-        &self,
-        definition: CanvasToolDefinition,
-        view: gpui::WeakEntity<NotatusWindow>,
-    ) -> Button {
-        let tool = definition.tool;
-
-        Button::new(definition.id)
-            .small()
-            .icon(Icon::new(definition.icon))
-            .tooltip(format!("{}: {}", definition.label, definition.tooltip))
-            .selected(self.state.active_tool == tool)
-            .on_click(move |_, _, cx| {
-                let _ = view.update(cx, |notatus, cx| {
-                    notatus.set_canvas_tool(tool, cx);
-                });
-            })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn exposes_all_initial_canvas_tools() {
-        let tools: Vec<_> = canvas_tool_definitions()
-            .into_iter()
-            .map(|definition| definition.tool)
-            .collect();
-
-        assert_eq!(
-            tools,
-            vec![
-                AnnotationTool::DrawBox,
-                AnnotationTool::Select,
-                AnnotationTool::Pan
-            ]
-        );
-    }
 
     #[test]
     fn finishing_draw_box_returns_bbox_for_large_drag() {
