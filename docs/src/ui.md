@@ -133,14 +133,16 @@ The center panel previews the selected image with GPUI's `img` element:
 
 The canvas has a tool-oriented interaction layer. Tool metadata and interaction
 state live in the GPUI shell, while completed mutations go through `UiState`.
-Draw Box is the only enabled canvas tool today:
+The initial tools are:
 
-- maps window coordinates to image pixel coordinates
-- draws a box preview while dragging
-- clamps positions to image bounds
-- creates `AnnotationGeometry::Bbox` through `UiState`
+- Draw Box maps window coordinates to image pixel coordinates, draws a preview
+  while dragging, clamps positions to image bounds, and creates
+  `AnnotationGeometry::Bbox` through `UiState`.
+- Select hit-tests bounding boxes in image space, selects the topmost matching
+  annotation, and keeps selection changes out of dataset dirty state.
+- Pan/Zoom drags the shared image viewport and zooms the viewport with the
+  scroll wheel.
 
-Select and Pan/Zoom are visible extension points but are not implemented yet.
 Future segmentation tools should add new handlers to the canvas tool layer and
 commit completed polygons through the canonical core schema.
 

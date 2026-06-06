@@ -142,6 +142,28 @@ impl UiState {
         Ok(())
     }
 
+    pub fn select_annotation(
+        &mut self,
+        annotation_id: Option<AnnotationId>,
+    ) -> Result<(), UiMutationError> {
+        let Some(annotation_id) = annotation_id else {
+            self.selected_annotation = None;
+            return Ok(());
+        };
+
+        let annotation = self
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == annotation_id)
+            .ok_or(UiMutationError::MissingAnnotation { annotation_id })?;
+
+        self.selected_asset = Some(annotation.asset_id);
+        self.selected_annotation = Some(annotation_id);
+        self.selected_label = Some(annotation.label_id);
+        Ok(())
+    }
+
     pub fn add_human_bbox(
         &mut self,
         asset_id: AssetId,
@@ -177,6 +199,7 @@ pub enum UiMutationError {
     Geometry(GeometryError),
     Validation(ValidationError),
     MissingAsset { asset_id: AssetId },
+    MissingAnnotation { annotation_id: AnnotationId },
     MissingLabel { label_id: LabelId },
     EmptyLabelName { label_id: LabelId },
 }
@@ -187,6 +210,9 @@ impl fmt::Display for UiMutationError {
             Self::Geometry(source) => write!(f, "{source}"),
             Self::Validation(source) => write!(f, "{source}"),
             Self::MissingAsset { asset_id } => write!(f, "missing asset {asset_id}"),
+            Self::MissingAnnotation { annotation_id } => {
+                write!(f, "missing annotation {annotation_id}")
+            }
             Self::MissingLabel { label_id } => write!(f, "missing label {label_id}"),
             Self::EmptyLabelName { label_id } => write!(f, "label {label_id} needs a name"),
         }
@@ -198,9 +224,10 @@ impl Error for UiMutationError {
         match self {
             Self::Geometry(source) => Some(source),
             Self::Validation(source) => Some(source),
-            Self::MissingAsset { .. } | Self::MissingLabel { .. } | Self::EmptyLabelName { .. } => {
-                None
-            }
+            Self::MissingAsset { .. }
+            | Self::MissingAnnotation { .. }
+            | Self::MissingLabel { .. }
+            | Self::EmptyLabelName { .. } => None,
         }
     }
 }
@@ -249,6 +276,31 @@ mod tests {
         state.set_tool(AnnotationTool::DrawBox);
 
         assert_eq!(state.active_tool, AnnotationTool::DrawBox);
+        assert!(!state.dirty);
+    }
+
+    #[test]
+    fn selects_annotation_without_dirtying_dataset() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("car");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        state.mark_saved();
+
+        state.select_annotation(Some(annotation_id)).unwrap();
+
+        assert_eq!(state.selected_asset, Some(asset_id));
+        assert_eq!(state.selected_label, Some(label_id));
+        assert_eq!(state.selected_annotation, Some(annotation_id));
         assert!(!state.dirty);
     }
 

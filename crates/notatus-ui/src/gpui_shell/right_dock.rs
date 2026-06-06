@@ -83,6 +83,10 @@ impl NotatusWindow {
                 "Active tool",
                 self.state.active_tool.display_name().to_string(),
             ))
+            .child(metric(
+                "Zoom",
+                format!("{:.0}%", self.tools.viewport.zoom * 100.0),
+            ))
             .child(metric("Active label", active_label))
             .child(metric("Selected media", selected_media))
             .child(metric(

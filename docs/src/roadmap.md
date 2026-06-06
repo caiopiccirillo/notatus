@@ -8,9 +8,9 @@ This page documents likely next steps based on the current implementation.
 
 Extend the canvas tool architecture:
 
-- implement Select mode for existing annotations
 - add annotation edit handles
-- add pan and zoom controls
+- add keyboard shortcuts and cursor affordances for tools
+- add zoom reset and fit-to-screen controls
 - keep new canvas interactions routed through the GPUI tool layer
 
 ### Label Management

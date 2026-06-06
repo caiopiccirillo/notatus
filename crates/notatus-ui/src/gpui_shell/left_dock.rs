@@ -125,6 +125,8 @@ impl NotatusWindow {
                             let _ = view.update(cx, |window, cx| {
                                 if let Err(error) = window.state.select_asset(asset_id) {
                                     window.status_message = Some(error.to_string());
+                                } else {
+                                    window.tools.viewport.reset();
                                 }
                                 cx.notify();
                             });

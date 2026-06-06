@@ -6,7 +6,7 @@ use gpui::{
     WindowBounds, WindowDecorations, WindowOptions, div, img, px, rgb, size,
 };
 use gpui_component::{
-    Disableable as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
+    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
     button::Button,
     input::{Input, InputEvent, InputState},
     menu::{DropdownMenu, PopupMenuItem},
@@ -51,7 +51,14 @@ enum RightDock {
     MediaInfo,
 }
 
-type SharedImageBounds = Rc<RefCell<Option<Bounds<Pixels>>>>;
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct CanvasImageLayout {
+    fit_bounds: Bounds<Pixels>,
+    image_bounds: Bounds<Pixels>,
+    image_bounds_in_canvas: Bounds<Pixels>,
+}
+
+type SharedImageLayout = Rc<RefCell<Option<CanvasImageLayout>>>;
 
 struct NotatusWindow {
     state: UiState,
@@ -61,7 +68,7 @@ struct NotatusWindow {
     label_name_input: gpui::Entity<InputState>,
     syncing_label_input: bool,
     tools: ToolInteractionState,
-    canvas_image_bounds: SharedImageBounds,
+    canvas_image_layout: SharedImageLayout,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -96,7 +103,7 @@ impl NotatusWindow {
             label_name_input,
             syncing_label_input: false,
             tools: ToolInteractionState::default(),
-            canvas_image_bounds: Rc::new(RefCell::new(None)),
+            canvas_image_layout: Rc::new(RefCell::new(None)),
             _subscriptions,
         }
     }

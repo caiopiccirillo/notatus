@@ -1,7 +1,17 @@
 use super::helpers::*;
 use super::*;
-use gpui::{MouseDownEvent, MouseMoveEvent, MouseUpEvent, bounds, fill, outline, px};
-use notatus_core::AnnotationGeometry;
+use gpui::{
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollWheelEvent, bounds, fill, outline, px,
+};
+use notatus_core::{AnnotationGeometry, AnnotationId};
+
+#[derive(Clone)]
+struct AnnotationOverlay {
+    id: AnnotationId,
+    geometry: AnnotationGeometry,
+    color: String,
+    selected: bool,
+}
 
 impl NotatusWindow {
     pub(super) fn canvas_area(
@@ -11,7 +21,7 @@ impl NotatusWindow {
     ) -> impl IntoElement {
         let selected_asset = self.selected_asset();
         let drawing = self.tools.draw_box;
-        let canvas_image_bounds = self.canvas_image_bounds.clone();
+        let canvas_image_layout = self.canvas_image_layout.clone();
         let annotations: Vec<_> = selected_asset
             .map(|asset| self.annotations_for_asset(asset))
             .unwrap_or_default();
@@ -22,14 +32,16 @@ impl NotatusWindow {
                 let color = label
                     .and_then(|l| l.color.as_deref())
                     .unwrap_or(DEFAULT_LABEL_COLOR);
-                (
-                    ann.geometry.clone(),
-                    color.to_string(),
-                    self.state.selected_annotation == Some(ann.id),
-                )
+                AnnotationOverlay {
+                    id: ann.id,
+                    geometry: ann.geometry.clone(),
+                    color: color.to_string(),
+                    selected: self.state.selected_annotation == Some(ann.id),
+                }
             })
             .collect();
         let active_tool = self.state.active_tool;
+        let viewport = self.tools.viewport;
         let preview_color = self
             .selected_label()
             .and_then(|l| l.color.as_deref())
@@ -60,9 +72,10 @@ impl NotatusWindow {
                             asset,
                             view,
                             drawing,
-                            canvas_image_bounds,
+                            canvas_image_layout,
                             &state_labels,
                             active_tool,
+                            viewport,
                             preview_color.clone(),
                             window,
                             cx,
@@ -87,9 +100,10 @@ fn interactive_image_canvas(
     asset: &AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
     drawing: Option<super::tools::DrawingState>,
-    shared_img_bounds: SharedImageBounds,
-    annotations: &[(AnnotationGeometry, String, bool)],
+    shared_image_layout: SharedImageLayout,
+    annotations: &[AnnotationOverlay],
     active_tool: AnnotationTool,
+    viewport: super::tools::CanvasViewport,
     preview_color: String,
     _window: &mut Window,
     _cx: &mut Context<NotatusWindow>,
@@ -101,35 +115,50 @@ fn interactive_image_canvas(
     let img_width = asset.dimensions.width as f64;
     let img_height = asset.dimensions.height as f64;
     let annotations = annotations.to_vec();
-    let accepts_drag_events = super::tools::tool_accepts_canvas_drag(active_tool);
+    let paint_annotations = annotations.clone();
+    let rendered_image_layout = *shared_image_layout.borrow();
 
-    let bounds_for_prepaint = shared_img_bounds.clone();
+    let layout_for_prepaint = shared_image_layout.clone();
+    let image = img(image_path.clone())
+        .with_loading(|| canvas_message("Loading image").into_any_element())
+        .with_fallback(|| canvas_message("Unable to load selected image").into_any_element());
 
     div()
         .id("image-canvas")
         .size_full()
+        .relative()
         .flex()
         .items_center()
         .justify_center()
-        .child(
-            img(image_path.clone())
+        .child(match rendered_image_layout {
+            Some(layout) => image
+                .absolute()
+                .left(layout.image_bounds_in_canvas.origin.x)
+                .top(layout.image_bounds_in_canvas.origin.y)
+                .w(layout.image_bounds_in_canvas.size.width)
+                .h(layout.image_bounds_in_canvas.size.height)
+                .object_fit(ObjectFit::Fill)
+                .into_any_element(),
+            None => image
                 .size_full()
                 .object_fit(ObjectFit::Contain)
-                .with_loading(|| canvas_message("Loading image").into_any_element())
-                .with_fallback(|| {
-                    canvas_message("Unable to load selected image").into_any_element()
-                }),
-        )
+                .into_any_element(),
+        })
         .child(
             gpui::canvas(
-                move |bounds, _window, _cx| {
-                    let img_bounds = compute_image_bounds(bounds, img_width, img_height);
-                    *bounds_for_prepaint.borrow_mut() = Some(img_bounds);
+                move |bounds, window, cx| {
+                    let fit_bounds = compute_image_bounds(bounds, img_width, img_height);
+                    let img_bounds = apply_viewport_to_bounds(fit_bounds, viewport);
+                    let layout = canvas_image_layout(bounds, fit_bounds, img_bounds);
+                    if *layout_for_prepaint.borrow() != Some(layout) {
+                        *layout_for_prepaint.borrow_mut() = Some(layout);
+                        cx.notify(window.current_view());
+                    }
                     img_bounds
                 },
                 move |_bounds, img_bounds, window, _cx| {
-                    for (geometry, color, selected) in &annotations {
-                        if let AnnotationGeometry::Bbox(bbox) = geometry {
+                    for annotation in &paint_annotations {
+                        if let AnnotationGeometry::Bbox(bbox) = &annotation.geometry {
                             let screen_rect = image_bbox_to_screen(
                                 img_bounds,
                                 img_width,
@@ -139,9 +168,9 @@ fn interactive_image_canvas(
                                 bbox.width,
                                 bbox.height,
                             );
-                            let border_color = hex_to_rgba(color);
-                            let bg_color = rgba_with_alpha(color, 0.08);
-                            let border_width = if *selected { 3.0 } else { 2.0 };
+                            let border_color = hex_to_rgba(&annotation.color);
+                            let bg_color = rgba_with_alpha(&annotation.color, 0.08);
+                            let border_width = if annotation.selected { 3.0 } else { 2.0 };
                             window.paint_quad(fill(screen_rect, bg_color));
                             window.paint_quad(
                                 outline(screen_rect, border_color, gpui::BorderStyle::Solid)
@@ -184,23 +213,23 @@ fn interactive_image_canvas(
             .top_0()
             .left_0(),
         )
-        .when(accepts_drag_events, |canvas| {
+        .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
             let view_down = view.clone();
             let view_move = view.clone();
             let view_up = view.clone();
-            let bounds_down = shared_img_bounds.clone();
-            let bounds_move = shared_img_bounds.clone();
-            let bounds_up = shared_img_bounds.clone();
+            let layout_down = shared_image_layout.clone();
+            let layout_move = shared_image_layout.clone();
+            let layout_up = shared_image_layout.clone();
             canvas
                 .on_mouse_down(
                     gpui::MouseButton::Left,
                     move |event: &MouseDownEvent, _window, cx| {
-                        let img_bounds = bounds_down.borrow();
-                        if let Some(img_bounds) = *img_bounds {
+                        let layout = layout_down.borrow();
+                        if let Some(layout) = *layout {
                             let _ = view_down.update(cx, |notatus, cx| {
                                 if let Some(asset) = notatus.selected_asset() {
                                     let (ix, iy) =
-                                        screen_to_image(img_bounds, event.position, asset);
+                                        screen_to_image(layout.image_bounds, event.position, asset);
                                     notatus.tools.begin_draw_box((ix, iy));
                                     cx.notify();
                                 }
@@ -209,13 +238,13 @@ fn interactive_image_canvas(
                     },
                 )
                 .on_mouse_move(move |event: &MouseMoveEvent, _window, cx| {
-                    let img_bounds = bounds_move.borrow();
-                    if let Some(img_bounds) = *img_bounds {
+                    let layout = layout_move.borrow();
+                    if let Some(layout) = *layout {
                         let _ = view_move.update(cx, |notatus, cx| {
                             if notatus.tools.draw_box.is_some() {
                                 if let Some(asset) = notatus.selected_asset() {
                                     let (ix, iy) =
-                                        screen_to_image(img_bounds, event.position, asset);
+                                        screen_to_image(layout.image_bounds, event.position, asset);
                                     notatus.tools.update_draw_box((ix, iy));
                                     cx.notify();
                                 }
@@ -226,14 +255,14 @@ fn interactive_image_canvas(
                 .on_mouse_up(
                     gpui::MouseButton::Left,
                     move |_event: &MouseUpEvent, _window, cx| {
-                        let img_bounds_ref = bounds_up.borrow();
-                        if let Some(img_bounds) = *img_bounds_ref {
+                        let layout = layout_up.borrow();
+                        if let Some(layout) = *layout {
                             let _ = view_up.update(cx, |notatus, cx| {
                                 if let Some(completion) = notatus.tools.finish_draw_box() {
                                     if let Some(asset) = notatus.selected_asset() {
                                         if let Some(label_id) = notatus.state.selected_label {
                                             if let Some(bbox) = completion.bbox {
-                                                let _ = img_bounds;
+                                                let _ = layout;
                                                 match notatus
                                                     .state
                                                     .add_human_bbox(asset.id, label_id, bbox, None)
@@ -260,6 +289,89 @@ fn interactive_image_canvas(
                     },
                 )
         })
+        .when(matches!(active_tool, AnnotationTool::Select), |canvas| {
+            let view_select = view.clone();
+            let layout_select = shared_image_layout.clone();
+            let annotations = annotations.clone();
+            canvas.on_mouse_down(
+                gpui::MouseButton::Left,
+                move |event: &MouseDownEvent, _window, cx| {
+                    let layout = layout_select.borrow();
+                    if let Some(layout) = *layout {
+                        let _ = view_select.update(cx, |notatus, cx| {
+                            if let Some(asset) = notatus.selected_asset() {
+                                let image_pos =
+                                    screen_to_image(layout.image_bounds, event.position, asset);
+                                let selected = hit_test_bbox_annotation(&annotations, image_pos);
+                                match notatus.state.select_annotation(selected) {
+                                    Ok(()) => {
+                                        notatus.status_message =
+                                            selected.map(|_| "Selected annotation".to_string());
+                                    }
+                                    Err(error) => {
+                                        notatus.status_message = Some(error.to_string());
+                                    }
+                                }
+                                cx.notify();
+                            }
+                        });
+                    }
+                },
+            )
+        })
+        .when(matches!(active_tool, AnnotationTool::Pan), |canvas| {
+            let view_down = view.clone();
+            let view_move = view.clone();
+            let view_up = view.clone();
+            let view_scroll = view.clone();
+            canvas
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    move |event: &MouseDownEvent, _window, cx| {
+                        let _ = view_down.update(cx, |notatus, cx| {
+                            notatus.tools.begin_pan(event.position);
+                            cx.notify();
+                        });
+                    },
+                )
+                .on_mouse_move(move |event: &MouseMoveEvent, _window, cx| {
+                    let _ = view_move.update(cx, |notatus, cx| {
+                        if notatus.tools.pan.is_some() {
+                            notatus.tools.update_pan(event.position);
+                            cx.notify();
+                        }
+                    });
+                })
+                .on_mouse_up(
+                    gpui::MouseButton::Left,
+                    move |_event: &MouseUpEvent, _window, cx| {
+                        let _ = view_up.update(cx, |notatus, cx| {
+                            notatus.tools.finish_pan();
+                            cx.notify();
+                        });
+                    },
+                )
+                .on_scroll_wheel(move |event: &ScrollWheelEvent, window, cx| {
+                    let delta = event.delta.pixel_delta(window.line_height());
+                    let dy: f32 = delta.y.into();
+                    if dy.abs() < f32::EPSILON {
+                        return;
+                    }
+                    let factor = if dy < 0.0 { 1.1 } else { 1.0 / 1.1 };
+                    let _ = view_scroll.update(cx, |notatus, cx| {
+                        if let Some(layout) = *notatus.canvas_image_layout.borrow() {
+                            notatus.tools.viewport.zoom_at(
+                                event.position,
+                                layout.fit_bounds,
+                                factor,
+                            );
+                        } else {
+                            notatus.tools.viewport.zoom_by(factor);
+                        }
+                        cx.notify();
+                    });
+                })
+        })
 }
 
 fn compute_image_bounds(
@@ -283,6 +395,46 @@ fn compute_image_bounds(
     )
 }
 
+fn apply_viewport_to_bounds(
+    fit_bounds: Bounds<Pixels>,
+    viewport: super::tools::CanvasViewport,
+) -> Bounds<Pixels> {
+    let fit_w: f32 = fit_bounds.size.width.into();
+    let fit_h: f32 = fit_bounds.size.height.into();
+    let display_w = fit_w * viewport.zoom;
+    let display_h = fit_h * viewport.zoom;
+    let extra_w = display_w - fit_w;
+    let extra_h = display_h - fit_h;
+    let origin_x: f32 = fit_bounds.origin.x.into();
+    let origin_y: f32 = fit_bounds.origin.y.into();
+
+    bounds(
+        gpui::point(
+            px(origin_x + viewport.pan_x - extra_w / 2.0),
+            px(origin_y + viewport.pan_y - extra_h / 2.0),
+        ),
+        size(px(display_w), px(display_h)),
+    )
+}
+
+fn canvas_image_layout(
+    canvas_bounds: Bounds<Pixels>,
+    fit_bounds: Bounds<Pixels>,
+    image_bounds: Bounds<Pixels>,
+) -> CanvasImageLayout {
+    CanvasImageLayout {
+        fit_bounds,
+        image_bounds,
+        image_bounds_in_canvas: bounds(
+            gpui::point(
+                image_bounds.origin.x - canvas_bounds.origin.x,
+                image_bounds.origin.y - canvas_bounds.origin.y,
+            ),
+            image_bounds.size,
+        ),
+    }
+}
+
 fn screen_to_image(
     img_bounds: Bounds<Pixels>,
     screen_pos: Point<Pixels>,
@@ -300,6 +452,22 @@ fn screen_to_image(
         ix.clamp(0.0, asset.dimensions.width as f64),
         iy.clamp(0.0, asset.dimensions.height as f64),
     )
+}
+
+fn hit_test_bbox_annotation(
+    annotations: &[AnnotationOverlay],
+    image_pos: (f64, f64),
+) -> Option<AnnotationId> {
+    annotations.iter().rev().find_map(|annotation| {
+        let AnnotationGeometry::Bbox(bbox) = annotation.geometry else {
+            return None;
+        };
+        bbox_contains_point(bbox, image_pos).then_some(annotation.id)
+    })
+}
+
+fn bbox_contains_point(bbox: BoundingBox, (x, y): (f64, f64)) -> bool {
+    x >= bbox.x && x <= bbox.max_x() && y >= bbox.y && y <= bbox.max_y()
 }
 
 fn image_bbox_to_screen(
@@ -522,6 +690,74 @@ mod tests {
         assert_eq!(height, 600.0);
         assert_eq!(origin_x, 0.0);
         assert_eq!(origin_y, 0.0);
+    }
+
+    #[test]
+    fn apply_viewport_scales_around_fit_center_and_applies_pan() {
+        let fit_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
+        let viewport = super::tools::CanvasViewport {
+            zoom: 2.0,
+            pan_x: 10.0,
+            pan_y: -20.0,
+        };
+
+        let transformed = apply_viewport_to_bounds(fit_bounds, viewport);
+
+        let origin_x: f32 = transformed.origin.x.into();
+        let origin_y: f32 = transformed.origin.y.into();
+        let width: f32 = transformed.size.width.into();
+        let height: f32 = transformed.size.height.into();
+
+        assert_eq!(origin_x, -90.0);
+        assert_eq!(origin_y, -120.0);
+        assert_eq!(width, 800.0);
+        assert_eq!(height, 600.0);
+    }
+
+    #[test]
+    fn canvas_image_layout_keeps_absolute_and_parent_relative_bounds() {
+        let canvas_bounds = bounds(gpui::point(px(40.0), px(20.0)), size(px(800.0), px(600.0)));
+        let fit_bounds = bounds(gpui::point(px(140.0), px(70.0)), size(px(400.0), px(300.0)));
+        let image_bounds = bounds(gpui::point(px(120.0), px(60.0)), size(px(440.0), px(330.0)));
+
+        let layout = canvas_image_layout(canvas_bounds, fit_bounds, image_bounds);
+
+        let rel_x: f32 = layout.image_bounds_in_canvas.origin.x.into();
+        let rel_y: f32 = layout.image_bounds_in_canvas.origin.y.into();
+        assert_eq!(layout.fit_bounds, fit_bounds);
+        assert_eq!(layout.image_bounds, image_bounds);
+        assert_eq!(rel_x, 80.0);
+        assert_eq!(rel_y, 40.0);
+    }
+
+    #[test]
+    fn hit_test_selects_topmost_bbox_annotation() {
+        let bottom_id = AnnotationId::new();
+        let top_id = AnnotationId::new();
+        let annotations = vec![
+            AnnotationOverlay {
+                id: bottom_id,
+                geometry: AnnotationGeometry::Bbox(
+                    BoundingBox::from_xywh(0.0, 0.0, 100.0, 100.0).unwrap(),
+                ),
+                color: DEFAULT_LABEL_COLOR.to_string(),
+                selected: false,
+            },
+            AnnotationOverlay {
+                id: top_id,
+                geometry: AnnotationGeometry::Bbox(
+                    BoundingBox::from_xywh(25.0, 25.0, 100.0, 100.0).unwrap(),
+                ),
+                color: DEFAULT_LABEL_COLOR.to_string(),
+                selected: false,
+            },
+        ];
+
+        assert_eq!(
+            hit_test_bbox_annotation(&annotations, (50.0, 50.0)),
+            Some(top_id)
+        );
+        assert_eq!(hit_test_bbox_annotation(&annotations, (200.0, 200.0)), None);
     }
 
     #[test]
