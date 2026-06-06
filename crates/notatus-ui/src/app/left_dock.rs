@@ -1,4 +1,6 @@
 use super::helpers::*;
+use super::media_import::open_media_picker;
+use super::project_commands;
 use super::*;
 
 impl NotatusWindow {
@@ -10,13 +12,15 @@ impl NotatusWindow {
             .bg(rgb(0xffffff))
             .overflow_hidden()
             .child(match self.left_dock {
-                LeftDock::Project => self.project_dock().into_any_element(),
+                LeftDock::Project => self.project_dock(cx).into_any_element(),
                 LeftDock::Media => self.media_dock(cx).into_any_element(),
                 LeftDock::Labels => self.labels_dock(cx).into_any_element(),
             })
     }
 
-    fn project_dock(&self) -> gpui::Div {
+    fn project_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let view = cx.weak_entity();
+
         div()
             .size_full()
             .flex()
@@ -33,21 +37,22 @@ impl NotatusWindow {
                     .py_3()
                     .border_b_1()
                     .border_color(rgb(0xe5e7eb))
-                    .child(section_title("Datasets"))
+                    .child(section_title("Project"))
                     .child(sidebar_count("1")),
             )
             .child(
                 div()
                     .flex_1()
-                    .overflow_hidden()
+                    .overflow_y_scrollbar()
                     .p_2()
-                    .child(SidebarMenu::new().children(self.dataset_items())),
+                    .child(SidebarMenu::new().children(self.dataset_items()))
+                    .child(self.project_editor(view)),
             )
     }
 
     fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
-        let asset_items = self.asset_items(view);
+        let import_view = cx.weak_entity();
 
         div()
             .size_full()
@@ -66,14 +71,22 @@ impl NotatusWindow {
                     .border_b_1()
                     .border_color(rgb(0xe5e7eb))
                     .child(section_title("Media"))
-                    .child(sidebar_count(self.state.dataset.assets.len().to_string())),
+                    .child(
+                        Button::new("media-import")
+                            .small()
+                            .icon(Icon::new(IconName::Plus))
+                            .tooltip("Import media")
+                            .on_click(move |_, _, cx| {
+                                open_media_picker(import_view.clone(), cx);
+                            }),
+                    ),
             )
             .child(
                 div()
                     .flex_1()
                     .overflow_hidden()
                     .p_2()
-                    .child(SidebarMenu::new().children(asset_items)),
+                    .child(self.media_content(view)),
             )
     }
 
@@ -95,6 +108,112 @@ impl NotatusWindow {
                     SidebarMenuItem::new(dataset_created_label(&self.state.dataset)).disable(true),
                 ]),
         ]
+    }
+
+    fn project_editor(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .px_2()
+            .pt_3()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(section_title("Name"))
+                    .child(Input::new(&self.project_name_input).small().w_full()),
+            )
+            .child(metric("Location", self.project_location.display_name()))
+            .child(metric(
+                "Status",
+                if self.state.dirty { "Unsaved" } else { "Saved" }.to_string(),
+            ))
+            .child(metric("Summary", self.project_summary()))
+            .child(dataset_created_label(&self.state.dataset))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        Button::new("project-save")
+                            .small()
+                            .icon(Icon::new(IconName::Folder))
+                            .label("Save")
+                            .on_click({
+                                let view = view.clone();
+                                move |_, window, cx| {
+                                    project_commands::save_project(view.clone(), window, cx);
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new("project-save-as")
+                            .small()
+                            .icon(Icon::new(IconName::Folder))
+                            .label("Save as")
+                            .on_click({
+                                let view = view.clone();
+                                move |_, window, cx| {
+                                    project_commands::save_project_as(view.clone(), window, cx);
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new("project-new")
+                            .small()
+                            .icon(Icon::new(IconName::Plus))
+                            .label("New")
+                            .on_click({
+                                let view = view.clone();
+                                move |_, window, cx| {
+                                    project_commands::new_project(view.clone(), window, cx);
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new("project-open")
+                            .small()
+                            .icon(Icon::new(IconName::FolderOpen))
+                            .label("Open")
+                            .on_click(move |_, window, cx| {
+                                project_commands::open_project(view.clone(), window, cx);
+                            }),
+                    ),
+            )
+    }
+
+    fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        if self.state.dataset.assets.is_empty() {
+            let import_view = view.clone();
+            div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .p_4()
+                .text_sm()
+                .text_color(rgb(0x6b7280))
+                .child("Import media after setting up project labels")
+                .child(
+                    Button::new("media-empty-import")
+                        .small()
+                        .icon(Icon::new(IconName::Plus))
+                        .label("Import media")
+                        .on_click(move |_, _, cx| {
+                            open_media_picker(import_view.clone(), cx);
+                        }),
+                )
+                .into_any_element()
+        } else {
+            SidebarMenu::new()
+                .children(self.asset_items(view))
+                .into_any_element()
+        }
     }
 
     fn asset_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
@@ -138,6 +257,8 @@ impl NotatusWindow {
 
     fn labels_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
+        let add_label_view = cx.weak_entity();
+        let empty_label_view = cx.weak_entity();
         let label_items = self.label_items(view.clone());
         let selected_label = self.selected_label();
 
@@ -158,7 +279,17 @@ impl NotatusWindow {
                     .border_b_1()
                     .border_color(rgb(0xe5e7eb))
                     .child(section_title("Labels"))
-                    .child(sidebar_count(self.state.dataset.labels.len().to_string())),
+                    .child(
+                        Button::new("labels-add")
+                            .small()
+                            .icon(Icon::new(IconName::Plus))
+                            .tooltip("Add label")
+                            .on_click(move |_, window, cx| {
+                                let _ = add_label_view.update(cx, |notatus, cx| {
+                                    notatus.create_label(window, cx);
+                                });
+                            }),
+                    ),
             )
             .child(
                 div()
@@ -183,12 +314,31 @@ impl NotatusWindow {
                     div()
                         .flex_1()
                         .flex()
+                        .flex_col()
                         .items_center()
                         .justify_center()
+                        .gap_3()
                         .p_4()
                         .text_sm()
                         .text_color(rgb(0x6b7280))
-                        .child("Select a label"),
+                        .child(if self.state.dataset.labels.is_empty() {
+                            "Create labels before importing media"
+                        } else {
+                            "Select a label"
+                        })
+                        .when(self.state.dataset.labels.is_empty(), |empty| {
+                            empty.child(
+                                Button::new("labels-empty-add")
+                                    .small()
+                                    .icon(Icon::new(IconName::Plus))
+                                    .label("Add label")
+                                    .on_click(move |_, window, cx| {
+                                        let _ = empty_label_view.update(cx, |notatus, cx| {
+                                            notatus.create_label(window, cx);
+                                        });
+                                    }),
+                            )
+                        }),
                 )
             })
     }

@@ -64,6 +64,17 @@ impl UiState {
         self.dirty = false;
     }
 
+    pub fn rename_project(&mut self, name: impl Into<String>) -> Result<(), UiMutationError> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            return Err(UiMutationError::EmptyProjectName);
+        }
+
+        self.dataset.rename_project(name);
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
         let label_id = self.dataset.add_label(name);
         self.selected_label = Some(label_id);
@@ -201,6 +212,7 @@ pub enum UiMutationError {
     MissingAsset { asset_id: AssetId },
     MissingAnnotation { annotation_id: AnnotationId },
     MissingLabel { label_id: LabelId },
+    EmptyProjectName,
     EmptyLabelName { label_id: LabelId },
 }
 
@@ -214,6 +226,7 @@ impl fmt::Display for UiMutationError {
                 write!(f, "missing annotation {annotation_id}")
             }
             Self::MissingLabel { label_id } => write!(f, "missing label {label_id}"),
+            Self::EmptyProjectName => write!(f, "project needs a name"),
             Self::EmptyLabelName { label_id } => write!(f, "label {label_id} needs a name"),
         }
     }
@@ -227,6 +240,7 @@ impl Error for UiMutationError {
             Self::MissingAsset { .. }
             | Self::MissingAnnotation { .. }
             | Self::MissingLabel { .. }
+            | Self::EmptyProjectName
             | Self::EmptyLabelName { .. } => None,
         }
     }
@@ -277,6 +291,29 @@ mod tests {
 
         assert_eq!(state.active_tool, AnnotationTool::DrawBox);
         assert!(!state.dirty);
+    }
+
+    #[test]
+    fn renames_project_and_marks_dirty() {
+        let mut state = UiState::new_project("demo");
+        state.mark_saved();
+        let old_updated_at = state.dataset.manifest.project.updated_at;
+
+        state.rename_project("renamed").unwrap();
+
+        assert_eq!(state.dataset.manifest.project.name, "renamed");
+        assert!(state.dataset.manifest.project.updated_at >= old_updated_at);
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn rejects_empty_project_name() {
+        let mut state = UiState::new_project("demo");
+
+        let error = state.rename_project(" ").unwrap_err();
+
+        assert!(matches!(error, UiMutationError::EmptyProjectName));
+        assert_eq!(state.dataset.manifest.project.name, "demo");
     }
 
     #[test]

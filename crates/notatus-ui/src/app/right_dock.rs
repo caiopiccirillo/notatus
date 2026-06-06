@@ -79,6 +79,7 @@ impl NotatusWindow {
                 "Dataset",
                 compact_text(&self.state.dataset.manifest.project.name, 28),
             ))
+            .child(metric("Project path", self.project_location.display_name()))
             .child(metric(
                 "Active tool",
                 self.state.active_tool.display_name().to_string(),

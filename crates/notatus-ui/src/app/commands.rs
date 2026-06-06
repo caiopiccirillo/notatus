@@ -61,6 +61,15 @@ impl NotatusWindow {
         self.syncing_label_input = false;
     }
 
+    pub(super) fn sync_project_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self.state.dataset.manifest.project.name.clone();
+        self.syncing_project_input = true;
+        self.project_name_input.update(cx, |input, cx| {
+            input.set_value(name, window, cx);
+        });
+        self.syncing_project_input = false;
+    }
+
     pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
         self.tools.fit_canvas_to_view();
         self.status_message = Some("Fit image to canvas".to_string());

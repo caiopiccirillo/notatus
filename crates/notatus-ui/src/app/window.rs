@@ -18,6 +18,9 @@ pub(super) struct NotatusWindow {
     pub(super) left_dock: LeftDock,
     pub(super) right_dock: RightDock,
     pub(super) status_message: Option<String>,
+    pub(super) project_location: ProjectLocation,
+    pub(super) project_name_input: gpui::Entity<InputState>,
+    pub(super) syncing_project_input: bool,
     pub(super) label_name_input: gpui::Entity<InputState>,
     pub(super) syncing_label_input: bool,
     pub(super) tools: ToolInteractionState,
@@ -29,30 +32,53 @@ impl NotatusWindow {
     pub(super) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut state = UiState::new_project("Untitled dataset");
         state.set_tool(AnnotationTool::DrawBox);
+        let project_name_input = cx.new(|cx| InputState::new(window, cx));
         let label_name_input = cx.new(|cx| InputState::new(window, cx));
-        let _subscriptions = vec![cx.subscribe_in(
-            &label_name_input,
-            window,
-            |this, input, event: &InputEvent, _window, cx| {
-                if matches!(event, InputEvent::Change)
-                    && !this.syncing_label_input
-                    && let Some(label_id) = this.state.selected_label
-                {
-                    let value = input.read(cx).value().to_string();
-                    match this.state.update_label_name(label_id, value) {
-                        Ok(()) => this.status_message = None,
-                        Err(error) => this.status_message = Some(error.to_string()),
+        project_name_input.update(cx, |input, cx| {
+            input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
+        });
+        let _subscriptions = vec![
+            cx.subscribe_in(
+                &project_name_input,
+                window,
+                |this, input, event: &InputEvent, _window, cx| {
+                    if matches!(event, InputEvent::Change) && !this.syncing_project_input {
+                        let value = input.read(cx).value().to_string();
+                        match this.state.rename_project(value) {
+                            Ok(()) => this.status_message = None,
+                            Err(error) => this.status_message = Some(error.to_string()),
+                        }
+                        cx.notify();
                     }
-                    cx.notify();
-                }
-            },
-        )];
+                },
+            ),
+            cx.subscribe_in(
+                &label_name_input,
+                window,
+                |this, input, event: &InputEvent, _window, cx| {
+                    if matches!(event, InputEvent::Change)
+                        && !this.syncing_label_input
+                        && let Some(label_id) = this.state.selected_label
+                    {
+                        let value = input.read(cx).value().to_string();
+                        match this.state.update_label_name(label_id, value) {
+                            Ok(()) => this.status_message = None,
+                            Err(error) => this.status_message = Some(error.to_string()),
+                        }
+                        cx.notify();
+                    }
+                },
+            ),
+        ];
 
         Self {
             state,
             left_dock: LeftDock::Media,
             right_dock: RightDock::Annotations,
             status_message: None,
+            project_location: ProjectLocation::default(),
+            project_name_input,
+            syncing_project_input: false,
             label_name_input,
             syncing_label_input: false,
             tools: ToolInteractionState::default(),

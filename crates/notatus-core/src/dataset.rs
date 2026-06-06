@@ -79,6 +79,11 @@ impl Dataset {
         }
     }
 
+    pub fn rename_project(&mut self, name: impl Into<String>) {
+        self.manifest.project.name = name.into();
+        self.manifest.project.updated_at = now_utc();
+    }
+
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
         let label = Label::new(name);
         let id = label.id;
@@ -111,6 +116,12 @@ impl Dataset {
             return Err(ValidationError::UnsupportedSchemaVersion {
                 found: self.manifest.schema_version,
                 supported: CURRENT_SCHEMA_VERSION,
+            });
+        }
+
+        if self.manifest.project.name.trim().is_empty() {
+            return Err(ValidationError::EmptyProjectName {
+                project_id: self.manifest.project.id,
             });
         }
 
@@ -415,6 +426,8 @@ impl AnnotationRecord {
 pub enum ValidationError {
     #[error("unsupported schema version {found}, supported version is {supported}")]
     UnsupportedSchemaVersion { found: u32, supported: u32 },
+    #[error("project {project_id} has an empty name")]
+    EmptyProjectName { project_id: ProjectId },
     #[error("duplicate label id {label_id}")]
     DuplicateLabel { label_id: LabelId },
     #[error("duplicate asset id {asset_id}")]
@@ -490,6 +503,18 @@ mod tests {
         assert!(matches!(
             dataset.validate(),
             Err(ValidationError::UnknownLabel { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_empty_project_name() {
+        let mut dataset = Dataset::new("demo");
+
+        dataset.rename_project(" ");
+
+        assert!(matches!(
+            dataset.validate(),
+            Err(ValidationError::EmptyProjectName { .. })
         ));
     }
 }

@@ -7,18 +7,22 @@ use gpui::{
     bounds, div, fill, img, outline, px, rgb, size,
 };
 use gpui_component::{
-    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
+    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
     button::Button,
+    dialog::DialogButtonProps,
     input::{Input, InputEvent, InputState},
     menu::{DropdownMenu, PopupMenuItem},
     resizable::{h_resizable, resizable_panel},
+    scroll::ScrollableElement as _,
     sidebar::{SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetKind, AssetLocation, AssetRecord,
     BoundingBox, Label, LabelId,
 };
+use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore};
 use std::cell::RefCell;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -28,12 +32,15 @@ mod commands;
 mod helpers;
 mod left_dock;
 mod media_import;
+mod project_commands;
+mod project_session;
 mod right_dock;
 mod titlebar;
 mod tools;
 mod window;
 
 use helpers::{annotation_count_label, label_count_label, media_count_label};
+use project_session::ProjectLocation;
 use tools::ToolInteractionState;
 use window::{LeftDock, NotatusWindow, RightDock};
 
