@@ -75,7 +75,11 @@ owns media import and media selection.
 
 Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
 unsaved in memory or backed by a local folder. Creating or opening a project
-while the current dataset is dirty asks before discarding changes.
+while the current project is dirty asks before discarding changes.
+
+Attempts to jump ahead in the workflow, such as importing media before labels
+exist or drawing without an active label, redirect to the needed dock and show a
+GPUI component notification.
 
 ## Media Import
 

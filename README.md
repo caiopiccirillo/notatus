@@ -76,7 +76,6 @@ mdbook serve docs
 
 ## Near-Term Roadmap
 
-- Build the GPUI canvas and project navigation around `notatus-ui::UiState`.
 - Add image-folder import with dimension probing and content hashing.
 - Add write-to-disk export helpers for YOLO and COCO.
 - Add an external model runner process manager around the existing protocol.

@@ -23,7 +23,7 @@ parallel representations.
 - External JSON-lines protocol for model pre-annotation.
 - GPUI desktop app with a component title bar, bottom dock navigation,
   resizable panels, left-dock project/label/media workflow, local project
-  create/open/save commands, selected-image preview, and right-side
+  create/open/save commands, selected-media preview, and right-side
   annotation/info docks.
 
 ## Current Limitations

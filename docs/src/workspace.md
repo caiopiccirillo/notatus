@@ -86,4 +86,4 @@ The GPUI app currently includes:
 - left workflow docks for project persistence, labels, and media navigation
 - resizable left-dock/canvas/right-dock layout
 - component sidebar navigation
-- selected-image preview
+- selected-media preview
