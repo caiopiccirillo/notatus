@@ -355,8 +355,8 @@ fn rgba_with_alpha(hex: &str, alpha: f32) -> gpui::Rgba {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{Bounds, Point, Size, bounds, px, size};
-    use notatus_core::{AssetLocation, AssetRecord, ImageDimensions};
+    use gpui::{bounds, px, size};
+    use notatus_core::{AssetLocation, AssetRecord};
 
     fn make_test_asset(width: u32, height: u32) -> AssetRecord {
         AssetRecord::new_image(AssetLocation::local("test.jpg"), width, height).unwrap()
