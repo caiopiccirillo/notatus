@@ -1,13 +1,14 @@
 use super::helpers::*;
 use super::*;
-use gpui::{
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    bounds, fill, outline, px,
-};
+use gpui::{MouseDownEvent, MouseMoveEvent, MouseUpEvent, bounds, fill, outline, px};
 use notatus_core::AnnotationGeometry;
 
 impl NotatusWindow {
-    pub(super) fn canvas_area(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn canvas_area(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let selected_asset = self.selected_asset();
         let drawing = self.drawing;
         let canvas_image_bounds = self.canvas_image_bounds.clone();
@@ -21,7 +22,11 @@ impl NotatusWindow {
                 let color = label
                     .and_then(|l| l.color.as_deref())
                     .unwrap_or(DEFAULT_LABEL_COLOR);
-                (ann.geometry.clone(), color.to_string(), self.state.selected_annotation == Some(ann.id))
+                (
+                    ann.geometry.clone(),
+                    color.to_string(),
+                    self.state.selected_annotation == Some(ann.id),
+                )
             })
             .collect();
         let active_tool = self.state.active_tool;
@@ -50,19 +55,17 @@ impl NotatusWindow {
                     .bg(rgb(0xffffff))
                     .overflow_hidden()
                     .when_some(selected_asset, |canvas, asset| {
-                        canvas.child(
-                            interactive_image_canvas(
-                                asset,
-                                view,
-                                drawing,
-                                canvas_image_bounds,
-                                &state_labels,
-                                active_tool,
-                                preview_color.clone(),
-                                window,
-                                cx,
-                            )
-                        )
+                        canvas.child(interactive_image_canvas(
+                            asset,
+                            view,
+                            drawing,
+                            canvas_image_bounds,
+                            &state_labels,
+                            active_tool,
+                            preview_color.clone(),
+                            window,
+                            cx,
+                        ))
                     })
                     .when(selected_asset.is_none(), |canvas| {
                         canvas
@@ -157,13 +160,7 @@ fn interactive_image_canvas(
                         let w = (x2 - x1).abs();
                         let h = (y2 - y1).abs();
                         let screen_rect = image_bbox_to_screen(
-                            img_bounds,
-                            img_width,
-                            img_height,
-                            min_x,
-                            min_y,
-                            w,
-                            h,
+                            img_bounds, img_width, img_height, min_x, min_y, w, h,
                         );
                         let preview_border = hex_to_rgba(&preview_color);
                         let preview_bg = rgba_with_alpha(&preview_color, 0.08);
@@ -245,15 +242,12 @@ fn interactive_image_canvas(
                                             let w = (x2 - x1).abs();
                                             let h = (y2 - y1).abs();
                                             if w > 1.0 && h > 1.0 {
-                                                if let Ok(bbox) = BoundingBox::from_xywh(
-                                                    min_x, min_y, w, h,
-                                                ) {
+                                                if let Ok(bbox) =
+                                                    BoundingBox::from_xywh(min_x, min_y, w, h)
+                                                {
                                                     let _ = img_bounds;
                                                     match notatus.state.add_human_bbox(
-                                                        asset.id,
-                                                        label_id,
-                                                        bbox,
-                                                        None,
+                                                        asset.id, label_id, bbox, None,
                                                     ) {
                                                         Ok(_) => {
                                                             notatus.status_message =
@@ -314,7 +308,10 @@ fn screen_to_image(
     let scale_y = asset.dimensions.height as f32 / img_h;
     let ix = (rel_x * scale_x) as f64;
     let iy = (rel_y * scale_y) as f64;
-    (ix.clamp(0.0, asset.dimensions.width as f64), iy.clamp(0.0, asset.dimensions.height as f64))
+    (
+        ix.clamp(0.0, asset.dimensions.width as f64),
+        iy.clamp(0.0, asset.dimensions.height as f64),
+    )
 }
 
 fn image_bbox_to_screen(
@@ -367,10 +364,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_at_origin() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(100.0), px(50.0));
 
@@ -382,10 +376,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_at_center() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(300.0), px(200.0));
 
@@ -397,10 +388,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_at_bottom_right() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(500.0), px(350.0));
 
@@ -412,10 +400,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_clamps_out_of_bounds() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(600.0), px(400.0));
 
@@ -427,10 +412,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_clamps_negative() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(50.0), px(20.0));
 
@@ -442,10 +424,7 @@ mod tests {
 
     #[test]
     fn screen_to_image_with_scaling() {
-        let img_bounds = bounds(
-            gpui::point(px(0.0), px(0.0)),
-            size(px(200.0), px(150.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(0.0), px(0.0)), size(px(200.0), px(150.0)));
         let asset = make_test_asset(800, 600);
         let screen_pos = gpui::point(px(100.0), px(75.0));
 
@@ -457,10 +436,7 @@ mod tests {
 
     #[test]
     fn image_bbox_to_screen_at_origin() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
 
         let screen = image_bbox_to_screen(img_bounds, 800.0, 600.0, 0.0, 0.0, 100.0, 100.0);
 
@@ -477,10 +453,7 @@ mod tests {
 
     #[test]
     fn image_bbox_to_screen_at_center() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
 
         let screen = image_bbox_to_screen(img_bounds, 800.0, 600.0, 400.0, 300.0, 200.0, 200.0);
 
@@ -497,10 +470,7 @@ mod tests {
 
     #[test]
     fn image_bbox_to_screen_full_image() {
-        let img_bounds = bounds(
-            gpui::point(px(0.0), px(0.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(0.0), px(0.0)), size(px(400.0), px(300.0)));
 
         let screen = image_bbox_to_screen(img_bounds, 800.0, 600.0, 0.0, 0.0, 800.0, 600.0);
 
@@ -517,10 +487,7 @@ mod tests {
 
     #[test]
     fn compute_image_bounds_fits_width() {
-        let canvas_bounds = bounds(
-            gpui::point(px(0.0), px(0.0)),
-            size(px(400.0), px(400.0)),
-        );
+        let canvas_bounds = bounds(gpui::point(px(0.0), px(0.0)), size(px(400.0), px(400.0)));
 
         let img_bounds = compute_image_bounds(canvas_bounds, 800.0, 600.0);
 
@@ -537,10 +504,7 @@ mod tests {
 
     #[test]
     fn compute_image_bounds_fits_height() {
-        let canvas_bounds = bounds(
-            gpui::point(px(0.0), px(0.0)),
-            size(px(600.0), px(300.0)),
-        );
+        let canvas_bounds = bounds(gpui::point(px(0.0), px(0.0)), size(px(600.0), px(300.0)));
 
         let img_bounds = compute_image_bounds(canvas_bounds, 800.0, 600.0);
 
@@ -557,10 +521,7 @@ mod tests {
 
     #[test]
     fn compute_image_bounds_exact_fit() {
-        let canvas_bounds = bounds(
-            gpui::point(px(0.0), px(0.0)),
-            size(px(800.0), px(600.0)),
-        );
+        let canvas_bounds = bounds(gpui::point(px(0.0), px(0.0)), size(px(800.0), px(600.0)));
 
         let img_bounds = compute_image_bounds(canvas_bounds, 800.0, 600.0);
 
@@ -658,10 +619,7 @@ mod tests {
 
     #[test]
     fn coordinate_conversion_roundtrip() {
-        let img_bounds = bounds(
-            gpui::point(px(100.0), px(50.0)),
-            size(px(400.0), px(300.0)),
-        );
+        let img_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
         let asset = make_test_asset(800, 600);
 
         let screen_pos = gpui::point(px(250.0), px(162.5));

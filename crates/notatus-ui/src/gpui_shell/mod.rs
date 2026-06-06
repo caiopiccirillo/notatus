@@ -14,8 +14,8 @@ use gpui_component::{
     sidebar::{SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
-    AnnotationGeometry, AnnotationRecord, AssetKind, AssetLocation, AssetRecord,
-    BoundingBox, Label, LabelId,
+    AnnotationGeometry, AnnotationRecord, AssetKind, AssetLocation, AssetRecord, BoundingBox,
+    Label, LabelId,
 };
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
