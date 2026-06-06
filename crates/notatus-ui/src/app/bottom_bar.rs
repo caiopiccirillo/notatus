@@ -27,17 +27,17 @@ impl NotatusWindow {
                         cx,
                     ))
                     .child(self.bottom_left_dock_button(
-                        "bottom-media",
-                        IconName::GalleryVerticalEnd,
-                        "Media",
-                        LeftDock::Media,
-                        cx,
-                    ))
-                    .child(self.bottom_left_dock_button(
                         "bottom-labels",
                         IconName::Palette,
                         "Labels",
                         LeftDock::Labels,
+                        cx,
+                    ))
+                    .child(self.bottom_left_dock_button(
+                        "bottom-media",
+                        IconName::GalleryVerticalEnd,
+                        "Media",
+                        LeftDock::Media,
                         cx,
                     )),
             )
