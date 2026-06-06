@@ -10,7 +10,7 @@ impl NotatusWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected_asset = self.selected_asset();
-        let drawing = self.drawing;
+        let drawing = self.tools.draw_box;
         let canvas_image_bounds = self.canvas_image_bounds.clone();
         let annotations: Vec<_> = selected_asset
             .map(|asset| self.annotations_for_asset(asset))
@@ -54,6 +54,7 @@ impl NotatusWindow {
                     .border_color(rgb(0xcbd5e1))
                     .bg(rgb(0xffffff))
                     .overflow_hidden()
+                    .relative()
                     .when_some(selected_asset, |canvas, asset| {
                         canvas.child(interactive_image_canvas(
                             asset,
@@ -76,7 +77,8 @@ impl NotatusWindow {
                                     .text_color(rgb(0x4b5563))
                                     .child("No media selected"),
                             )
-                    }),
+                    })
+                    .child(self.canvas_toolbar(cx)),
             )
     }
 }
@@ -84,7 +86,7 @@ impl NotatusWindow {
 fn interactive_image_canvas(
     asset: &AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
-    drawing: Option<DrawingState>,
+    drawing: Option<super::tools::DrawingState>,
     shared_img_bounds: SharedImageBounds,
     annotations: &[(AnnotationGeometry, String, bool)],
     active_tool: AnnotationTool,
@@ -99,7 +101,7 @@ fn interactive_image_canvas(
     let img_width = asset.dimensions.width as f64;
     let img_height = asset.dimensions.height as f64;
     let annotations = annotations.to_vec();
-    let is_drawing_tool = matches!(active_tool, AnnotationTool::DrawBox);
+    let accepts_drag_events = super::tools::tool_accepts_canvas_drag(active_tool);
 
     let bounds_for_prepaint = shared_img_bounds.clone();
 
@@ -182,7 +184,7 @@ fn interactive_image_canvas(
             .top_0()
             .left_0(),
         )
-        .when(is_drawing_tool, |canvas| {
+        .when(accepts_drag_events, |canvas| {
             let view_down = view.clone();
             let view_move = view.clone();
             let view_up = view.clone();
@@ -199,10 +201,7 @@ fn interactive_image_canvas(
                                 if let Some(asset) = notatus.selected_asset() {
                                     let (ix, iy) =
                                         screen_to_image(img_bounds, event.position, asset);
-                                    notatus.drawing = Some(DrawingState {
-                                        start_image_pos: (ix, iy),
-                                        current_image_pos: (ix, iy),
-                                    });
+                                    notatus.tools.begin_draw_box((ix, iy));
                                     cx.notify();
                                 }
                             });
@@ -213,13 +212,11 @@ fn interactive_image_canvas(
                     let img_bounds = bounds_move.borrow();
                     if let Some(img_bounds) = *img_bounds {
                         let _ = view_move.update(cx, |notatus, cx| {
-                            if notatus.drawing.is_some() {
+                            if notatus.tools.draw_box.is_some() {
                                 if let Some(asset) = notatus.selected_asset() {
                                     let (ix, iy) =
                                         screen_to_image(img_bounds, event.position, asset);
-                                    if let Some(ref mut d) = notatus.drawing {
-                                        d.current_image_pos = (ix, iy);
-                                    }
+                                    notatus.tools.update_draw_box((ix, iy));
                                     cx.notify();
                                 }
                             }
@@ -232,31 +229,22 @@ fn interactive_image_canvas(
                         let img_bounds_ref = bounds_up.borrow();
                         if let Some(img_bounds) = *img_bounds_ref {
                             let _ = view_up.update(cx, |notatus, cx| {
-                                if let Some(drawing) = notatus.drawing.take() {
+                                if let Some(completion) = notatus.tools.finish_draw_box() {
                                     if let Some(asset) = notatus.selected_asset() {
                                         if let Some(label_id) = notatus.state.selected_label {
-                                            let (x1, y1) = drawing.start_image_pos;
-                                            let (x2, y2) = drawing.current_image_pos;
-                                            let min_x = x1.min(x2);
-                                            let min_y = y1.min(y2);
-                                            let w = (x2 - x1).abs();
-                                            let h = (y2 - y1).abs();
-                                            if w > 1.0 && h > 1.0 {
-                                                if let Ok(bbox) =
-                                                    BoundingBox::from_xywh(min_x, min_y, w, h)
+                                            if let Some(bbox) = completion.bbox {
+                                                let _ = img_bounds;
+                                                match notatus
+                                                    .state
+                                                    .add_human_bbox(asset.id, label_id, bbox, None)
                                                 {
-                                                    let _ = img_bounds;
-                                                    match notatus.state.add_human_bbox(
-                                                        asset.id, label_id, bbox, None,
-                                                    ) {
-                                                        Ok(_) => {
-                                                            notatus.status_message =
-                                                                Some("Created annotation".into());
-                                                        }
-                                                        Err(e) => {
-                                                            notatus.status_message =
-                                                                Some(e.to_string());
-                                                        }
+                                                    Ok(_) => {
+                                                        notatus.status_message =
+                                                            Some("Created annotation".into());
+                                                    }
+                                                    Err(e) => {
+                                                        notatus.status_message =
+                                                            Some(e.to_string());
                                                     }
                                                 }
                                             }

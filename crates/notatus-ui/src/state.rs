@@ -12,6 +12,16 @@ pub enum AnnotationTool {
     Pan,
 }
 
+impl AnnotationTool {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Select => "Select",
+            Self::DrawBox => "Draw Box",
+            Self::Pan => "Pan/Zoom",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct UiState {
     pub dataset: Dataset,
@@ -230,6 +240,16 @@ mod tests {
         assert_eq!(state.selected_annotation, Some(annotation_id));
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn setting_tool_does_not_dirty_dataset() {
+        let mut state = UiState::new_project("demo");
+
+        state.set_tool(AnnotationTool::DrawBox);
+
+        assert_eq!(state.active_tool, AnnotationTool::DrawBox);
+        assert!(!state.dirty);
     }
 
     #[test]

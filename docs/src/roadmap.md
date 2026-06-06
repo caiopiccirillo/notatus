@@ -4,15 +4,14 @@ This page documents likely next steps based on the current implementation.
 
 ## Near Term
 
-### Interactive Bounding Boxes
+### Canvas Tools
 
-Add a real canvas interaction model:
+Extend the canvas tool architecture:
 
-- map window coordinates to image pixel coordinates
-- draw a box preview while dragging
-- clamp boxes to image bounds
-- create `AnnotationGeometry::Bbox`
-- select and edit existing boxes
+- implement Select mode for existing annotations
+- add annotation edit handles
+- add pan and zoom controls
+- keep new canvas interactions routed through the GPUI tool layer
 
 ### Label Management
 
@@ -46,6 +45,7 @@ Add UI commands around the implemented adapters:
 
 The core schema already includes polygons. The UI needs:
 
+- a segmentation tool entry
 - point placement
 - polygon closure
 - vertex editing

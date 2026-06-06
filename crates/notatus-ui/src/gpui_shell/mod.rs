@@ -6,7 +6,7 @@ use gpui::{
     WindowBounds, WindowDecorations, WindowOptions, div, img, px, rgb, size,
 };
 use gpui_component::{
-    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
+    Disableable as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
     button::Button,
     input::{Input, InputEvent, InputState},
     menu::{DropdownMenu, PopupMenuItem},
@@ -28,8 +28,10 @@ mod left_dock;
 mod media_import;
 mod right_dock;
 mod titlebar;
+mod tools;
 
 use helpers::{annotation_count_label, label_count_label, media_count_label};
+use tools::ToolInteractionState;
 
 const DEFAULT_LABEL_COLOR: &str = "#2563eb";
 const LABEL_COLORS: [&str; 8] = [
@@ -49,12 +51,6 @@ enum RightDock {
     MediaInfo,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct DrawingState {
-    start_image_pos: (f64, f64),
-    current_image_pos: (f64, f64),
-}
-
 type SharedImageBounds = Rc<RefCell<Option<Bounds<Pixels>>>>;
 
 struct NotatusWindow {
@@ -64,7 +60,7 @@ struct NotatusWindow {
     status_message: Option<String>,
     label_name_input: gpui::Entity<InputState>,
     syncing_label_input: bool,
-    drawing: Option<DrawingState>,
+    tools: ToolInteractionState,
     canvas_image_bounds: SharedImageBounds,
     _subscriptions: Vec<Subscription>,
 }
@@ -99,7 +95,7 @@ impl NotatusWindow {
             status_message: None,
             label_name_input,
             syncing_label_input: false,
-            drawing: None,
+            tools: ToolInteractionState::default(),
             canvas_image_bounds: Rc::new(RefCell::new(None)),
             _subscriptions,
         }

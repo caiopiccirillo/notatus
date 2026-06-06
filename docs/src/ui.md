@@ -11,7 +11,7 @@ The crate has two layers:
 
 `UiState` wraps the canonical `Dataset` and tracks UI-specific state:
 
-- active annotation tool
+- active annotation tool (`Select`, `Draw Box`, `Pan/Zoom`)
 - selected asset
 - selected annotation
 - selected label
@@ -131,8 +131,18 @@ The center panel previews the selected image with GPUI's `img` element:
 - loading and fallback messages are provided
 - S3 object previews currently show a not-implemented message
 
-The canvas does not yet implement interactive drawing. The next major UI step is
-to add coordinate mapping and bounding-box creation on top of this preview.
+The canvas has a tool-oriented interaction layer. Tool metadata and interaction
+state live in the GPUI shell, while completed mutations go through `UiState`.
+Draw Box is the only enabled canvas tool today:
+
+- maps window coordinates to image pixel coordinates
+- draws a box preview while dragging
+- clamps positions to image bounds
+- creates `AnnotationGeometry::Bbox` through `UiState`
+
+Select and Pan/Zoom are visible extension points but are not implemented yet.
+Future segmentation tools should add new handlers to the canvas tool layer and
+commit completed polygons through the canonical core schema.
 
 ## Right Docks
 
