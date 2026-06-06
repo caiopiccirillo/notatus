@@ -127,6 +127,12 @@ pub(super) struct DrawBoxCompletion {
 }
 
 impl ToolInteractionState {
+    pub(super) fn fit_canvas_to_view(&mut self) {
+        self.draw_box = None;
+        self.pan = None;
+        self.viewport.reset();
+    }
+
     pub(super) fn clear_for_tool(&mut self, tool: AnnotationTool) {
         if !matches!(tool, AnnotationTool::DrawBox) {
             self.draw_box = None;
@@ -190,6 +196,12 @@ impl ToolInteractionState {
 }
 
 impl NotatusWindow {
+    pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
+        self.tools.fit_canvas_to_view();
+        self.status_message = Some("Fit image to canvas".to_string());
+        cx.notify();
+    }
+
     pub(super) fn set_canvas_tool(&mut self, tool: AnnotationTool, cx: &mut Context<Self>) {
         self.tools.clear_for_tool(tool);
         self.state.set_tool(tool);
@@ -216,6 +228,17 @@ impl NotatusWindow {
                 canvas_tool_definitions()
                     .into_iter()
                     .map(|definition| self.canvas_tool_button(definition, view.clone())),
+            )
+            .child(
+                Button::new("tool-fit-canvas")
+                    .small()
+                    .icon(Icon::new(IconName::Maximize))
+                    .tooltip("Fit image to canvas")
+                    .on_click(move |_, _, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.fit_canvas_to_view(cx);
+                        });
+                    }),
             )
     }
 
@@ -308,6 +331,22 @@ mod tests {
 
         viewport.zoom_by(0.001);
         assert_eq!(viewport.zoom, CanvasViewport::MIN_ZOOM);
+    }
+
+    #[test]
+    fn fit_canvas_to_view_resets_interaction_state() {
+        let mut tools = ToolInteractionState::default();
+        tools.begin_draw_box((10.0, 10.0));
+        tools.begin_pan(gpui::point(px(10.0), px(20.0)));
+        tools.viewport.zoom_by(2.0);
+
+        tools.fit_canvas_to_view();
+
+        assert!(tools.draw_box.is_none());
+        assert!(tools.pan.is_none());
+        assert_eq!(tools.viewport.zoom, 1.0);
+        assert_eq!(tools.viewport.pan_x, 0.0);
+        assert_eq!(tools.viewport.pan_y, 0.0);
     }
 
     #[test]

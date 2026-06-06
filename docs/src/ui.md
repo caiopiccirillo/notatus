@@ -142,6 +142,8 @@ The initial tools are:
   annotation, and keeps selection changes out of dataset dirty state.
 - Pan/Zoom drags the shared image viewport and zooms the viewport with the
   scroll wheel.
+- Fit resets the viewport to the canvas-contained image bounds. It is available
+  as a toolbar button and by double-clicking the canvas.
 
 Future segmentation tools should add new handlers to the canvas tool layer and
 commit completed polygons through the canonical core schema.

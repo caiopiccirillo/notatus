@@ -224,6 +224,13 @@ fn interactive_image_canvas(
                 .on_mouse_down(
                     gpui::MouseButton::Left,
                     move |event: &MouseDownEvent, _window, cx| {
+                        if event.click_count >= 2 {
+                            let _ = view_down.update(cx, |notatus, cx| {
+                                notatus.fit_canvas_to_view(cx);
+                            });
+                            return;
+                        }
+
                         let layout = layout_down.borrow();
                         if let Some(layout) = *layout {
                             let _ = view_down.update(cx, |notatus, cx| {
@@ -296,6 +303,13 @@ fn interactive_image_canvas(
             canvas.on_mouse_down(
                 gpui::MouseButton::Left,
                 move |event: &MouseDownEvent, _window, cx| {
+                    if event.click_count >= 2 {
+                        let _ = view_select.update(cx, |notatus, cx| {
+                            notatus.fit_canvas_to_view(cx);
+                        });
+                        return;
+                    }
+
                     let layout = layout_select.borrow();
                     if let Some(layout) = *layout {
                         let _ = view_select.update(cx, |notatus, cx| {
@@ -329,8 +343,12 @@ fn interactive_image_canvas(
                     gpui::MouseButton::Left,
                     move |event: &MouseDownEvent, _window, cx| {
                         let _ = view_down.update(cx, |notatus, cx| {
-                            notatus.tools.begin_pan(event.position);
-                            cx.notify();
+                            if event.click_count >= 2 {
+                                notatus.fit_canvas_to_view(cx);
+                            } else {
+                                notatus.tools.begin_pan(event.position);
+                                cx.notify();
+                            }
                         });
                     },
                 )
