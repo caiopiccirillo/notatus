@@ -2,7 +2,7 @@ use super::super::*;
 use super::{CanvasToolDefinition, canvas_tool_definitions};
 
 impl NotatusWindow {
-    pub(in crate::gpui_shell) fn canvas_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::app) fn canvas_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();
 
         div()

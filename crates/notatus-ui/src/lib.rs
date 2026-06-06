@@ -8,9 +8,9 @@ mod state;
 pub use state::{AnnotationTool, UiMutationError, UiState};
 
 #[cfg(feature = "gpui-ui")]
-mod gpui_shell;
+mod app;
 
 #[cfg(feature = "gpui-ui")]
 pub fn launch_gpui() {
-    gpui_shell::launch_gpui();
+    app::launch_gpui();
 }

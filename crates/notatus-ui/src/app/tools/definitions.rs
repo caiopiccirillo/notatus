@@ -1,15 +1,15 @@
 use super::super::*;
 
 #[derive(Clone)]
-pub(in crate::gpui_shell) struct CanvasToolDefinition {
-    pub(in crate::gpui_shell) tool: AnnotationTool,
-    pub(in crate::gpui_shell) id: &'static str,
-    pub(in crate::gpui_shell) label: &'static str,
-    pub(in crate::gpui_shell) tooltip: &'static str,
-    pub(in crate::gpui_shell) icon: IconName,
+pub(in crate::app) struct CanvasToolDefinition {
+    pub(in crate::app) tool: AnnotationTool,
+    pub(in crate::app) id: &'static str,
+    pub(in crate::app) label: &'static str,
+    pub(in crate::app) tooltip: &'static str,
+    pub(in crate::app) icon: IconName,
 }
 
-pub(in crate::gpui_shell) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
+pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
     [
         CanvasToolDefinition {
             tool: AnnotationTool::DrawBox,

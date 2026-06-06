@@ -134,11 +134,3 @@ impl Render for NotatusWindow {
             .child(self.app_frame(window, cx))
     }
 }
-
-pub(super) fn requested_window_decorations() -> Option<WindowDecorations> {
-    if cfg!(target_os = "linux") {
-        Some(WindowDecorations::Client)
-    } else {
-        None
-    }
-}

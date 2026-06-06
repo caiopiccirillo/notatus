@@ -3,8 +3,8 @@ use gpui::prelude::*;
 use gpui::{
     App, Application, Bounds, Context, FontWeight, IntoElement, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, ObjectFit, PathPromptOptions, Pixels, Point, Render, ScrollWheelEvent,
-    SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowDecorations, WindowOptions, bounds, div, fill, img, outline, px, rgb, size,
+    SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
+    bounds, div, fill, img, outline, px, rgb, size,
 };
 use gpui_component::{
     Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar,
@@ -35,7 +35,7 @@ mod window;
 
 use helpers::{annotation_count_label, label_count_label, media_count_label};
 use tools::ToolInteractionState;
-use window::{LeftDock, NotatusWindow, RightDock, requested_window_decorations};
+use window::{LeftDock, NotatusWindow, RightDock};
 
 const DEFAULT_LABEL_COLOR: &str = "#2563eb";
 const LABEL_COLORS: [&str; 8] = [
@@ -70,7 +70,6 @@ pub fn launch_gpui() {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(TitleBar::title_bar_options()),
                     window_background: WindowBackgroundAppearance::Opaque,
-                    window_decorations: requested_window_decorations(),
                     window_min_size: Some(size(px(720.0), px(460.0))),
                     ..Default::default()
                 },

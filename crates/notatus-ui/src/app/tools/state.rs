@@ -1,16 +1,16 @@
 use super::super::*;
 
 #[derive(Clone, Copy, Debug)]
-pub(in crate::gpui_shell) struct DrawingState {
-    pub(in crate::gpui_shell) start_image_pos: (f64, f64),
-    pub(in crate::gpui_shell) current_image_pos: (f64, f64),
+pub(in crate::app) struct DrawingState {
+    pub(in crate::app) start_image_pos: (f64, f64),
+    pub(in crate::app) current_image_pos: (f64, f64),
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(in crate::gpui_shell) struct CanvasViewport {
-    pub(in crate::gpui_shell) zoom: f32,
-    pub(in crate::gpui_shell) pan_x: f32,
-    pub(in crate::gpui_shell) pan_y: f32,
+pub(in crate::app) struct CanvasViewport {
+    pub(in crate::app) zoom: f32,
+    pub(in crate::app) pan_x: f32,
+    pub(in crate::app) pan_y: f32,
 }
 
 impl Default for CanvasViewport {
@@ -27,15 +27,15 @@ impl CanvasViewport {
     const MIN_ZOOM: f32 = 0.25;
     const MAX_ZOOM: f32 = 8.0;
 
-    pub(in crate::gpui_shell) fn reset(&mut self) {
+    pub(in crate::app) fn reset(&mut self) {
         *self = Self::default();
     }
 
-    pub(in crate::gpui_shell) fn zoom_by(&mut self, factor: f32) {
+    pub(in crate::app) fn zoom_by(&mut self, factor: f32) {
         self.zoom = (self.zoom * factor).clamp(Self::MIN_ZOOM, Self::MAX_ZOOM);
     }
 
-    pub(in crate::gpui_shell) fn zoom_at(
+    pub(in crate::app) fn zoom_at(
         &mut self,
         screen_pos: Point<Pixels>,
         fit_bounds: Bounds<Pixels>,
@@ -73,32 +73,32 @@ impl CanvasViewport {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(in crate::gpui_shell) struct PanState {
+pub(in crate::app) struct PanState {
     start_screen_pos: Point<Pixels>,
     start_pan_x: f32,
     start_pan_y: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(in crate::gpui_shell) struct ToolInteractionState {
-    pub(in crate::gpui_shell) draw_box: Option<DrawingState>,
-    pub(in crate::gpui_shell) pan: Option<PanState>,
-    pub(in crate::gpui_shell) viewport: CanvasViewport,
+pub(in crate::app) struct ToolInteractionState {
+    pub(in crate::app) draw_box: Option<DrawingState>,
+    pub(in crate::app) pan: Option<PanState>,
+    pub(in crate::app) viewport: CanvasViewport,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(in crate::gpui_shell) struct DrawBoxCompletion {
-    pub(in crate::gpui_shell) bbox: Option<BoundingBox>,
+pub(in crate::app) struct DrawBoxCompletion {
+    pub(in crate::app) bbox: Option<BoundingBox>,
 }
 
 impl ToolInteractionState {
-    pub(in crate::gpui_shell) fn fit_canvas_to_view(&mut self) {
+    pub(in crate::app) fn fit_canvas_to_view(&mut self) {
         self.draw_box = None;
         self.pan = None;
         self.viewport.reset();
     }
 
-    pub(in crate::gpui_shell) fn clear_for_tool(&mut self, tool: AnnotationTool) {
+    pub(in crate::app) fn clear_for_tool(&mut self, tool: AnnotationTool) {
         if !matches!(tool, AnnotationTool::DrawBox) {
             self.draw_box = None;
         }
@@ -107,20 +107,20 @@ impl ToolInteractionState {
         }
     }
 
-    pub(in crate::gpui_shell) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
+    pub(in crate::app) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
         self.draw_box = Some(DrawingState {
             start_image_pos: image_pos,
             current_image_pos: image_pos,
         });
     }
 
-    pub(in crate::gpui_shell) fn update_draw_box(&mut self, image_pos: (f64, f64)) {
+    pub(in crate::app) fn update_draw_box(&mut self, image_pos: (f64, f64)) {
         if let Some(ref mut drawing) = self.draw_box {
             drawing.current_image_pos = image_pos;
         }
     }
 
-    pub(in crate::gpui_shell) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
+    pub(in crate::app) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
         let drawing = self.draw_box.take()?;
         let (x1, y1) = drawing.start_image_pos;
         let (x2, y2) = drawing.current_image_pos;
@@ -137,7 +137,7 @@ impl ToolInteractionState {
         Some(DrawBoxCompletion { bbox })
     }
 
-    pub(in crate::gpui_shell) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
+    pub(in crate::app) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
         self.pan = Some(PanState {
             start_screen_pos: screen_pos,
             start_pan_x: self.viewport.pan_x,
@@ -145,7 +145,7 @@ impl ToolInteractionState {
         });
     }
 
-    pub(in crate::gpui_shell) fn update_pan(&mut self, screen_pos: Point<Pixels>) {
+    pub(in crate::app) fn update_pan(&mut self, screen_pos: Point<Pixels>) {
         let Some(pan) = self.pan else {
             return;
         };
@@ -155,7 +155,7 @@ impl ToolInteractionState {
         self.viewport.pan_y = pan.start_pan_y + dy;
     }
 
-    pub(in crate::gpui_shell) fn finish_pan(&mut self) {
+    pub(in crate::app) fn finish_pan(&mut self) {
         self.pan = None;
     }
 }
