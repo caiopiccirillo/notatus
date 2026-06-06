@@ -20,7 +20,7 @@ impl NotatusWindow {
                         RightDock::Annotations => {
                             self.annotations_panel_content().into_any_element()
                         }
-                        RightDock::MediaInfo => self.media_info_panel_content().into_any_element(),
+                        RightDock::Info => self.info_panel_content().into_any_element(),
                     }),
             )
     }
@@ -50,7 +50,7 @@ impl NotatusWindow {
         }
     }
 
-    fn media_info_panel_content(&self) -> gpui::Div {
+    fn info_panel_content(&self) -> gpui::Div {
         let selected_media = self
             .selected_asset()
             .map(compact_asset_name)
@@ -76,7 +76,7 @@ impl NotatusWindow {
             .overflow_hidden()
             .child(section_title("Info"))
             .child(metric(
-                "Dataset",
+                "Project",
                 compact_text(&self.state.dataset.manifest.project.name, 28),
             ))
             .child(metric("Project path", self.project_location.display_name()))

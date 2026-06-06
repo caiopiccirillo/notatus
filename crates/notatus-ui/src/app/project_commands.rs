@@ -244,7 +244,7 @@ fn initialize_project_at(path: &Path) -> Result<notatus_core::Dataset, String> {
         .file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.trim().is_empty())
-        .unwrap_or("Untitled dataset");
+        .unwrap_or("Untitled project");
     LocalProjectStore::new(path)
         .initialize(name)
         .map_err(|error| error.to_string())
@@ -297,7 +297,7 @@ fn apply_project_load_result(
                     .map(ProjectLocation::local)
                     .unwrap_or(ProjectLocation::Unsaved);
                 notatus.left_dock = LeftDock::Project;
-                notatus.right_dock = RightDock::MediaInfo;
+                notatus.right_dock = RightDock::Info;
                 notatus.tools.fit_canvas_to_view();
                 notatus.canvas_image_layout.borrow_mut().take();
                 notatus.status_message = Some(success_message.to_string());

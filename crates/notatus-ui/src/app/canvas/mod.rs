@@ -40,6 +40,13 @@ impl NotatusWindow {
             .collect();
         let active_tool = self.state.active_tool;
         let viewport = self.tools.viewport;
+        let (empty_title, empty_message) = if self.state.dataset.labels.is_empty() {
+            ("Create labels to continue", "No labels in this project")
+        } else if self.state.dataset.assets.is_empty() {
+            ("Import media to continue", "No media in this project")
+        } else {
+            ("Select media to annotate", "No media selected")
+        };
         let preview_color = self
             .selected_label()
             .and_then(|l| l.color.as_deref())
@@ -80,14 +87,12 @@ impl NotatusWindow {
                         ))
                     })
                     .when(selected_asset.is_none(), |canvas| {
-                        canvas
-                            .child(div().text_lg().child("Choose images to start"))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0x4b5563))
-                                    .child("No media selected"),
-                            )
+                        canvas.child(div().text_lg().child(empty_title)).child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0x4b5563))
+                                .child(empty_message),
+                        )
                     })
                     .child(self.canvas_toolbar(cx)),
             )

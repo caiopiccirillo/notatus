@@ -39,11 +39,34 @@ struct MediaCandidate {
     height: u32,
 }
 
-pub(super) fn open_media_picker(view: gpui::WeakEntity<NotatusWindow>, cx: &mut App) {
-    let _ = view.update(cx, |window, cx| {
-        window.status_message = Some("Waiting for media selection".to_string());
-        cx.notify();
-    });
+pub(super) fn open_media_picker(
+    view: gpui::WeakEntity<NotatusWindow>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let skipped_required_step = view
+        .update(cx, |notatus, cx| {
+            if notatus.state.dataset.labels.is_empty() {
+                notatus.left_dock = LeftDock::Labels;
+                notatus.status_message = Some("Create a label before importing media".to_string());
+                cx.notify();
+                return true;
+            }
+
+            notatus.status_message = Some("Waiting for media selection".to_string());
+            cx.notify();
+            false
+        })
+        .unwrap_or(false);
+
+    if skipped_required_step {
+        window.push_notification(
+            Notification::warning("Create a label before importing media.")
+                .title("Labels required"),
+            cx,
+        );
+        return;
+    }
 
     let paths = cx.prompt_for_paths(PathPromptOptions {
         files: true,

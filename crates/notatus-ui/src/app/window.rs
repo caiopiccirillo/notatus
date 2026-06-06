@@ -10,7 +10,7 @@ pub(super) enum LeftDock {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RightDock {
     Annotations,
-    MediaInfo,
+    Info,
 }
 
 pub(super) struct NotatusWindow {
@@ -30,7 +30,7 @@ pub(super) struct NotatusWindow {
 
 impl NotatusWindow {
     pub(super) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut state = UiState::new_project("Untitled dataset");
+        let mut state = UiState::new_project("Untitled project");
         state.set_tool(AnnotationTool::DrawBox);
         let project_name_input = cx.new(|cx| InputState::new(window, cx));
         let label_name_input = cx.new(|cx| InputState::new(window, cx));
@@ -73,8 +73,8 @@ impl NotatusWindow {
 
         Self {
             state,
-            left_dock: LeftDock::Media,
-            right_dock: RightDock::Annotations,
+            left_dock: LeftDock::Project,
+            right_dock: RightDock::Info,
             status_message: None,
             project_location: ProjectLocation::default(),
             project_name_input,

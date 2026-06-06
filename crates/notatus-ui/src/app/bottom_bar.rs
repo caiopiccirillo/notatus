@@ -58,7 +58,7 @@ impl NotatusWindow {
                         "bottom-info",
                         IconName::Info,
                         "Info",
-                        RightDock::MediaInfo,
+                        RightDock::Info,
                         cx,
                     )),
             )
@@ -78,11 +78,30 @@ impl NotatusWindow {
             .icon(Icon::new(icon))
             .tooltip(tooltip)
             .selected(self.left_dock == dock)
-            .on_click(move |_, _, cx| {
-                let _ = view.update(cx, |notatus, cx| {
-                    notatus.left_dock = dock;
-                    cx.notify();
-                });
+            .on_click(move |_, window, cx| {
+                let skipped_required_step = view
+                    .update(cx, |notatus, cx| {
+                        if dock == LeftDock::Media && notatus.state.dataset.labels.is_empty() {
+                            notatus.left_dock = LeftDock::Labels;
+                            notatus.status_message =
+                                Some("Create a label before importing media".into());
+                            cx.notify();
+                            return true;
+                        }
+
+                        notatus.left_dock = dock;
+                        cx.notify();
+                        false
+                    })
+                    .unwrap_or(false);
+
+                if skipped_required_step {
+                    window.push_notification(
+                        Notification::warning("Create a label before importing media.")
+                            .title("Labels required"),
+                        cx,
+                    );
+                }
             })
     }
 

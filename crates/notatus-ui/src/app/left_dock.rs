@@ -76,8 +76,8 @@ impl NotatusWindow {
                             .small()
                             .icon(Icon::new(IconName::Plus))
                             .tooltip("Import media")
-                            .on_click(move |_, _, cx| {
-                                open_media_picker(import_view.clone(), cx);
+                            .on_click(move |_, window, cx| {
+                                open_media_picker(import_view.clone(), window, cx);
                             }),
                     ),
             )
@@ -204,8 +204,8 @@ impl NotatusWindow {
                         .small()
                         .icon(Icon::new(IconName::Plus))
                         .label("Import media")
-                        .on_click(move |_, _, cx| {
-                            open_media_picker(import_view.clone(), cx);
+                        .on_click(move |_, window, cx| {
+                            open_media_picker(import_view.clone(), window, cx);
                         }),
                 )
                 .into_any_element()

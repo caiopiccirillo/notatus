@@ -149,7 +149,6 @@ impl UiState {
 
         self.selected_asset = Some(asset_id);
         self.selected_annotation = None;
-        self.selected_label = None;
         Ok(())
     }
 
@@ -339,6 +338,21 @@ mod tests {
         assert_eq!(state.selected_label, Some(label_id));
         assert_eq!(state.selected_annotation, Some(annotation_id));
         assert!(!state.dirty);
+    }
+
+    #[test]
+    fn selecting_asset_preserves_active_label() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+        let asset_id = state
+            .add_local_image_asset("/tmp/image.png", 640, 480)
+            .unwrap();
+        state.select_label(label_id).unwrap();
+
+        state.select_asset(asset_id).unwrap();
+
+        assert_eq!(state.selected_label, Some(label_id));
+        assert_eq!(state.selected_asset, Some(asset_id));
     }
 
     #[test]

@@ -79,35 +79,53 @@ fn attach_draw_box_interactions(
         })
         .on_mouse_up(
             gpui::MouseButton::Left,
-            move |_event: &MouseUpEvent, _window, cx| {
+            move |_event: &MouseUpEvent, window, cx| {
                 let layout = layout_up.borrow();
-                if let Some(layout) = *layout {
-                    let _ = view_up.update(cx, |notatus, cx| {
-                        if let Some(completion) = notatus.tools.finish_draw_box()
-                            && let Some(asset) = notatus.selected_asset()
-                        {
-                            if let Some(label_id) = notatus.state.selected_label {
-                                if let Some(bbox) = completion.bbox {
-                                    let _ = layout;
-                                    match notatus
-                                        .state
-                                        .add_human_bbox(asset.id, label_id, bbox, None)
-                                    {
-                                        Ok(_) => {
-                                            notatus.status_message =
-                                                Some("Created annotation".into());
-                                        }
-                                        Err(e) => {
-                                            notatus.status_message = Some(e.to_string());
+                let skipped_required_step = if let Some(layout) = *layout {
+                    view_up
+                        .update(cx, |notatus, cx| {
+                            let mut skipped_required_step = false;
+
+                            if let Some(completion) = notatus.tools.finish_draw_box()
+                                && let Some(asset) = notatus.selected_asset()
+                            {
+                                if let Some(label_id) = notatus.state.selected_label {
+                                    if let Some(bbox) = completion.bbox {
+                                        let _ = layout;
+                                        match notatus
+                                            .state
+                                            .add_human_bbox(asset.id, label_id, bbox, None)
+                                        {
+                                            Ok(_) => {
+                                                notatus.status_message =
+                                                    Some("Created annotation".into());
+                                            }
+                                            Err(e) => {
+                                                notatus.status_message = Some(e.to_string());
+                                            }
                                         }
                                     }
+                                } else {
+                                    notatus.left_dock = LeftDock::Labels;
+                                    notatus.status_message = Some("Select a label first".into());
+                                    skipped_required_step = true;
                                 }
-                            } else {
-                                notatus.status_message = Some("Select a label first".into());
                             }
-                        }
-                        cx.notify();
-                    });
+
+                            cx.notify();
+                            skipped_required_step
+                        })
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                if skipped_required_step {
+                    window.push_notification(
+                        Notification::warning("Select a label before drawing annotations.")
+                            .title("Label required"),
+                        cx,
+                    );
                 }
             },
         )
