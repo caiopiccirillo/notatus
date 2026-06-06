@@ -20,6 +20,7 @@ impl NotatusWindow {
 
     fn project_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
+        let actions_view = view.clone();
 
         div()
             .size_full()
@@ -38,7 +39,7 @@ impl NotatusWindow {
                     .border_b_1()
                     .border_color(rgb(0xe5e7eb))
                     .child(section_title("Project"))
-                    .child(sidebar_count("1")),
+                    .child(self.project_actions(actions_view)),
             )
             .child(
                 div()
@@ -46,8 +47,44 @@ impl NotatusWindow {
                     .overflow_y_scrollbar()
                     .p_2()
                     .child(SidebarMenu::new().children(self.dataset_items()))
-                    .child(self.project_editor(view)),
+                    .child(self.project_editor()),
             )
+    }
+
+    fn project_actions(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(project_action_button(
+                "project-new",
+                IconName::Plus,
+                "New project",
+                project_commands::new_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-open",
+                IconName::FolderOpen,
+                "Open project",
+                project_commands::open_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-save",
+                IconName::FolderClosed,
+                "Save project",
+                project_commands::save_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-save-as",
+                IconName::Folder,
+                "Save project as",
+                project_commands::save_project_as,
+                view,
+            ))
     }
 
     fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -110,7 +147,7 @@ impl NotatusWindow {
         ]
     }
 
-    fn project_editor(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+    fn project_editor(&self) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -132,57 +169,6 @@ impl NotatusWindow {
             ))
             .child(metric("Summary", self.project_summary()))
             .child(dataset_created_label(&self.state.dataset))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(
-                        Button::new("project-save")
-                            .small()
-                            .icon(Icon::new(IconName::Folder))
-                            .label("Save")
-                            .on_click({
-                                let view = view.clone();
-                                move |_, window, cx| {
-                                    project_commands::save_project(view.clone(), window, cx);
-                                }
-                            }),
-                    )
-                    .child(
-                        Button::new("project-save-as")
-                            .small()
-                            .icon(Icon::new(IconName::Folder))
-                            .label("Save as")
-                            .on_click({
-                                let view = view.clone();
-                                move |_, window, cx| {
-                                    project_commands::save_project_as(view.clone(), window, cx);
-                                }
-                            }),
-                    )
-                    .child(
-                        Button::new("project-new")
-                            .small()
-                            .icon(Icon::new(IconName::Plus))
-                            .label("New")
-                            .on_click({
-                                let view = view.clone();
-                                move |_, window, cx| {
-                                    project_commands::new_project(view.clone(), window, cx);
-                                }
-                            }),
-                    )
-                    .child(
-                        Button::new("project-open")
-                            .small()
-                            .icon(Icon::new(IconName::FolderOpen))
-                            .label("Open")
-                            .on_click(move |_, window, cx| {
-                                project_commands::open_project(view.clone(), window, cx);
-                            }),
-                    ),
-            )
     }
 
     fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
@@ -423,4 +409,20 @@ impl NotatusWindow {
                     .to_string(),
             ))
     }
+}
+
+fn project_action_button(
+    id: &'static str,
+    icon: IconName,
+    tooltip: &'static str,
+    action: fn(gpui::WeakEntity<NotatusWindow>, &mut Window, &mut App),
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> Button {
+    Button::new(id)
+        .small()
+        .icon(Icon::new(icon))
+        .tooltip(tooltip)
+        .on_click(move |_, window, cx| {
+            action(view.clone(), window, cx);
+        })
 }
