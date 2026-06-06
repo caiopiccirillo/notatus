@@ -86,6 +86,6 @@ The current tests focus on the stable domain and adapter layers:
 - inference protocol roundtrip
 - UI state mutation
 
-The GPUI shell is currently verified by compiling the default UI package. Future
-interactive canvas work should add more focused tests around coordinate mapping
-and annotation creation.
+The GPUI app is verified by compiling the default UI package and by focused unit
+tests around project state, tool state, coordinate mapping, and annotation
+creation.

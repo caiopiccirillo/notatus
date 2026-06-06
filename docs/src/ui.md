@@ -5,7 +5,7 @@ The UI implementation lives in `crates/notatus-ui`.
 The crate has two layers:
 
 - `UiState`, which is renderer-independent and testable.
-- `gpui_shell`, which is compiled by default through the `gpui-ui` feature.
+- `app`, which is compiled by default through the `gpui-ui` feature.
 
 ## UI State
 
@@ -21,6 +21,7 @@ Implemented mutations:
 
 - create a new project
 - create UI state from an existing validated dataset
+- rename the project
 - set active tool
 - mark saved
 - add label
@@ -51,40 +52,35 @@ The feature enables:
 
 The `image` crate is used to probe dimensions for selected image files before
 adding them as assets. The `gpui-component-assets` crate provides the SVG icons
-used by component controls such as the titlebar and dock buttons.
+used by component controls such as the dock buttons.
 
 ## Window Chrome
 
-Linux uses client-side window decorations.
+The current shell uses `gpui-component::TitleBar` with GPUI's default platform
+decoration behavior. The titlebar is intentionally informational: it shows the
+application identity, current project name, and saved/unsaved status.
 
-The current shell uses `gpui-component::TitleBar` with the component window
-border:
+## Workflow Navigation
 
-- visible minimize button
-- visible maximize button
-- visible close button
-- draggable titlebar
-- double-click maximize
-- right-click window menu
-- resize edges
-
-## Titlebar Menus
-
-Global commands live in classical titlebar menus:
+Commands live in the workflow docks instead of the titlebar. The bottom bar
+switches the primary left dock in the order users usually work:
 
 - Project
-- Media
 - Labels
-- Export
+- Media
 
-The menu triggers open dropdown menus below the titlebar button. Current actions
-include opening the relevant dock, importing media, creating labels, and export
-placeholders.
+The Project dock owns creating, opening, saving, saving as, and renaming local
+projects. The Labels dock owns label creation and label editing. The Media dock
+owns media import and media selection.
+
+Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
+unsaved in memory or backed by a local folder. Creating or opening a project
+while the current dataset is dirty asks before discarding changes.
 
 ## Media Import
 
-The Media titlebar menu has an Import media command. It opens a file picker and
-currently accepts image files by probing dimensions with the `image` crate.
+The Media dock has an Import media command. It opens a file picker and currently
+accepts image files by probing dimensions with the `image` crate.
 
 Unsupported files are skipped and reported through the Info dock status field.
 The command is media-oriented so video and folder import can be added without
@@ -96,9 +92,9 @@ The left panel is switched by bottom-bar dock buttons.
 
 It contains separate docks for:
 
-- Project: datasets available to work on
-- Media: media rows with nested annotation rows
-- Labels: label list and label customization
+- Project: project identity, location, status, summary, and persistence commands
+- Labels: label creation, label list, and label customization
+- Media: media import, media rows, and nested annotation rows
 
 Media rows show their asset type and annotation count. Each media row can expand
 to show its annotations, including label, review state, and geometry type. Media
@@ -115,8 +111,8 @@ This keeps repeated screenshot-style filenames readable in a narrow panel.
 The bottom bar is the persistent dock switcher:
 
 - Project
-- Media
 - Labels
+- Media
 - Annotations
 - Info
 
@@ -132,7 +128,7 @@ The center panel previews the selected image with GPUI's `img` element:
 - S3 object previews currently show a not-implemented message
 
 The canvas has a tool-oriented interaction layer. Tool metadata and interaction
-state live in the GPUI shell, while completed mutations go through `UiState`.
+state live in the app layer, while completed mutations go through `UiState`.
 The initial tools are:
 
 - Draw Box maps window coordinates to image pixel coordinates, draws a preview

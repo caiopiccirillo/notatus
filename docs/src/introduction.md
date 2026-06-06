@@ -21,16 +21,16 @@ parallel representations.
 - YOLO detection export and import.
 - COCO detection export.
 - External JSON-lines protocol for model pre-annotation.
-- GPUI desktop shell with a component title bar on Linux, titlebar menus,
-  bottom dock navigation, resizable panels, media navigation, selected-image
-  preview, and right-side annotation/info docks.
+- GPUI desktop app with a component title bar, bottom dock navigation,
+  resizable panels, left-dock project/label/media workflow, local project
+  create/open/save commands, selected-image preview, and right-side
+  annotation/info docks.
 
 ## Current Limitations
 
-- The canvas previews selected images but does not yet implement interactive
-  bounding-box drawing.
-- Project save/load actions are implemented in `notatus-storage`, but the GPUI
-  shell currently starts with an in-memory project.
+- The canvas supports bounding-box drawing, selection, pan/zoom, and fit-to-view.
+- Project persistence is local-folder based. Recent project lists and richer
+  save/discard/cancel flows are still planned.
 - Remote S3-compatible storage is represented in the schema but has no storage
   backend yet.
 - Polygon and video tracking schemas are planned, not implemented as workflows.

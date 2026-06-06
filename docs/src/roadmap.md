@@ -15,21 +15,20 @@ Extend the canvas tool architecture:
 
 ### Label Management
 
-Add UI controls for:
+Build on the initial label dock controls:
 
-- creating labels
-- editing label names
-- setting label colors
 - selecting an active label for new annotations
+- deleting and reordering labels
+- validation for duplicate label names
 
-### Project Persistence in UI
+### Project Workflow
 
-Wire the existing `LocalProjectStore` into the desktop shell:
+Build on the local project commands:
 
-- create project
-- open project folder
-- save project
-- dirty-state prompts
+- recent projects
+- richer save/discard/cancel prompts
+- autosave preferences
+- project folder validation and migration UX
 
 ### Export Commands
 

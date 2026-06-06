@@ -76,14 +76,14 @@ Contains:
 
 - renderer-independent `UiState`
 - mutation helpers for labels, assets, selected asset, and bounding boxes
-- default GPUI application shell through the `gpui-ui` feature
+- default GPUI application through the `gpui-ui` feature
 
-The GPUI shell currently includes:
+The GPUI app currently includes:
 
-- `gpui-component` title bar and Linux client-side window border
-- titlebar dropdown menus for project, media, labels, and export commands
-- bottom-bar dock buttons for Project, Media, Labels, Annotations, and Info
-- left docks for datasets, media rows, nested annotation rows, and label editing
+- `gpui-component` title bar with project/status display
+- local project create/open/save/save-as commands
+- bottom-bar dock buttons for Project, Labels, Media, Annotations, and Info
+- left workflow docks for project persistence, labels, and media navigation
 - resizable left-dock/canvas/right-dock layout
 - component sidebar navigation
 - selected-image preview

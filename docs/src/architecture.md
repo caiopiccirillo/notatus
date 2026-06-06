@@ -12,7 +12,7 @@ Notatus is organized around a clean adapter boundary:
         |                  |                  |
 +-------v------+   +-------v------+   +-------v------+
 | notatus-ui   |   | notatus-     |   | notatus-     |
-| GPUI shell   |   | storage      |   | export       |
+| GPUI app     |   | storage      |   | export       |
 +--------------+   +--------------+   +--------------+
                            |
                     +------v-------+
