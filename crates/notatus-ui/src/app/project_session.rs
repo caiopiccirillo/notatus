@@ -1,16 +1,11 @@
 use super::helpers::compact_text;
 use super::*;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) enum ProjectLocation {
+    #[default]
     Unsaved,
     Local(PathBuf),
-}
-
-impl Default for ProjectLocation {
-    fn default() -> Self {
-        Self::Unsaved
-    }
 }
 
 impl ProjectLocation {

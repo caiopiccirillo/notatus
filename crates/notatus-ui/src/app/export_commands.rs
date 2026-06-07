@@ -3,45 +3,45 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ExportWorkflowIssue {
-    MissingLabels,
-    MissingMedia,
-    MissingAnnotations,
-    MissingFormat,
+    Labels,
+    Media,
+    Annotations,
+    Format,
 }
 
 impl ExportWorkflowIssue {
     fn target_dock(self) -> LeftDock {
         match self {
-            Self::MissingLabels => LeftDock::Dataset,
-            Self::MissingMedia => LeftDock::Media,
-            Self::MissingAnnotations | Self::MissingFormat => LeftDock::Dataset,
+            Self::Labels => LeftDock::Dataset,
+            Self::Media => LeftDock::Media,
+            Self::Annotations | Self::Format => LeftDock::Dataset,
         }
     }
 
     fn title(self) -> &'static str {
         match self {
-            Self::MissingLabels => "Labels required",
-            Self::MissingMedia => "Media required",
-            Self::MissingAnnotations => "Annotations required",
-            Self::MissingFormat => "Format required",
+            Self::Labels => "Labels required",
+            Self::Media => "Media required",
+            Self::Annotations => "Annotations required",
+            Self::Format => "Format required",
         }
     }
 
     fn message(self) -> &'static str {
         match self {
-            Self::MissingLabels => "Create a label before exporting annotations.",
-            Self::MissingMedia => "Import media before exporting annotations.",
-            Self::MissingAnnotations => "Create exportable annotations before exporting.",
-            Self::MissingFormat => "Select at least one export format.",
+            Self::Labels => "Create a label before exporting annotations.",
+            Self::Media => "Import media before exporting annotations.",
+            Self::Annotations => "Create exportable annotations before exporting.",
+            Self::Format => "Select at least one export format.",
         }
     }
 
     fn status(self) -> &'static str {
         match self {
-            Self::MissingLabels => "Create a label before exporting",
-            Self::MissingMedia => "Import media before exporting",
-            Self::MissingAnnotations => "No exportable annotations",
-            Self::MissingFormat => "Select an export format",
+            Self::Labels => "Create a label before exporting",
+            Self::Media => "Import media before exporting",
+            Self::Annotations => "No exportable annotations",
+            Self::Format => "Select an export format",
         }
     }
 }
@@ -49,13 +49,13 @@ impl ExportWorkflowIssue {
 impl NotatusWindow {
     pub(super) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
         if self.state.dataset.labels.is_empty() {
-            Some(ExportWorkflowIssue::MissingLabels)
+            Some(ExportWorkflowIssue::Labels)
         } else if self.state.dataset.assets.is_empty() {
-            Some(ExportWorkflowIssue::MissingMedia)
+            Some(ExportWorkflowIssue::Media)
         } else if exportable_annotation_count(&self.state.dataset) == 0 {
-            Some(ExportWorkflowIssue::MissingAnnotations)
+            Some(ExportWorkflowIssue::Annotations)
         } else if !self.export_yolo && !self.export_coco {
-            Some(ExportWorkflowIssue::MissingFormat)
+            Some(ExportWorkflowIssue::Format)
         } else {
             None
         }
@@ -75,7 +75,7 @@ impl NotatusWindow {
         self.export_yolo = !self.export_yolo;
         if !self.export_yolo && !self.export_coco {
             self.export_yolo = true;
-            self.status_message = Some(ExportWorkflowIssue::MissingFormat.status().to_string());
+            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
         } else {
             self.status_message = None;
         }
@@ -86,7 +86,7 @@ impl NotatusWindow {
         self.export_coco = !self.export_coco;
         if !self.export_yolo && !self.export_coco {
             self.export_coco = true;
-            self.status_message = Some(ExportWorkflowIssue::MissingFormat.status().to_string());
+            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
         } else {
             self.status_message = None;
         }

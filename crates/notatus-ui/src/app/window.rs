@@ -143,7 +143,7 @@ impl NotatusWindow {
             .collect()
     }
 
-    fn app_frame(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .flex()
@@ -163,7 +163,7 @@ impl NotatusWindow {
                         .child(
                             resizable_panel()
                                 .size_range(px(320.0)..Pixels::MAX)
-                                .child(self.canvas_area(window, cx)),
+                                .child(self.canvas_area(cx)),
                         )
                         .child(
                             resizable_panel()
@@ -187,7 +187,7 @@ impl Render for NotatusWindow {
             .relative()
             .size_full()
             .bg(rgb(0xf3f4f6))
-            .child(self.app_frame(window, cx))
+            .child(self.app_frame(cx))
             .children(dialog_layer)
             .children(notification_layer)
     }

@@ -4,6 +4,15 @@ use super::media_import::open_media_picker;
 use super::project_commands;
 use super::*;
 
+#[derive(Clone)]
+struct LabelMenuContext {
+    label_id: LabelId,
+    label_name: String,
+    label_color: Option<String>,
+    annotation_count: usize,
+    view: gpui::WeakEntity<NotatusWindow>,
+}
+
 impl NotatusWindow {
     pub(super) fn left_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
@@ -401,11 +410,13 @@ fn label_row(
         .context_menu(move |menu, window, cx| {
             label_menu(
                 menu,
-                label_id,
-                row_label_name.clone(),
-                row_label_color.clone(),
-                annotation_count,
-                menu_view.clone(),
+                LabelMenuContext {
+                    label_id,
+                    label_name: row_label_name.clone(),
+                    label_color: row_label_color.clone(),
+                    annotation_count,
+                    view: menu_view.clone(),
+                },
                 window,
                 cx,
             )
@@ -441,11 +452,13 @@ fn label_actions(
                 .dropdown_menu(move |menu, window, cx| {
                     label_menu(
                         menu,
-                        label_id,
-                        menu_label_name.clone(),
-                        menu_label_color.clone(),
-                        annotation_count,
-                        menu_view.clone(),
+                        LabelMenuContext {
+                            label_id,
+                            label_name: menu_label_name.clone(),
+                            label_color: menu_label_color.clone(),
+                            annotation_count,
+                            view: menu_view.clone(),
+                        },
                         window,
                         cx,
                     )
@@ -474,14 +487,17 @@ fn label_actions(
 
 fn label_menu(
     menu: PopupMenu,
-    label_id: LabelId,
-    label_name: String,
-    label_color: Option<String>,
-    annotation_count: usize,
-    view: gpui::WeakEntity<NotatusWindow>,
+    context: LabelMenuContext,
     _: &mut Window,
     _: &mut Context<PopupMenu>,
 ) -> PopupMenu {
+    let LabelMenuContext {
+        label_id,
+        label_name,
+        label_color,
+        annotation_count,
+        view,
+    } = context;
     let rename_view = view.clone();
     let custom_color_view = view.clone();
     let remove_view = view.clone();
@@ -541,8 +557,8 @@ fn label_color_palette(
         .children(LABEL_COLORS.iter().enumerate().map(|(color_ix, color)| {
             label_color_button(
                 color_ix,
-                *color,
-                *color == selected_color,
+                color,
+                color == &selected_color,
                 label_id,
                 view.clone(),
             )

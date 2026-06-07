@@ -12,11 +12,7 @@ use layout::{apply_viewport_to_bounds, canvas_image_layout, compute_image_bounds
 use overlay::{AnnotationOverlay, paint_annotations, paint_drawing_preview};
 
 impl NotatusWindow {
-    pub(super) fn canvas_area(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    pub(super) fn canvas_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let selected_asset = self.selected_asset();
         let drawing = self.tools.draw_box;
         let canvas_image_layout = self.canvas_image_layout.clone();
@@ -74,18 +70,16 @@ impl NotatusWindow {
                     .overflow_hidden()
                     .relative()
                     .when_some(selected_asset, |canvas, asset| {
-                        canvas.child(interactive_image_canvas(
+                        canvas.child(interactive_image_canvas(InteractiveImageCanvas {
                             asset,
                             view,
                             drawing,
-                            canvas_image_layout,
-                            &state_labels,
+                            shared_image_layout: canvas_image_layout,
+                            annotations: &state_labels,
                             active_tool,
                             viewport,
-                            preview_color.clone(),
-                            window,
-                            cx,
-                        ))
+                            preview_color: preview_color.clone(),
+                        }))
                     })
                     .when(selected_asset.is_none(), |canvas| {
                         canvas.child(canvas_empty_state(empty_title, empty_message))
@@ -112,18 +106,29 @@ fn canvas_empty_state(title: &'static str, message: &'static str) -> impl IntoEl
         .child(div().text_sm().text_color(rgb(0x4b5563)).child(message))
 }
 
-fn interactive_image_canvas(
-    asset: &AssetRecord,
+struct InteractiveImageCanvas<'a> {
+    asset: &'a AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
     drawing: Option<super::tools::DrawingState>,
     shared_image_layout: SharedImageLayout,
-    annotations: &[AnnotationOverlay],
+    annotations: &'a [AnnotationOverlay],
     active_tool: AnnotationTool,
     viewport: super::tools::CanvasViewport,
     preview_color: String,
-    _window: &mut Window,
-    _cx: &mut Context<NotatusWindow>,
-) -> impl IntoElement {
+}
+
+fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElement {
+    let InteractiveImageCanvas {
+        asset,
+        view,
+        drawing,
+        shared_image_layout,
+        annotations,
+        active_tool,
+        viewport,
+        preview_color,
+    } = args;
+
     let image_path = match &asset.location {
         AssetLocation::LocalPath { path } => PathBuf::from(path),
         AssetLocation::S3Object { .. } => PathBuf::new(),
