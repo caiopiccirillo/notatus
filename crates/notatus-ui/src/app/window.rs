@@ -149,10 +149,14 @@ impl NotatusWindow {
 
 impl Render for NotatusWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let notification_layer = Root::render_notification_layer(window, cx);
+
         div()
             .id("notatus-window")
+            .relative()
             .size_full()
             .bg(rgb(0xf3f4f6))
             .child(self.app_frame(window, cx))
+            .children(notification_layer)
     }
 }

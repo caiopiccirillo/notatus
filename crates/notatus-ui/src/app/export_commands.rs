@@ -100,7 +100,10 @@ pub(super) fn push_export_workflow_notification(
     cx: &mut App,
 ) {
     window.push_notification(
-        Notification::warning(issue.message()).title(issue.title()),
+        Notification::warning(issue.message())
+            .id1::<ExportWorkflowNotification>("workflow")
+            .title(issue.title())
+            .autohide(false),
         cx,
     );
 }
@@ -150,11 +153,16 @@ pub(super) fn export_annotations(
                 let result = export_request
                     .map_err(|_| "window closed".to_string())
                     .and_then(|request| run_export(request, &output_dir));
-                let _ = view.update_in(window, |notatus, _, cx| {
+                let _ = view.update_in(window, |notatus, window, cx| {
                     match result {
-                        Ok(summary) => notatus.status_message = Some(summary),
+                        Ok(summary) => {
+                            push_export_success_notification(summary.clone(), window, cx);
+                            notatus.status_message = Some(summary);
+                        }
                         Err(error) => {
-                            notatus.status_message = Some(format!("Export failed: {error}"));
+                            let message = format!("Export failed: {error}");
+                            push_export_error_notification(message.clone(), window, cx);
+                            notatus.status_message = Some(message);
                         }
                     }
                     cx.notify();
@@ -167,14 +175,18 @@ pub(super) fn export_annotations(
                 });
             }
             Ok(Err(error)) => {
-                let _ = view.update_in(window, |notatus, _, cx| {
-                    notatus.status_message = Some(format!("Export picker failed: {error}"));
+                let _ = view.update_in(window, |notatus, window, cx| {
+                    let message = format!("Export picker failed: {error}");
+                    push_export_error_notification(message.clone(), window, cx);
+                    notatus.status_message = Some(message);
                     cx.notify();
                 });
             }
             Err(_) => {
-                let _ = view.update_in(window, |notatus, _, cx| {
-                    notatus.status_message = Some("Export picker closed unexpectedly".to_string());
+                let _ = view.update_in(window, |notatus, window, cx| {
+                    let message = "Export picker closed unexpectedly".to_string();
+                    push_export_error_notification(message.clone(), window, cx);
+                    notatus.status_message = Some(message);
                     cx.notify();
                 });
             }
@@ -186,6 +198,36 @@ struct ExportRequest {
     dataset: notatus_core::Dataset,
     yolo: bool,
     coco: bool,
+}
+
+struct ExportWorkflowNotification;
+struct ExportResultNotification;
+
+fn push_export_success_notification(
+    message: impl Into<SharedString>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    window.push_notification(
+        Notification::success(message)
+            .id1::<ExportResultNotification>("success")
+            .title("Export complete"),
+        cx,
+    );
+}
+
+fn push_export_error_notification(
+    message: impl Into<SharedString>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    window.push_notification(
+        Notification::error(message)
+            .id1::<ExportResultNotification>("error")
+            .title("Export failed")
+            .autohide(false),
+        cx,
+    );
 }
 
 fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, String> {
