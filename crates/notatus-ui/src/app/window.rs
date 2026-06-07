@@ -24,6 +24,7 @@ pub(super) struct NotatusWindow {
     pub(super) label_name_input: gpui::Entity<InputState>,
     pub(super) syncing_label_input: bool,
     pub(super) tools: ToolInteractionState,
+    pub(super) hovered_annotation: Option<AnnotationId>,
     pub(super) canvas_image_layout: SharedImageLayout,
     pub(super) _subscriptions: Vec<Subscription>,
 }
@@ -82,6 +83,7 @@ impl NotatusWindow {
             label_name_input,
             syncing_label_input: false,
             tools: ToolInteractionState::default(),
+            hovered_annotation: None,
             canvas_image_layout: Rc::new(RefCell::new(None)),
             _subscriptions,
         }

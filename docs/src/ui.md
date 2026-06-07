@@ -155,9 +155,11 @@ The right panel is split into:
 - Annotations
 - Info
 
-The Annotations dock lists annotations for the selected media. The Info dock
-shows cross-cutting context such as active tool, active label, counts, review
-queue, status messages, and selected-media metadata.
+The Annotations dock lists annotations for the selected media, highlights the
+matching canvas annotation while a row is hovered, and exposes compact row
+actions for changing an annotation label. The Info dock shows cross-cutting
+context such as active tool, active label, counts, review queue, status messages,
+and selected-media metadata.
 
 Label customization lives in the Labels left dock.
 

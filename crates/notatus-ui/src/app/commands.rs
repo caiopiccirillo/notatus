@@ -49,6 +49,50 @@ impl NotatusWindow {
         }
     }
 
+    pub(super) fn update_annotation_label(
+        &mut self,
+        annotation_id: AnnotationId,
+        label_id: LabelId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.update_annotation_label(annotation_id, label_id) {
+            Ok(()) => {
+                self.status_message = Some("Updated annotation label".to_string());
+                self.sync_label_name_input(window, cx);
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn select_annotation(
+        &mut self,
+        annotation_id: Option<AnnotationId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.select_annotation(annotation_id) {
+            Ok(()) => {
+                self.status_message = annotation_id.map(|_| "Selected annotation".to_string());
+                self.sync_label_name_input(window, cx);
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn hover_annotation(
+        &mut self,
+        annotation_id: Option<AnnotationId>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.hovered_annotation != annotation_id {
+            self.hovered_annotation = annotation_id;
+            cx.notify();
+        }
+    }
+
     pub(super) fn sync_label_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let name = self
             .selected_label()

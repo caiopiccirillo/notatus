@@ -8,6 +8,7 @@ pub(super) struct AnnotationOverlay {
     pub(super) geometry: AnnotationGeometry,
     pub(super) color: String,
     pub(super) selected: bool,
+    pub(super) hovered: bool,
 }
 
 pub(super) fn paint_annotations(
@@ -29,8 +30,19 @@ pub(super) fn paint_annotations(
                 bbox.height,
             );
             let border_color = hex_to_rgba(&annotation.color);
-            let bg_color = rgba_with_alpha(&annotation.color, 0.08);
-            let border_width = if annotation.selected { 3.0 } else { 2.0 };
+            let bg_alpha = if annotation.selected {
+                0.14
+            } else if annotation.hovered {
+                0.16
+            } else {
+                0.08
+            };
+            let bg_color = rgba_with_alpha(&annotation.color, bg_alpha);
+            let border_width = if annotation.selected || annotation.hovered {
+                3.0
+            } else {
+                2.0
+            };
             window.paint_quad(fill(screen_rect, bg_color));
             window.paint_quad(
                 outline(screen_rect, border_color, gpui::BorderStyle::Solid).border_widths(

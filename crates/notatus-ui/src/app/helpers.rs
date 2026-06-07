@@ -104,41 +104,6 @@ pub(super) fn label_swatch(color: &str, fill_parent: bool) -> impl IntoElement {
         .bg(hex_color(color))
 }
 
-pub(super) fn annotation_items_for_asset(
-    state: &UiState,
-    asset: &AssetRecord,
-) -> Vec<SidebarMenuItem> {
-    let items: Vec<_> = state
-        .dataset
-        .annotations
-        .iter()
-        .filter(|annotation| annotation.asset_id == asset.id)
-        .map(|annotation| {
-            SidebarMenuItem::new(annotation_item_label(state, annotation))
-                .suffix(sidebar_count(annotation_geometry_label(
-                    &annotation.geometry,
-                )))
-                .active(state.selected_annotation == Some(annotation.id))
-        })
-        .collect();
-
-    if items.is_empty() {
-        vec![SidebarMenuItem::new("No annotations").disable(true)]
-    } else {
-        items
-    }
-}
-
-pub(super) fn annotation_item_label(state: &UiState, annotation: &AnnotationRecord) -> String {
-    let label = state
-        .dataset
-        .label_by_id(annotation.label_id)
-        .map(|label| label.name.as_str())
-        .unwrap_or("Unknown label");
-
-    compact_text(&format!("{label} · {:?}", annotation.review_state), 34)
-}
-
 pub(super) fn annotation_geometry_label(geometry: &AnnotationGeometry) -> &'static str {
     match geometry {
         AnnotationGeometry::Bbox(_) => "Box",

@@ -35,6 +35,7 @@ impl NotatusWindow {
                     geometry: ann.geometry.clone(),
                     color: color.to_string(),
                     selected: self.state.selected_annotation == Some(ann.id),
+                    hovered: self.hovered_annotation == Some(ann.id),
                 }
             })
             .collect();

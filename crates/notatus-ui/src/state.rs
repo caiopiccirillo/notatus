@@ -174,6 +174,30 @@ impl UiState {
         Ok(())
     }
 
+    pub fn update_annotation_label(
+        &mut self,
+        annotation_id: AnnotationId,
+        label_id: LabelId,
+    ) -> Result<(), UiMutationError> {
+        if self.dataset.label_by_id(label_id).is_none() {
+            return Err(UiMutationError::MissingLabel { label_id });
+        }
+
+        let annotation = self
+            .dataset
+            .annotations
+            .iter_mut()
+            .find(|annotation| annotation.id == annotation_id)
+            .ok_or(UiMutationError::MissingAnnotation { annotation_id })?;
+
+        annotation.label_id = label_id;
+        self.selected_annotation = Some(annotation_id);
+        self.selected_asset = Some(annotation.asset_id);
+        self.selected_label = Some(label_id);
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn add_human_bbox(
         &mut self,
         asset_id: AssetId,
@@ -198,7 +222,8 @@ impl UiState {
         );
         let annotation_id = annotation.id;
         self.dataset.add_annotation(annotation);
-        self.selected_annotation = Some(annotation_id);
+        self.selected_annotation = None;
+        self.selected_label = Some(label_id);
         self.dirty = true;
         Ok(annotation_id)
     }
@@ -277,7 +302,15 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(state.selected_annotation, Some(annotation_id));
+        assert!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == annotation_id)
+        );
+        assert_eq!(state.selected_annotation, None);
+        assert_eq!(state.selected_label, Some(label_id));
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());
     }
@@ -371,6 +404,74 @@ mod tests {
         assert_eq!(label.name, "car");
         assert_eq!(label.color.as_deref(), Some("#dc2626"));
         assert!(state.dirty);
+    }
+
+    #[test]
+    fn updates_annotation_label_and_marks_dirty() {
+        let mut state = UiState::new_project("demo");
+        let old_label = state.add_label("vehicle");
+        let new_label = state.add_label("pedestrian");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                old_label,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        state.mark_saved();
+
+        state
+            .update_annotation_label(annotation_id, new_label)
+            .unwrap();
+
+        let annotation = state
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == annotation_id)
+            .unwrap();
+        assert_eq!(annotation.label_id, new_label);
+        assert_eq!(state.selected_asset, Some(asset_id));
+        assert_eq!(state.selected_annotation, Some(annotation_id));
+        assert_eq!(state.selected_label, Some(new_label));
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn rejects_annotation_label_update_with_missing_label() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+
+        let error = state
+            .update_annotation_label(annotation_id, LabelId::new())
+            .unwrap_err();
+
+        assert!(matches!(error, UiMutationError::MissingLabel { .. }));
+        assert_eq!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .find(|annotation| annotation.id == annotation_id)
+                .unwrap()
+                .label_id,
+            label_id
+        );
     }
 
     #[test]

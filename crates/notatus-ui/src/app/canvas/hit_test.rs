@@ -36,6 +36,7 @@ mod tests {
                 ),
                 color: DEFAULT_LABEL_COLOR.to_string(),
                 selected: false,
+                hovered: false,
             },
             AnnotationOverlay {
                 id: top_id,
@@ -44,6 +45,7 @@ mod tests {
                 ),
                 color: DEFAULT_LABEL_COLOR.to_string(),
                 selected: false,
+                hovered: false,
             },
         ];
 

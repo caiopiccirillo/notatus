@@ -11,6 +11,7 @@ use gpui_component::{
     button::Button,
     dialog::DialogButtonProps,
     input::{Input, InputEvent, InputState},
+    menu::{DropdownMenu, PopupMenuItem},
     notification::Notification,
     resizable::{h_resizable, resizable_panel},
     scroll::ScrollableElement as _,

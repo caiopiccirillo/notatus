@@ -139,7 +139,7 @@ fn attach_select_interactions(
 ) -> gpui::Stateful<gpui::Div> {
     canvas.on_mouse_down(
         gpui::MouseButton::Left,
-        move |event: &MouseDownEvent, _window, cx| {
+        move |event: &MouseDownEvent, window, cx| {
             if event.click_count >= 2 {
                 let _ = view.update(cx, |notatus, cx| {
                     notatus.fit_canvas_to_view(cx);
@@ -153,16 +153,7 @@ fn attach_select_interactions(
                     if let Some(asset) = notatus.selected_asset() {
                         let image_pos = screen_to_image(layout.image_bounds, event.position, asset);
                         let selected = hit_test_bbox_annotation(&annotations, image_pos);
-                        match notatus.state.select_annotation(selected) {
-                            Ok(()) => {
-                                notatus.status_message =
-                                    selected.map(|_| "Selected annotation".to_string());
-                            }
-                            Err(error) => {
-                                notatus.status_message = Some(error.to_string());
-                            }
-                        }
-                        cx.notify();
+                        notatus.select_annotation(selected, window, cx);
                     }
                 });
             }
