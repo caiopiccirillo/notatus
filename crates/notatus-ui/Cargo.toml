@@ -19,3 +19,6 @@ gpui = { version = "0.2", optional = true }
 gpui-component = { version = "0.5.1", optional = true }
 gpui-component-assets = { version = "0.5.1", optional = true }
 image = { version = "0.25", optional = true }
+
+[dev-dependencies]
+gpui = { version = "0.2", features = ["test-support"] }

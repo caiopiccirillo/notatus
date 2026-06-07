@@ -42,6 +42,9 @@ mod titlebar;
 mod tools;
 mod window;
 
+#[cfg(test)]
+mod gpui_tests;
+
 use project_session::ProjectLocation;
 use tools::ToolInteractionState;
 use window::{LeftDock, NotatusWindow, RightDock};

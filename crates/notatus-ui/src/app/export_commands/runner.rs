@@ -2,7 +2,7 @@ use super::workflow::push_export_workflow_notification;
 use super::*;
 use crate::app::helpers::plural;
 
-pub(super) fn export_annotations(
+pub(in crate::app) fn export_annotations(
     view: gpui::WeakEntity<NotatusWindow>,
     window: &mut Window,
     cx: &mut App,

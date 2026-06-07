@@ -2,7 +2,7 @@ use super::*;
 use crate::app::helpers::exportable_annotation_count;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ExportWorkflowIssue {
+pub(in crate::app) enum ExportWorkflowIssue {
     Labels,
     Media,
     Annotations,
@@ -47,7 +47,7 @@ impl ExportWorkflowIssue {
 }
 
 impl NotatusWindow {
-    pub(super) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
+    pub(in crate::app) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
         if self.state.dataset.labels.is_empty() {
             Some(ExportWorkflowIssue::Labels)
         } else if self.state.dataset.assets.is_empty() {
@@ -61,7 +61,7 @@ impl NotatusWindow {
         }
     }
 
-    pub(super) fn apply_export_workflow_issue(
+    pub(in crate::app) fn apply_export_workflow_issue(
         &mut self,
         issue: ExportWorkflowIssue,
         cx: &mut Context<Self>,
@@ -71,7 +71,7 @@ impl NotatusWindow {
         cx.notify();
     }
 
-    pub(super) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::app) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
         self.export_yolo = !self.export_yolo;
         if !self.export_yolo && !self.export_coco {
             self.export_yolo = true;
@@ -82,7 +82,7 @@ impl NotatusWindow {
         cx.notify();
     }
 
-    pub(super) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::app) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
         self.export_coco = !self.export_coco;
         if !self.export_yolo && !self.export_coco {
             self.export_coco = true;
