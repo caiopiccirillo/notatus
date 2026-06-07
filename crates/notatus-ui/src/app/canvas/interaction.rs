@@ -106,7 +106,7 @@ fn attach_draw_box_interactions(
                                         }
                                     }
                                 } else {
-                                    notatus.left_dock = LeftDock::Labels;
+                                    notatus.left_dock = LeftDock::Dataset;
                                     notatus.status_message = Some("Select a label first".into());
                                     skipped_required_step = true;
                                 }

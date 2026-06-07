@@ -13,16 +13,13 @@ impl NotatusWindow {
             .bg(rgb(0xffffff))
             .overflow_hidden()
             .child(match self.left_dock {
-                LeftDock::Project => self.project_dock(cx).into_any_element(),
+                LeftDock::Dataset => self.dataset_dock(cx).into_any_element(),
                 LeftDock::Media => self.media_dock(cx).into_any_element(),
-                LeftDock::Labels => self.labels_dock(cx).into_any_element(),
-                LeftDock::Export => self.export_dock(cx).into_any_element(),
             })
     }
 
-    fn project_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
+    fn dataset_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
-        let actions_view = view.clone();
 
         div()
             .size_full()
@@ -40,52 +37,22 @@ impl NotatusWindow {
                     .py_3()
                     .border_b_1()
                     .border_color(rgb(0xe5e7eb))
-                    .child(section_title("Project"))
-                    .child(self.project_actions(actions_view)),
+                    .child(section_title("Dataset"))
+                    .child(self.project_actions(view.clone())),
             )
             .child(
                 div()
                     .flex_1()
+                    .min_h_0()
                     .overflow_y_scrollbar()
-                    .p_2()
-                    .child(self.project_editor()),
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_5()
+                    .child(dataset_section("Project", self.project_editor()))
+                    .child(self.labels_section(view.clone()))
+                    .child(self.export_section(view)),
             )
-    }
-
-    fn project_actions(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
-        div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap_1()
-            .child(project_action_button(
-                "project-new",
-                IconName::Plus,
-                "New project",
-                project_commands::new_project,
-                view.clone(),
-            ))
-            .child(project_action_button(
-                "project-open",
-                IconName::FolderOpen,
-                "Open project",
-                project_commands::open_project,
-                view.clone(),
-            ))
-            .child(project_action_button(
-                "project-save",
-                IconName::FolderClosed,
-                "Save project",
-                project_commands::save_project,
-                view.clone(),
-            ))
-            .child(project_action_button(
-                "project-save-as",
-                IconName::Folder,
-                "Save project as",
-                project_commands::save_project_as,
-                view,
-            ))
     }
 
     fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -128,27 +95,148 @@ impl NotatusWindow {
             )
     }
 
-    fn export_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let view = cx.weak_entity();
-        let export_view = view.clone();
-        let exportable_count = exportable_annotation_count(&self.state.dataset);
-
+    fn project_actions(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
         div()
-            .size_full()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(project_action_button(
+                "project-new",
+                IconName::Plus,
+                "New project",
+                project_commands::new_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-open",
+                IconName::FolderOpen,
+                "Open project",
+                project_commands::open_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-save",
+                IconName::FolderClosed,
+                "Save project",
+                project_commands::save_project,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-save-as",
+                IconName::Folder,
+                "Save project as",
+                project_commands::save_project_as,
+                view,
+            ))
+    }
+
+    fn project_editor(&self) -> impl IntoElement {
+        div()
             .flex()
             .flex_col()
-            .overflow_hidden()
+            .gap_3()
             .child(
                 div()
-                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(section_title("Name"))
+                    .child(Input::new(&self.project_name_input).small().w_full()),
+            )
+            .child(metric(
+                "Location",
+                compact_text(&self.project_location.display_name(), 34),
+            ))
+            .child(dataset_created_label(&self.state.dataset))
+    }
+
+    fn labels_section(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        let add_label_view = view.clone();
+        let empty_label_view = view.clone();
+        let label_items = self.label_items(view.clone());
+        let selected_label = self.selected_label();
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .border_t_1()
+            .border_color(rgb(0xe5e7eb))
+            .pt_4()
+            .child(
+                div()
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(rgb(0xe5e7eb))
+                    .child(section_title("Labels"))
+                    .child(
+                        Button::new("labels-add")
+                            .small()
+                            .icon(Icon::new(IconName::Plus))
+                            .tooltip("Add label")
+                            .on_click(move |_, window, cx| {
+                                let _ = add_label_view.update(cx, |notatus, cx| {
+                                    notatus.create_label(window, cx);
+                                });
+                            }),
+                    ),
+            )
+            .child(if self.state.dataset.labels.is_empty() {
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_3()
+                    .py_6()
+                    .text_sm()
+                    .text_color(rgb(0x6b7280))
+                    .child("Create labels before importing media")
+                    .child(
+                        Button::new("labels-empty-add")
+                            .small()
+                            .icon(Icon::new(IconName::Plus))
+                            .label("Add label")
+                            .on_click(move |_, window, cx| {
+                                let _ = empty_label_view.update(cx, |notatus, cx| {
+                                    notatus.create_label(window, cx);
+                                });
+                            }),
+                    )
+                    .into_any_element()
+            } else {
+                SidebarMenu::new().children(label_items).into_any_element()
+            })
+            .when_some(selected_label, |panel, label| {
+                panel.child(
+                    div()
+                        .border_t_1()
+                        .border_color(rgb(0xe5e7eb))
+                        .pt_3()
+                        .child(self.label_editor(label, view)),
+                )
+            })
+    }
+
+    fn export_section(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        let export_view = view.clone();
+        let exportable_count = exportable_annotation_count(&self.state.dataset);
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .border_t_1()
+            .border_color(rgb(0xe5e7eb))
+            .pt_4()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
                     .child(section_title("Export"))
                     .child(
                         Button::new("export-run")
@@ -164,36 +252,26 @@ impl NotatusWindow {
                             }),
                     ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .overflow_y_scrollbar()
-                    .p_4()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(section_title("Formats"))
-                    .child(self.export_format_buttons(view))
-                    .child(section_title("Dataset"))
-                    .child(metric(
-                        "Media",
-                        media_count_label(self.state.dataset.assets.len()),
-                    ))
-                    .child(metric(
-                        "Labels",
-                        label_count_label(self.state.dataset.labels.len()),
-                    ))
-                    .child(metric(
-                        "Annotations",
-                        annotation_count_label(self.state.dataset.annotations.len()),
-                    ))
-                    .child(metric(
-                        "Exportable",
-                        annotation_count_label(exportable_count),
-                    ))
-                    .child(metric("Filter", "All non-rejected".to_string()))
-                    .child(metric("Output", export_output_label(self))),
-            )
+            .child(section_title("Formats"))
+            .child(self.export_format_buttons(view))
+            .child(metric(
+                "Media",
+                media_count_label(self.state.dataset.assets.len()),
+            ))
+            .child(metric(
+                "Labels",
+                label_count_label(self.state.dataset.labels.len()),
+            ))
+            .child(metric(
+                "Annotations",
+                annotation_count_label(self.state.dataset.annotations.len()),
+            ))
+            .child(metric(
+                "Exportable",
+                annotation_count_label(exportable_count),
+            ))
+            .child(metric("Filter", "All non-rejected".to_string()))
+            .child(metric("Output", export_output_label(self)))
     }
 
     fn export_format_buttons(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
@@ -224,28 +302,6 @@ impl NotatusWindow {
                         });
                     }),
             )
-    }
-
-    fn project_editor(&self) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .px_2()
-            .pt_3()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(section_title("Name"))
-                    .child(Input::new(&self.project_name_input).small().w_full()),
-            )
-            .child(metric(
-                "Location",
-                compact_text(&self.project_location.display_name(), 34),
-            ))
-            .child(dataset_created_label(&self.state.dataset))
     }
 
     fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
@@ -319,94 +375,6 @@ impl NotatusWindow {
                 })
                 .collect()
         }
-    }
-
-    fn labels_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let view = cx.weak_entity();
-        let add_label_view = cx.weak_entity();
-        let empty_label_view = cx.weak_entity();
-        let label_items = self.label_items(view.clone());
-        let selected_label = self.selected_label();
-
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(rgb(0xe5e7eb))
-                    .child(section_title("Labels"))
-                    .child(
-                        Button::new("labels-add")
-                            .small()
-                            .icon(Icon::new(IconName::Plus))
-                            .tooltip("Add label")
-                            .on_click(move |_, window, cx| {
-                                let _ = add_label_view.update(cx, |notatus, cx| {
-                                    notatus.create_label(window, cx);
-                                });
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .p_2()
-                    .child(SidebarMenu::new().children(label_items)),
-            )
-            .when_some(selected_label, |panel, label| {
-                panel.child(
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_hidden()
-                        .border_t_1()
-                        .border_color(rgb(0xe5e7eb))
-                        .p_4()
-                        .child(self.label_editor(label, view)),
-                )
-            })
-            .when(selected_label.is_none(), |panel| {
-                panel.child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .gap_3()
-                        .p_4()
-                        .text_sm()
-                        .text_color(rgb(0x6b7280))
-                        .child(if self.state.dataset.labels.is_empty() {
-                            "Create labels before importing media"
-                        } else {
-                            "Select a label"
-                        })
-                        .when(self.state.dataset.labels.is_empty(), |empty| {
-                            empty.child(
-                                Button::new("labels-empty-add")
-                                    .small()
-                                    .icon(Icon::new(IconName::Plus))
-                                    .label("Add label")
-                                    .on_click(move |_, window, cx| {
-                                        let _ = empty_label_view.update(cx, |notatus, cx| {
-                                            notatus.create_label(window, cx);
-                                        });
-                                    }),
-                            )
-                        }),
-                )
-            })
     }
 
     fn label_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
@@ -506,6 +474,15 @@ impl NotatusWindow {
                 ),
             )
     }
+}
+
+fn dataset_section(title: &'static str, content: impl IntoElement) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(section_title(title))
+        .child(content)
 }
 
 fn media_asset_actions(

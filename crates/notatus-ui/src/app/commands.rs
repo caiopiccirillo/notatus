@@ -6,7 +6,7 @@ impl NotatusWindow {
         let label_number = self.state.dataset.labels.len() + 1;
         let label_id = self.state.add_label(format!("Label {label_number}"));
         let color = LABEL_COLORS[(label_number - 1) % LABEL_COLORS.len()].to_string();
-        self.left_dock = LeftDock::Labels;
+        self.left_dock = LeftDock::Dataset;
         if let Err(error) = self.state.update_label_color(label_id, Some(color)) {
             self.status_message = Some(error.to_string());
         } else {
@@ -24,7 +24,6 @@ impl NotatusWindow {
     ) {
         match self.state.select_label(label_id) {
             Ok(()) => {
-                self.left_dock = LeftDock::Labels;
                 self.status_message = None;
                 self.sync_label_name_input(window, cx);
             }

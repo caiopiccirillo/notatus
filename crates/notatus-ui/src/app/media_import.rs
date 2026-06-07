@@ -47,7 +47,7 @@ pub(super) fn open_media_picker(
     let skipped_required_step = view
         .update(cx, |notatus, cx| {
             if notatus.state.dataset.labels.is_empty() {
-                notatus.left_dock = LeftDock::Labels;
+                notatus.left_dock = LeftDock::Dataset;
                 notatus.status_message = Some("Create a label before importing media".to_string());
                 cx.notify();
                 return true;

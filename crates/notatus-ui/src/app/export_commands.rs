@@ -12,9 +12,9 @@ pub(super) enum ExportWorkflowIssue {
 impl ExportWorkflowIssue {
     fn target_dock(self) -> LeftDock {
         match self {
-            Self::MissingLabels => LeftDock::Labels,
+            Self::MissingLabels => LeftDock::Dataset,
             Self::MissingMedia => LeftDock::Media,
-            Self::MissingAnnotations | Self::MissingFormat => LeftDock::Export,
+            Self::MissingAnnotations | Self::MissingFormat => LeftDock::Dataset,
         }
     }
 
@@ -116,7 +116,7 @@ pub(super) fn export_annotations(
             if let Some(issue) = issue {
                 notatus.apply_export_workflow_issue(issue, cx);
             } else {
-                notatus.left_dock = LeftDock::Export;
+                notatus.left_dock = LeftDock::Dataset;
                 notatus.status_message = Some("Choose an export folder".to_string());
                 cx.notify();
             }

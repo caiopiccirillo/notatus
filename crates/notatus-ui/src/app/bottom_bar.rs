@@ -20,17 +20,10 @@ impl NotatusWindow {
                     .gap_1()
                     .min_w_0()
                     .child(self.bottom_left_dock_button(
-                        "bottom-project",
+                        "bottom-dataset",
                         IconName::LayoutDashboard,
-                        "Project",
-                        LeftDock::Project,
-                        cx,
-                    ))
-                    .child(self.bottom_left_dock_button(
-                        "bottom-labels",
-                        IconName::Palette,
-                        "Labels",
-                        LeftDock::Labels,
+                        "Dataset",
+                        LeftDock::Dataset,
                         cx,
                     ))
                     .child(self.bottom_left_dock_button(
@@ -38,13 +31,6 @@ impl NotatusWindow {
                         IconName::GalleryVerticalEnd,
                         "Media",
                         LeftDock::Media,
-                        cx,
-                    ))
-                    .child(self.bottom_left_dock_button(
-                        "bottom-export",
-                        IconName::ExternalLink,
-                        "Export",
-                        LeftDock::Export,
                         cx,
                     )),
             )
@@ -89,40 +75,25 @@ impl NotatusWindow {
                 let skipped_required_step = view
                     .update(cx, |notatus, cx| {
                         if dock == LeftDock::Media && notatus.state.dataset.labels.is_empty() {
-                            notatus.left_dock = LeftDock::Labels;
+                            notatus.left_dock = LeftDock::Dataset;
                             notatus.status_message =
                                 Some("Create a label before importing media".into());
                             cx.notify();
-                            return Some(None);
-                        }
-
-                        if dock == LeftDock::Export
-                            && let Some(issue) = notatus.export_workflow_issue()
-                        {
-                            notatus.apply_export_workflow_issue(issue, cx);
-                            return Some(Some(issue));
+                            return true;
                         }
 
                         notatus.left_dock = dock;
                         cx.notify();
-                        None
+                        false
                     })
-                    .unwrap_or(None);
+                    .unwrap_or(false);
 
-                match skipped_required_step {
-                    Some(None) => {
-                        window.push_notification(
-                            Notification::warning("Create a label before importing media.")
-                                .title("Labels required"),
-                            cx,
-                        );
-                    }
-                    Some(Some(issue)) => {
-                        super::export_commands::push_export_workflow_notification(
-                            issue, window, cx,
-                        );
-                    }
-                    None => {}
+                if skipped_required_step {
+                    window.push_notification(
+                        Notification::warning("Create a label before importing media.")
+                            .title("Labels required"),
+                        cx,
+                    );
                 }
             })
     }

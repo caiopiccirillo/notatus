@@ -114,8 +114,8 @@ coco/
   annotations.json
 ```
 
-The desktop Export dock writes YOLO and COCO outputs into sibling subfolders
-under the user-selected output folder.
+The desktop Dataset dock export section writes YOLO and COCO outputs into
+sibling subfolders under the user-selected output folder.
 
 ## Error Handling
 

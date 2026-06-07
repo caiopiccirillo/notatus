@@ -69,15 +69,12 @@ application identity, current project name, and saved/unsaved status.
 Commands live in the workflow docks instead of the titlebar. The bottom bar
 switches the primary left dock in the order users usually work:
 
-- Project
-- Labels
+- Dataset
 - Media
-- Export
 
-The Project dock owns creating, opening, saving, saving as, and renaming local
-projects. The Labels dock owns label creation and label editing. The Media dock
-owns media import and media selection. The Export dock owns dataset handoff to
-external annotation formats.
+The Dataset dock owns project persistence, label management, and dataset handoff
+to external annotation formats. The Media dock owns media import and media
+selection.
 
 Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
 unsaved in memory or backed by a local folder. Creating or opening a project
@@ -102,10 +99,8 @@ The left panel is switched by bottom-bar dock buttons.
 
 It contains separate docks for:
 
-- Project: project name, location, and persistence commands
-- Labels: label creation, label list, and label customization
+- Dataset: project identity, persistence commands, label management, and export
 - Media: media import and media selection
-- Export: export format selection and output folder selection
 
 Media rows show their asset type, annotation count, and a compact remove action.
 They are selectable and update `UiState::selected_asset`. Removing media also
@@ -116,7 +111,7 @@ Label rows show their color swatch and annotation count. They are selectable and
 update `UiState::selected_label`. The selected-label editor can remove a label,
 which also removes annotations using that label.
 
-The Export dock exposes YOLO and COCO toggles, dataset/exportable annotation
+The Dataset dock exposes YOLO and COCO toggles, dataset/exportable annotation
 counts, and an export action. Export writes selected formats into subfolders
 under a user-selected output folder.
 
@@ -127,14 +122,13 @@ This keeps repeated screenshot-style filenames readable in a narrow panel.
 
 The bottom bar is the persistent dock switcher:
 
-- Project
-- Labels
+- Dataset
 - Media
-- Export
 - Annotations
 - Info
 
-The left group controls the left dock. The right group controls the right dock.
+The left group controls Dataset and Media. The right group controls the right
+dock.
 
 ## Canvas Area
 
@@ -158,6 +152,8 @@ The initial tools are:
   scroll wheel.
 - Fit resets the viewport to the canvas-contained image bounds. It is available
   as a toolbar button and by double-clicking the canvas.
+- Active Label selects the label used by Draw Box without switching away from
+  the canvas.
 
 Future segmentation tools should add new handlers to the canvas tool layer and
 commit completed polygons through the canonical core schema.

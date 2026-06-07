@@ -2,10 +2,8 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LeftDock {
-    Project,
+    Dataset,
     Media,
-    Labels,
-    Export,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,7 +75,7 @@ impl NotatusWindow {
 
         Self {
             state,
-            left_dock: LeftDock::Project,
+            left_dock: LeftDock::Dataset,
             right_dock: RightDock::Info,
             status_message: None,
             project_location: ProjectLocation::default(),
