@@ -82,8 +82,10 @@ The GPUI app currently includes:
 
 - `gpui-component` title bar with project/status display
 - local project create/open/save/save-as commands
-- bottom-bar dock buttons for Project, Labels, Media, Annotations, and Info
-- left workflow docks for project persistence, labels, and media navigation
+- bottom-bar dock buttons for Project, Labels, Media, Export, Annotations, and
+  Info
+- left workflow docks for project persistence, labels, media navigation, and
+  export
 - resizable left-dock/canvas/right-dock layout
 - component sidebar navigation
 - selected-media preview

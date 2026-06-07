@@ -5,6 +5,7 @@ pub(super) enum LeftDock {
     Project,
     Media,
     Labels,
+    Export,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,6 +26,8 @@ pub(super) struct NotatusWindow {
     pub(super) syncing_label_input: bool,
     pub(super) tools: ToolInteractionState,
     pub(super) hovered_annotation: Option<AnnotationId>,
+    pub(super) export_yolo: bool,
+    pub(super) export_coco: bool,
     pub(super) canvas_image_layout: SharedImageLayout,
     pub(super) _subscriptions: Vec<Subscription>,
 }
@@ -84,6 +87,8 @@ impl NotatusWindow {
             syncing_label_input: false,
             tools: ToolInteractionState::default(),
             hovered_annotation: None,
+            export_yolo: true,
+            export_coco: true,
             canvas_image_layout: Rc::new(RefCell::new(None)),
             _subscriptions,
         }

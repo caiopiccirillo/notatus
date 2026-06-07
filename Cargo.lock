@@ -3565,6 +3565,7 @@ dependencies = [
  "notatus-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
 ]
 

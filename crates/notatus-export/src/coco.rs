@@ -3,6 +3,8 @@ use notatus_core::{AssetId, Dataset, LabelId, Metadata};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct CocoDataset {
@@ -43,6 +45,13 @@ pub struct CocoCategory {
     pub id: u64,
     pub name: String,
     pub supercategory: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CocoExportSummary {
+    pub image_count: usize,
+    pub category_count: usize,
+    pub annotation_count: usize,
 }
 
 pub fn export_detection(
@@ -139,5 +148,42 @@ pub fn export_detection(
         images,
         annotations,
         categories,
+    })
+}
+
+pub fn write_detection_export(
+    dataset: &Dataset,
+    filter: &AnnotationFilter,
+    output_dir: impl AsRef<Path>,
+) -> Result<CocoExportSummary, ExportError> {
+    let output_dir = output_dir.as_ref();
+    create_dir_all(output_dir)?;
+
+    let exported = export_detection(dataset, filter)?;
+    let path = output_dir.join("annotations.json");
+    let contents = serde_json::to_string_pretty(&exported).map_err(|source| ExportError::Json {
+        path: path.clone(),
+        source,
+    })?;
+    write_file(&path, &contents)?;
+
+    Ok(CocoExportSummary {
+        image_count: exported.images.len(),
+        category_count: exported.categories.len(),
+        annotation_count: exported.annotations.len(),
+    })
+}
+
+fn create_dir_all(path: &Path) -> Result<(), ExportError> {
+    fs::create_dir_all(path).map_err(|source| ExportError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn write_file(path: &Path, contents: &str) -> Result<(), ExportError> {
+    fs::write(path, contents).map_err(|source| ExportError::Io {
+        path: PathBuf::from(path),
+        source,
     })
 }

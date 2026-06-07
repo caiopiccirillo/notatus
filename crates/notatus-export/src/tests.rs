@@ -51,3 +51,50 @@ fn exports_coco_detection_dataset() {
     assert_eq!(exported.categories[0].name, "car");
     assert_eq!(exported.annotations[0].bbox, [75.0, 30.0, 50.0, 40.0]);
 }
+
+#[test]
+fn writes_yolo_detection_export_layout() {
+    let dataset = sample_dataset();
+    let output = tempfile::tempdir().unwrap();
+
+    let summary =
+        yolo::write_detection_export(&dataset, &AnnotationFilter::default(), output.path())
+            .unwrap();
+
+    assert_eq!(summary.class_count, 1);
+    assert_eq!(summary.annotation_file_count, 1);
+    assert_eq!(summary.annotation_count, 1);
+    assert_eq!(
+        std::fs::read_to_string(output.path().join("classes.txt")).unwrap(),
+        "car\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(
+            output
+                .path()
+                .join("labels")
+                .join(format!("{}.txt", dataset.assets[0].id))
+        )
+        .unwrap(),
+        "0 0.500000 0.500000 0.250000 0.400000"
+    );
+}
+
+#[test]
+fn writes_coco_detection_export_layout() {
+    let output = tempfile::tempdir().unwrap();
+
+    let summary = coco::write_detection_export(
+        &sample_dataset(),
+        &AnnotationFilter::default(),
+        output.path(),
+    )
+    .unwrap();
+
+    assert_eq!(summary.image_count, 1);
+    assert_eq!(summary.category_count, 1);
+    assert_eq!(summary.annotation_count, 1);
+    let contents = std::fs::read_to_string(output.path().join("annotations.json")).unwrap();
+    assert!(contents.contains("\"categories\""));
+    assert!(contents.contains("\"name\": \"car\""));
+}

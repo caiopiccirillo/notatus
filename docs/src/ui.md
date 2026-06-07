@@ -28,8 +28,12 @@ Implemented mutations:
 - select label
 - update label name
 - update label color
+- remove label
 - add local image asset
 - select asset
+- remove media asset
+- select annotation
+- update annotation label
 - add human bounding-box annotation
 
 `UiState` always mutates the canonical dataset. It does not define a separate
@@ -68,10 +72,12 @@ switches the primary left dock in the order users usually work:
 - Project
 - Labels
 - Media
+- Export
 
 The Project dock owns creating, opening, saving, saving as, and renaming local
 projects. The Labels dock owns label creation and label editing. The Media dock
-owns media import and media selection.
+owns media import and media selection. The Export dock owns dataset handoff to
+external annotation formats.
 
 Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
 unsaved in memory or backed by a local folder. Creating or opening a project
@@ -99,6 +105,7 @@ It contains separate docks for:
 - Project: project name, location, and persistence commands
 - Labels: label creation, label list, and label customization
 - Media: media import and media selection
+- Export: export format selection and output folder selection
 
 Media rows show their asset type, annotation count, and a compact remove action.
 They are selectable and update `UiState::selected_asset`. Removing media also
@@ -108,6 +115,10 @@ Annotations dock so media navigation stays compact.
 Label rows show their color swatch and annotation count. They are selectable and
 update `UiState::selected_label`. The selected-label editor can remove a label,
 which also removes annotations using that label.
+
+The Export dock exposes YOLO and COCO toggles, dataset/exportable annotation
+counts, and an export action. Export writes selected formats into subfolders
+under a user-selected output folder.
 
 Long filenames are shortened with a middle truncation helper before rendering.
 This keeps repeated screenshot-style filenames readable in a narrow panel.
@@ -119,6 +130,7 @@ The bottom bar is the persistent dock switcher:
 - Project
 - Labels
 - Media
+- Export
 - Annotations
 - Info
 

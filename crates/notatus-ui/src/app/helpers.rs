@@ -119,6 +119,16 @@ pub(super) fn annotation_count_label(count: usize) -> String {
     format!("{count} annotation{}", plural(count))
 }
 
+pub(super) fn exportable_annotation_count(dataset: &notatus_core::Dataset) -> usize {
+    let filter = notatus_export::AnnotationFilter::all_non_rejected();
+    dataset
+        .annotations
+        .iter()
+        .filter(|annotation| filter.accepts(annotation))
+        .filter(|annotation| matches!(annotation.geometry, AnnotationGeometry::Bbox(_)))
+        .count()
+}
+
 pub(super) fn label_count_label(count: usize) -> String {
     format!("{count} label{}", plural(count))
 }

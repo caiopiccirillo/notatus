@@ -1,6 +1,8 @@
 use crate::{AnnotationFilter, ExportError};
 use notatus_core::{AnnotationGeometry, AnnotationRecord, AssetId, BoundingBox, Dataset, LabelId};
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct YoloAnnotationFile {
@@ -13,6 +15,13 @@ pub struct YoloAnnotationFile {
 pub struct YoloImportFile {
     pub asset_id: AssetId,
     pub contents: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct YoloExportSummary {
+    pub class_count: usize,
+    pub annotation_file_count: usize,
+    pub annotation_count: usize,
 }
 
 pub fn export_detection(
@@ -56,6 +65,34 @@ pub fn export_detection(
     }
 
     Ok(files)
+}
+
+pub fn write_detection_export(
+    dataset: &Dataset,
+    filter: &AnnotationFilter,
+    output_dir: impl AsRef<Path>,
+) -> Result<YoloExportSummary, ExportError> {
+    let output_dir = output_dir.as_ref();
+    let labels_dir = output_dir.join("labels");
+    create_dir_all(output_dir)?;
+    create_dir_all(&labels_dir)?;
+
+    let class_file = output_dir.join("classes.txt");
+    write_file(&class_file, &classes_file_contents(dataset))?;
+
+    let files = export_detection(dataset, filter)?;
+    let mut annotation_count = 0;
+    for file in &files {
+        annotation_count += file.contents.lines().count();
+        let path = labels_dir.join(format!("{}.txt", file.asset_id));
+        write_file(&path, &file.contents)?;
+    }
+
+    Ok(YoloExportSummary {
+        class_count: dataset.labels.len(),
+        annotation_file_count: files.len(),
+        annotation_count,
+    })
 }
 
 pub fn import_detection(
@@ -133,6 +170,33 @@ fn yolo_class_map(dataset: &Dataset) -> BTreeMap<LabelId, usize> {
         .enumerate()
         .map(|(index, label)| (label.id, index))
         .collect()
+}
+
+fn classes_file_contents(dataset: &Dataset) -> String {
+    let mut contents = dataset
+        .labels
+        .iter()
+        .map(|label| label.name.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !contents.is_empty() {
+        contents.push('\n');
+    }
+    contents
+}
+
+fn create_dir_all(path: &Path) -> Result<(), ExportError> {
+    fs::create_dir_all(path).map_err(|source| ExportError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn write_file(path: &Path, contents: &str) -> Result<(), ExportError> {
+    fs::write(path, contents).map_err(|source| ExportError::Io {
+        path: PathBuf::from(path),
+        source,
+    })
 }
 
 fn parse_usize(value: &str, asset_id: AssetId, line: usize) -> Result<usize, ExportError> {

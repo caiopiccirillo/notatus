@@ -1,0 +1,224 @@
+use super::helpers::{exportable_annotation_count, plural};
+use super::*;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ExportWorkflowIssue {
+    MissingLabels,
+    MissingMedia,
+    MissingAnnotations,
+    MissingFormat,
+}
+
+impl ExportWorkflowIssue {
+    fn target_dock(self) -> LeftDock {
+        match self {
+            Self::MissingLabels => LeftDock::Labels,
+            Self::MissingMedia => LeftDock::Media,
+            Self::MissingAnnotations | Self::MissingFormat => LeftDock::Export,
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::MissingLabels => "Labels required",
+            Self::MissingMedia => "Media required",
+            Self::MissingAnnotations => "Annotations required",
+            Self::MissingFormat => "Format required",
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::MissingLabels => "Create a label before exporting annotations.",
+            Self::MissingMedia => "Import media before exporting annotations.",
+            Self::MissingAnnotations => "Create exportable annotations before exporting.",
+            Self::MissingFormat => "Select at least one export format.",
+        }
+    }
+
+    fn status(self) -> &'static str {
+        match self {
+            Self::MissingLabels => "Create a label before exporting",
+            Self::MissingMedia => "Import media before exporting",
+            Self::MissingAnnotations => "No exportable annotations",
+            Self::MissingFormat => "Select an export format",
+        }
+    }
+}
+
+impl NotatusWindow {
+    pub(super) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
+        if self.state.dataset.labels.is_empty() {
+            Some(ExportWorkflowIssue::MissingLabels)
+        } else if self.state.dataset.assets.is_empty() {
+            Some(ExportWorkflowIssue::MissingMedia)
+        } else if exportable_annotation_count(&self.state.dataset) == 0 {
+            Some(ExportWorkflowIssue::MissingAnnotations)
+        } else if !self.export_yolo && !self.export_coco {
+            Some(ExportWorkflowIssue::MissingFormat)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn apply_export_workflow_issue(
+        &mut self,
+        issue: ExportWorkflowIssue,
+        cx: &mut Context<Self>,
+    ) {
+        self.left_dock = issue.target_dock();
+        self.status_message = Some(issue.status().to_string());
+        cx.notify();
+    }
+
+    pub(super) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
+        self.export_yolo = !self.export_yolo;
+        if !self.export_yolo && !self.export_coco {
+            self.export_yolo = true;
+            self.status_message = Some(ExportWorkflowIssue::MissingFormat.status().to_string());
+        } else {
+            self.status_message = None;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
+        self.export_coco = !self.export_coco;
+        if !self.export_yolo && !self.export_coco {
+            self.export_coco = true;
+            self.status_message = Some(ExportWorkflowIssue::MissingFormat.status().to_string());
+        } else {
+            self.status_message = None;
+        }
+        cx.notify();
+    }
+}
+
+pub(super) fn push_export_workflow_notification(
+    issue: ExportWorkflowIssue,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    window.push_notification(
+        Notification::warning(issue.message()).title(issue.title()),
+        cx,
+    );
+}
+
+pub(super) fn export_annotations(
+    view: gpui::WeakEntity<NotatusWindow>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let issue = view
+        .update(cx, |notatus, cx| {
+            let issue = notatus.export_workflow_issue();
+            if let Some(issue) = issue {
+                notatus.apply_export_workflow_issue(issue, cx);
+            } else {
+                notatus.left_dock = LeftDock::Export;
+                notatus.status_message = Some("Choose an export folder".to_string());
+                cx.notify();
+            }
+            issue
+        })
+        .unwrap_or(None);
+
+    if let Some(issue) = issue {
+        push_export_workflow_notification(issue, window, cx);
+        return;
+    }
+
+    let paths = cx.prompt_for_paths(PathPromptOptions {
+        files: false,
+        directories: true,
+        multiple: false,
+        prompt: Some(SharedString::from("Export annotations")),
+    });
+
+    window
+        .spawn(cx, async move |window| match paths.await {
+            Ok(Ok(Some(paths))) => {
+                let Some(output_dir) = paths.into_iter().next() else {
+                    return;
+                };
+                let export_request = view.update_in(window, |notatus, _, _| ExportRequest {
+                    dataset: notatus.state.dataset.clone(),
+                    yolo: notatus.export_yolo,
+                    coco: notatus.export_coco,
+                });
+                let result = export_request
+                    .map_err(|_| "window closed".to_string())
+                    .and_then(|request| run_export(request, &output_dir));
+                let _ = view.update_in(window, |notatus, _, cx| {
+                    match result {
+                        Ok(summary) => notatus.status_message = Some(summary),
+                        Err(error) => {
+                            notatus.status_message = Some(format!("Export failed: {error}"));
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+            Ok(Ok(None)) => {
+                let _ = view.update_in(window, |notatus, _, cx| {
+                    notatus.status_message = Some("Export cancelled".to_string());
+                    cx.notify();
+                });
+            }
+            Ok(Err(error)) => {
+                let _ = view.update_in(window, |notatus, _, cx| {
+                    notatus.status_message = Some(format!("Export picker failed: {error}"));
+                    cx.notify();
+                });
+            }
+            Err(_) => {
+                let _ = view.update_in(window, |notatus, _, cx| {
+                    notatus.status_message = Some("Export picker closed unexpectedly".to_string());
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+}
+
+struct ExportRequest {
+    dataset: notatus_core::Dataset,
+    yolo: bool,
+    coco: bool,
+}
+
+fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, String> {
+    let filter = notatus_export::AnnotationFilter::all_non_rejected();
+    let mut formats = Vec::new();
+    let mut annotation_count = 0;
+
+    if request.yolo {
+        let summary = notatus_export::yolo::write_detection_export(
+            &request.dataset,
+            &filter,
+            output_dir.join("yolo"),
+        )
+        .map_err(|error| error.to_string())?;
+        formats.push("YOLO");
+        annotation_count = annotation_count.max(summary.annotation_count);
+    }
+
+    if request.coco {
+        let summary = notatus_export::coco::write_detection_export(
+            &request.dataset,
+            &filter,
+            output_dir.join("coco"),
+        )
+        .map_err(|error| error.to_string())?;
+        formats.push("COCO");
+        annotation_count = annotation_count.max(summary.annotation_count);
+    }
+
+    Ok(format!(
+        "Exported {} annotation{} as {}",
+        annotation_count,
+        plural(annotation_count),
+        formats.join(" and ")
+    ))
+}

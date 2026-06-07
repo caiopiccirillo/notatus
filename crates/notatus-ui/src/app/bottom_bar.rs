@@ -39,6 +39,13 @@ impl NotatusWindow {
                         "Media",
                         LeftDock::Media,
                         cx,
+                    ))
+                    .child(self.bottom_left_dock_button(
+                        "bottom-export",
+                        IconName::ExternalLink,
+                        "Export",
+                        LeftDock::Export,
+                        cx,
                     )),
             )
             .child(
@@ -86,21 +93,36 @@ impl NotatusWindow {
                             notatus.status_message =
                                 Some("Create a label before importing media".into());
                             cx.notify();
-                            return true;
+                            return Some(None);
+                        }
+
+                        if dock == LeftDock::Export
+                            && let Some(issue) = notatus.export_workflow_issue()
+                        {
+                            notatus.apply_export_workflow_issue(issue, cx);
+                            return Some(Some(issue));
                         }
 
                         notatus.left_dock = dock;
                         cx.notify();
-                        false
+                        None
                     })
-                    .unwrap_or(false);
+                    .unwrap_or(None);
 
-                if skipped_required_step {
-                    window.push_notification(
-                        Notification::warning("Create a label before importing media.")
-                            .title("Labels required"),
-                        cx,
-                    );
+                match skipped_required_step {
+                    Some(None) => {
+                        window.push_notification(
+                            Notification::warning("Create a label before importing media.")
+                                .title("Labels required"),
+                            cx,
+                        );
+                    }
+                    Some(Some(issue)) => {
+                        super::export_commands::push_export_workflow_notification(
+                            issue, window, cx,
+                        );
+                    }
+                    None => {}
                 }
             })
     }

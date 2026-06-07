@@ -30,6 +30,7 @@ use std::rc::Rc;
 mod bottom_bar;
 mod canvas;
 mod commands;
+mod export_commands;
 mod helpers;
 mod left_dock;
 mod media_import;

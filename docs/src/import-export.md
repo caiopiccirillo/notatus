@@ -40,6 +40,18 @@ pixel coordinates, so export performs the conversion at the boundary.
 Only bounding-box annotations are exported. Polygon annotations are currently
 ignored by the YOLO detection adapter.
 
+The filesystem writer creates:
+
+```text
+yolo/
+  classes.txt
+  labels/
+    <asset-id>.txt
+```
+
+`classes.txt` lists labels in dataset order. Label files use asset IDs as stable
+file names and contain YOLO detection lines for the matching asset.
+
 ## YOLO Detection Import
 
 YOLO import reads:
@@ -94,6 +106,16 @@ Each exported annotation includes:
 - confidence when present
 
 Only bounding-box annotations are exported by the current COCO adapter.
+
+The filesystem writer creates:
+
+```text
+coco/
+  annotations.json
+```
+
+The desktop Export dock writes YOLO and COCO outputs into sibling subfolders
+under the user-selected output folder.
 
 ## Error Handling
 
