@@ -161,7 +161,6 @@ impl NotatusWindow {
         let add_label_view = view.clone();
         let empty_label_view = view.clone();
         let label_items = self.label_items(view.clone());
-        let selected_label = self.selected_label();
 
         div()
             .flex()
@@ -214,15 +213,6 @@ impl NotatusWindow {
                     .into_any_element()
             } else {
                 SidebarMenu::new().children(label_items).into_any_element()
-            })
-            .when_some(selected_label, |panel, label| {
-                panel.child(
-                    div()
-                        .border_t_1()
-                        .border_color(rgb(0xe5e7eb))
-                        .pt_3()
-                        .child(self.label_editor(label, view)),
-                )
             })
     }
 
@@ -318,83 +308,25 @@ impl NotatusWindow {
                         .count();
                     let label_name = label.name.clone();
                     let label_color = label.color.clone();
-                    let view = view.clone();
-                    SidebarMenuItem::new(label_name)
-                        .suffix(label_asset_meta(label_color.as_deref(), annotation_count))
+                    let select_view = view.clone();
+                    let remove_view = view.clone();
+                    SidebarMenuItem::new(label_name.clone())
+                        .suffix(label_actions(
+                            label_color.as_deref(),
+                            annotation_count,
+                            label_id,
+                            label_name,
+                            remove_view,
+                        ))
                         .active(self.state.selected_label == Some(label_id))
                         .on_click(move |_, window, cx| {
-                            let _ = view.update(cx, |notatus, cx| {
+                            let _ = select_view.update(cx, |notatus, cx| {
                                 notatus.select_label(label_id, window, cx);
                             });
                         })
                 })
                 .collect()
         }
-    }
-
-    fn label_editor(
-        &self,
-        label: &Label,
-        view: gpui::WeakEntity<NotatusWindow>,
-    ) -> impl IntoElement {
-        let selected_color = label.color.as_deref().unwrap_or(DEFAULT_LABEL_COLOR);
-        let label_id = label.id;
-        let remove_view = view.clone();
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(metric("Editing", "Label".to_string()))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(section_title("Name"))
-                    .child(Input::new(&self.label_name_input).small().w_full()),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(section_title("Color"))
-                    .child(div().flex().flex_wrap().gap_2().children(
-                        LABEL_COLORS.iter().enumerate().map(|(color_ix, color)| {
-                            label_color_button(
-                                color_ix,
-                                *color,
-                                *color == selected_color,
-                                view.clone(),
-                            )
-                        }),
-                    )),
-            )
-            .child(metric(
-                "Annotations",
-                self.state
-                    .dataset
-                    .annotations
-                    .iter()
-                    .filter(|annotation| annotation.label_id == label.id)
-                    .count()
-                    .to_string(),
-            ))
-            .child(
-                div().flex().justify_end().pt_1().child(
-                    Button::new("labels-remove")
-                        .small()
-                        .danger()
-                        .icon(Icon::new(IconName::Delete))
-                        .label("Remove label")
-                        .tooltip("Remove label and its annotations")
-                        .on_click(move |_, window, cx| {
-                            let _ = remove_view.update(cx, |notatus, cx| {
-                                notatus.remove_label(label_id, window, cx);
-                            });
-                        }),
-                ),
-            )
     }
 }
 
@@ -405,6 +337,81 @@ fn dataset_section(title: &'static str, content: impl IntoElement) -> impl IntoE
         .gap_3()
         .child(section_title(title))
         .child(content)
+}
+
+fn label_actions(
+    color: Option<&str>,
+    annotation_count: usize,
+    label_id: LabelId,
+    label_name: String,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(label_asset_meta(color, annotation_count))
+        .child(
+            Button::new(label_element_id("label-remove", label_id))
+                .xsmall()
+                .ghost()
+                .danger()
+                .icon(Icon::new(IconName::Delete))
+                .tooltip("Remove label")
+                .on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    remove_label_or_confirm(
+                        view.clone(),
+                        label_id,
+                        label_name.clone(),
+                        annotation_count,
+                        window,
+                        cx,
+                    );
+                }),
+        )
+}
+
+fn remove_label_or_confirm(
+    view: gpui::WeakEntity<NotatusWindow>,
+    label_id: LabelId,
+    label_name: String,
+    annotation_count: usize,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if annotation_count == 0 {
+        let _ = view.update(cx, |notatus, cx| {
+            notatus.remove_label(label_id, window, cx);
+        });
+        return;
+    }
+
+    window.open_dialog(cx, move |dialog, _, _| {
+        let remove_view = view.clone();
+        let message = format!(
+            "Removing \"{label_name}\" will also remove {annotation_count} annotation{}.",
+            plural(annotation_count)
+        );
+
+        dialog
+            .confirm()
+            .title("Remove label?")
+            .child(message)
+            .button_props(
+                DialogButtonProps::default()
+                    .ok_text("Remove label")
+                    .ok_variant(ButtonVariant::Danger)
+                    .cancel_text("Cancel"),
+            )
+            .on_ok(move |_, window, cx| {
+                let _ = remove_view.update(cx, |notatus, cx| {
+                    notatus.remove_label(label_id, window, cx);
+                });
+                true
+            })
+    });
 }
 
 fn media_asset_actions(
@@ -433,6 +440,13 @@ fn media_asset_actions(
                     });
                 }),
         )
+}
+
+fn label_element_id(prefix: &'static str, label_id: LabelId) -> gpui::ElementId {
+    let value = label_id.as_uuid().as_u128();
+    let high = (value >> 64) as u64;
+    let low = (value as u64).to_string();
+    (gpui::ElementId::from((prefix, high)), low).into()
 }
 
 fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId {

@@ -8,7 +8,7 @@ use gpui::{
 };
 use gpui_component::{
     Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
-    button::{Button, ButtonVariants as _},
+    button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::DialogButtonProps,
     input::{Input, InputEvent, InputState},
     menu::{DropdownMenu, PopupMenuItem},
