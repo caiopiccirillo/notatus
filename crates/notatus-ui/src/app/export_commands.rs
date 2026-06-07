@@ -1,4 +1,4 @@
-use super::helpers::{exportable_annotation_count, plural};
+use super::helpers::*;
 use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,6 +94,33 @@ impl NotatusWindow {
     }
 }
 
+pub(super) fn open_export_dialog(
+    view: gpui::WeakEntity<NotatusWindow>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    window.open_dialog(cx, move |dialog, _, cx| {
+        let content_view = view.clone();
+        let export_view = view.clone();
+
+        dialog
+            .confirm()
+            .w(px(420.0))
+            .title("Export annotations")
+            .child(export_dialog_content(content_view.clone(), cx))
+            .button_props(
+                DialogButtonProps::default()
+                    .ok_text("Export")
+                    .cancel_text("Cancel"),
+            )
+            .on_ok(move |_, window, cx| {
+                window.close_dialog(cx);
+                export_annotations(export_view.clone(), window, cx);
+                false
+            })
+    });
+}
+
 pub(super) fn push_export_workflow_notification(
     issue: ExportWorkflowIssue,
     window: &mut Window,
@@ -106,6 +133,98 @@ pub(super) fn push_export_workflow_notification(
             .autohide(false),
         cx,
     );
+}
+
+fn export_dialog_content(view: gpui::WeakEntity<NotatusWindow>, cx: &mut App) -> gpui::AnyElement {
+    let snapshot = view
+        .update(cx, |notatus, _| ExportDialogSnapshot {
+            media_count: notatus.state.dataset.assets.len(),
+            label_count: notatus.state.dataset.labels.len(),
+            annotation_count: notatus.state.dataset.annotations.len(),
+            exportable_count: exportable_annotation_count(&notatus.state.dataset),
+            yolo: notatus.export_yolo,
+            coco: notatus.export_coco,
+        })
+        .ok();
+
+    let Some(snapshot) = snapshot else {
+        return div()
+            .text_sm()
+            .text_color(rgb(0x6b7280))
+            .child("Export is unavailable because the window was closed.")
+            .into_any_element();
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_title("Formats"))
+                .child(export_dialog_format_buttons(
+                    view.clone(),
+                    snapshot.yolo,
+                    snapshot.coco,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_title("Summary"))
+                .child(metric("Media", media_count_label(snapshot.media_count)))
+                .child(metric("Labels", label_count_label(snapshot.label_count)))
+                .child(metric(
+                    "Annotations",
+                    annotation_count_label(snapshot.annotation_count),
+                ))
+                .child(metric(
+                    "Exportable",
+                    annotation_count_label(snapshot.exportable_count),
+                ))
+                .child(metric("Filter", "All non-rejected".to_string()))
+                .child(metric("Output", snapshot.output_label())),
+        )
+        .into_any_element()
+}
+
+fn export_dialog_format_buttons(
+    view: gpui::WeakEntity<NotatusWindow>,
+    yolo: bool,
+    coco: bool,
+) -> impl IntoElement {
+    let yolo_view = view.clone();
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(
+            Button::new("export-dialog-format-yolo")
+                .small()
+                .label("YOLO")
+                .selected(yolo)
+                .on_click(move |_, _, cx| {
+                    let _ = yolo_view.update(cx, |notatus, cx| {
+                        notatus.toggle_export_yolo(cx);
+                    });
+                }),
+        )
+        .child(
+            Button::new("export-dialog-format-coco")
+                .small()
+                .label("COCO")
+                .selected(coco)
+                .on_click(move |_, _, cx| {
+                    let _ = view.update(cx, |notatus, cx| {
+                        notatus.toggle_export_coco(cx);
+                    });
+                }),
+        )
 }
 
 pub(super) fn export_annotations(
@@ -198,6 +317,26 @@ struct ExportRequest {
     dataset: notatus_core::Dataset,
     yolo: bool,
     coco: bool,
+}
+
+struct ExportDialogSnapshot {
+    media_count: usize,
+    label_count: usize,
+    annotation_count: usize,
+    exportable_count: usize,
+    yolo: bool,
+    coco: bool,
+}
+
+impl ExportDialogSnapshot {
+    fn output_label(&self) -> String {
+        match (self.yolo, self.coco) {
+            (true, true) => "YOLO and COCO".to_string(),
+            (true, false) => "YOLO".to_string(),
+            (false, true) => "COCO".to_string(),
+            (false, false) => "None".to_string(),
+        }
+    }
 }
 
 struct ExportWorkflowNotification;

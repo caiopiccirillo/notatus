@@ -50,8 +50,7 @@ impl NotatusWindow {
                     .flex_col()
                     .gap_5()
                     .child(dataset_section("Project", self.project_editor()))
-                    .child(self.labels_section(view.clone()))
-                    .child(self.export_section(view)),
+                    .child(self.labels_section(view)),
             )
     }
 
@@ -127,6 +126,13 @@ impl NotatusWindow {
                 IconName::Folder,
                 "Save project as",
                 project_commands::save_project_as,
+                view.clone(),
+            ))
+            .child(project_action_button(
+                "project-export",
+                IconName::ExternalLink,
+                "Export annotations",
+                export_commands::open_export_dialog,
                 view,
             ))
     }
@@ -218,90 +224,6 @@ impl NotatusWindow {
                         .child(self.label_editor(label, view)),
                 )
             })
-    }
-
-    fn export_section(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
-        let export_view = view.clone();
-        let exportable_count = exportable_annotation_count(&self.state.dataset);
-
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .border_t_1()
-            .border_color(rgb(0xe5e7eb))
-            .pt_4()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(section_title("Export"))
-                    .child(
-                        Button::new("export-run")
-                            .small()
-                            .icon(Icon::new(IconName::ExternalLink))
-                            .tooltip("Export annotations")
-                            .on_click(move |_, window, cx| {
-                                export_commands::export_annotations(
-                                    export_view.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                    ),
-            )
-            .child(section_title("Formats"))
-            .child(self.export_format_buttons(view))
-            .child(metric(
-                "Media",
-                media_count_label(self.state.dataset.assets.len()),
-            ))
-            .child(metric(
-                "Labels",
-                label_count_label(self.state.dataset.labels.len()),
-            ))
-            .child(metric(
-                "Annotations",
-                annotation_count_label(self.state.dataset.annotations.len()),
-            ))
-            .child(metric(
-                "Exportable",
-                annotation_count_label(exportable_count),
-            ))
-            .child(metric("Filter", "All non-rejected".to_string()))
-            .child(metric("Output", export_output_label(self)))
-    }
-
-    fn export_format_buttons(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
-        let yolo_view = view.clone();
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .child(
-                Button::new("export-format-yolo")
-                    .small()
-                    .label("YOLO")
-                    .selected(self.export_yolo)
-                    .on_click(move |_, _, cx| {
-                        let _ = yolo_view.update(cx, |notatus, cx| {
-                            notatus.toggle_export_yolo(cx);
-                        });
-                    }),
-            )
-            .child(
-                Button::new("export-format-coco")
-                    .small()
-                    .label("COCO")
-                    .selected(self.export_coco)
-                    .on_click(move |_, _, cx| {
-                        let _ = view.update(cx, |notatus, cx| {
-                            notatus.toggle_export_coco(cx);
-                        });
-                    }),
-            )
     }
 
     fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
@@ -518,15 +440,6 @@ fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId 
     let high = (value >> 64) as u64;
     let low = (value as u64).to_string();
     (gpui::ElementId::from((prefix, high)), low).into()
-}
-
-fn export_output_label(window: &NotatusWindow) -> String {
-    match (window.export_yolo, window.export_coco) {
-        (true, true) => "YOLO and COCO".to_string(),
-        (true, false) => "YOLO".to_string(),
-        (false, true) => "COCO".to_string(),
-        (false, false) => "None".to_string(),
-    }
 }
 
 fn project_action_button(
