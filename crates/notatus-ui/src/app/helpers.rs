@@ -72,6 +72,7 @@ pub(super) fn label_color_button(
     color_ix: usize,
     color: &'static str,
     selected: bool,
+    label_id: LabelId,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement {
     div()
@@ -89,7 +90,7 @@ pub(super) fn label_color_button(
         .hover(|swatch| swatch.border_color(rgb(0x6b7280)))
         .on_click(move |_, _, cx| {
             let _ = view.update(cx, |notatus, cx| {
-                notatus.update_selected_label_color(color, cx);
+                notatus.update_label_color(label_id, color, cx);
             });
         })
         .child(label_swatch(color, true))

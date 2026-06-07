@@ -7,11 +7,12 @@ use gpui::{
     bounds, div, fill, img, outline, px, rgb, size,
 };
 use gpui_component::{
-    Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
+    Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
     button::{Button, ButtonVariant, ButtonVariants as _},
+    color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState},
     dialog::DialogButtonProps,
     input::{Input, InputEvent, InputState},
-    menu::{DropdownMenu, PopupMenuItem},
+    menu::{ContextMenuExt as _, DropdownMenu, PopupMenu, PopupMenuItem},
     notification::Notification,
     resizable::{h_resizable, resizable_panel},
     scroll::ScrollableElement as _,

@@ -1,3 +1,4 @@
+use super::helpers::hex_color;
 use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +23,8 @@ pub(super) struct NotatusWindow {
     pub(super) syncing_project_input: bool,
     pub(super) label_name_input: gpui::Entity<InputState>,
     pub(super) syncing_label_input: bool,
+    pub(super) label_color_picker: gpui::Entity<ColorPickerState>,
+    pub(super) label_color_target: Option<LabelId>,
     pub(super) tools: ToolInteractionState,
     pub(super) hovered_annotation: Option<AnnotationId>,
     pub(super) export_yolo: bool,
@@ -36,6 +39,9 @@ impl NotatusWindow {
         state.set_tool(AnnotationTool::DrawBox);
         let project_name_input = cx.new(|cx| InputState::new(window, cx));
         let label_name_input = cx.new(|cx| InputState::new(window, cx));
+        let label_color_picker = cx.new(|cx| {
+            ColorPickerState::new(window, cx).default_value(hex_color(DEFAULT_LABEL_COLOR))
+        });
         project_name_input.update(cx, |input, cx| {
             input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
         });
@@ -71,6 +77,28 @@ impl NotatusWindow {
                     }
                 },
             ),
+            cx.subscribe_in(
+                &label_color_picker,
+                window,
+                |this, _, event: &ColorPickerEvent, _window, cx| {
+                    let ColorPickerEvent::Change(Some(color)) = event else {
+                        return;
+                    };
+
+                    let Some(label_id) = this.label_color_target else {
+                        return;
+                    };
+
+                    match this
+                        .state
+                        .update_label_color(label_id, Some(color.to_hex()))
+                    {
+                        Ok(()) => this.status_message = None,
+                        Err(error) => this.status_message = Some(error.to_string()),
+                    }
+                    cx.notify();
+                },
+            ),
         ];
 
         Self {
@@ -83,6 +111,8 @@ impl NotatusWindow {
             syncing_project_input: false,
             label_name_input,
             syncing_label_input: false,
+            label_color_picker,
+            label_color_target: None,
             tools: ToolInteractionState::default(),
             hovered_annotation: None,
             export_yolo: true,

@@ -1,4 +1,4 @@
-use super::helpers::plural;
+use super::helpers::{hex_color, plural};
 use super::*;
 
 impl NotatusWindow {
@@ -32,19 +32,57 @@ impl NotatusWindow {
         cx.notify();
     }
 
-    pub(super) fn update_selected_label_color(
+    pub(super) fn update_label_color(
         &mut self,
-        color: &'static str,
+        label_id: LabelId,
+        color: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(label_id) = self.state.selected_label {
-            match self
-                .state
-                .update_label_color(label_id, Some(color.to_string()))
-            {
-                Ok(()) => self.status_message = None,
-                Err(error) => self.status_message = Some(error.to_string()),
-            }
+        match self.state.update_label_color(label_id, Some(color.into())) {
+            Ok(()) => self.status_message = None,
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn prepare_label_color_picker(
+        &mut self,
+        label_id: LabelId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> String {
+        self.label_color_target = Some(label_id);
+        let (label_name, color) = self
+            .state
+            .dataset
+            .label_by_id(label_id)
+            .map(|label| {
+                (
+                    label.name.clone(),
+                    label
+                        .color
+                        .as_deref()
+                        .unwrap_or(DEFAULT_LABEL_COLOR)
+                        .to_string(),
+                )
+            })
+            .unwrap_or_else(|| ("Label".to_string(), DEFAULT_LABEL_COLOR.to_string()));
+
+        self.label_color_picker.update(cx, |picker, cx| {
+            picker.set_value(hex_color(&color), window, cx);
+        });
+        cx.notify();
+        label_name
+    }
+
+    pub(super) fn prepare_label_rename(
+        &mut self,
+        label_id: LabelId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.state.select_label(label_id).is_ok() {
+            self.sync_label_name_input(window, cx);
             cx.notify();
         }
     }
