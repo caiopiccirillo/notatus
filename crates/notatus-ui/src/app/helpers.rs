@@ -243,9 +243,28 @@ pub(super) fn section_title(title: &'static str) -> impl IntoElement {
 pub(super) fn metric(label: &'static str, value: String) -> impl IntoElement {
     div()
         .flex()
-        .items_center()
-        .justify_between()
+        .items_start()
+        .gap_2()
+        .min_w_0()
         .text_sm()
-        .child(div().text_color(rgb(0x4b5563)).child(label))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(value))
+        .child(
+            div()
+                .flex_none()
+                .w(px(84.0))
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .truncate()
+                .text_color(rgb(0x4b5563))
+                .child(label),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .truncate()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(value),
+        )
 }

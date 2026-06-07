@@ -87,16 +87,28 @@ impl NotatusWindow {
                         ))
                     })
                     .when(selected_asset.is_none(), |canvas| {
-                        canvas.child(div().text_lg().child(empty_title)).child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0x4b5563))
-                                .child(empty_message),
-                        )
+                        canvas.child(canvas_empty_state(empty_title, empty_message))
                     })
                     .child(self.canvas_toolbar(cx)),
             )
     }
+}
+
+fn canvas_empty_state(title: &'static str, message: &'static str) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .text_center()
+        .child(
+            div()
+                .text_lg()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(title),
+        )
+        .child(div().text_sm().text_color(rgb(0x4b5563)).child(message))
 }
 
 fn interactive_image_canvas(

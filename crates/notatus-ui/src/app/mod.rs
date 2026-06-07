@@ -39,7 +39,6 @@ mod titlebar;
 mod tools;
 mod window;
 
-use helpers::{annotation_count_label, label_count_label, media_count_label};
 use project_session::ProjectLocation;
 use tools::ToolInteractionState;
 use window::{LeftDock, NotatusWindow, RightDock};

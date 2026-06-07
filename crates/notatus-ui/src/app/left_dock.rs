@@ -46,7 +46,6 @@ impl NotatusWindow {
                     .flex_1()
                     .overflow_y_scrollbar()
                     .p_2()
-                    .child(SidebarMenu::new().children(self.dataset_items()))
                     .child(self.project_editor()),
             )
     }
@@ -127,26 +126,6 @@ impl NotatusWindow {
             )
     }
 
-    fn dataset_items(&self) -> Vec<SidebarMenuItem> {
-        let dataset_name = self.state.dataset.manifest.project.name.clone();
-        let summary = self.project_summary();
-
-        vec![
-            SidebarMenuItem::new(dataset_name)
-                .suffix(sidebar_count(if self.state.dirty {
-                    "Unsaved"
-                } else {
-                    "Saved"
-                }))
-                .default_open(true)
-                .active(true)
-                .children(vec![
-                    SidebarMenuItem::new(summary).disable(true),
-                    SidebarMenuItem::new(dataset_created_label(&self.state.dataset)).disable(true),
-                ]),
-        ]
-    }
-
     fn project_editor(&self) -> impl IntoElement {
         div()
             .flex()
@@ -162,12 +141,10 @@ impl NotatusWindow {
                     .child(section_title("Name"))
                     .child(Input::new(&self.project_name_input).small().w_full()),
             )
-            .child(metric("Location", self.project_location.display_name()))
             .child(metric(
-                "Status",
-                if self.state.dirty { "Unsaved" } else { "Saved" }.to_string(),
+                "Location",
+                compact_text(&self.project_location.display_name(), 34),
             ))
-            .child(metric("Summary", self.project_summary()))
             .child(dataset_created_label(&self.state.dataset))
     }
 
@@ -219,12 +196,9 @@ impl NotatusWindow {
                         .iter()
                         .filter(|annotation| annotation.asset_id == asset_id)
                         .count();
-                    let annotation_items = annotation_items_for_asset(&self.state, asset);
                     let view = view.clone();
                     SidebarMenuItem::new(compact_asset_name(asset))
                         .suffix(media_asset_meta(&asset.kind, annotation_count))
-                        .default_open(self.state.selected_asset == Some(asset_id))
-                        .children(annotation_items)
                         .active(self.state.selected_asset == Some(asset_id))
                         .on_click(move |_, _, cx| {
                             let _ = view.update(cx, |window, cx| {

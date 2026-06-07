@@ -96,13 +96,13 @@ The left panel is switched by bottom-bar dock buttons.
 
 It contains separate docks for:
 
-- Project: project identity, location, status, summary, and persistence commands
+- Project: project name, location, and persistence commands
 - Labels: label creation, label list, and label customization
-- Media: media import, media rows, and nested annotation rows
+- Media: media import and media selection
 
-Media rows show their asset type and annotation count. Each media row can expand
-to show its annotations, including label, review state, and geometry type. Media
-rows are selectable and update `UiState::selected_asset`.
+Media rows show their asset type and annotation count. They are selectable and
+update `UiState::selected_asset`. Annotation rows live in the right-side
+Annotations dock so media navigation stays compact.
 
 Label rows show their color swatch and annotation count. They are selectable and
 update `UiState::selected_label`.
@@ -156,8 +156,8 @@ The right panel is split into:
 - Info
 
 The Annotations dock lists annotations for the selected media. The Info dock
-shows dataset, selection, status, count, review queue, and selected-media
-metadata.
+shows cross-cutting context such as active tool, active label, counts, review
+queue, status messages, and selected-media metadata.
 
 Label customization lives in the Labels left dock.
 

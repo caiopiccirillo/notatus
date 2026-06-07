@@ -108,15 +108,6 @@ impl NotatusWindow {
             .collect()
     }
 
-    pub(super) fn project_summary(&self) -> String {
-        format!(
-            "{} · {} · {}",
-            media_count_label(self.state.dataset.assets.len()),
-            annotation_count_label(self.state.dataset.annotations.len()),
-            label_count_label(self.state.dataset.labels.len())
-        )
-    }
-
     fn app_frame(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
