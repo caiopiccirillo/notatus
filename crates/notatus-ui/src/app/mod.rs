@@ -8,7 +8,7 @@ use gpui::{
 };
 use gpui_component::{
     Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
-    button::Button,
+    button::{Button, ButtonVariants as _},
     dialog::DialogButtonProps,
     input::{Input, InputEvent, InputState},
     menu::{DropdownMenu, PopupMenuItem},
@@ -18,8 +18,8 @@ use gpui_component::{
     sidebar::{SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
-    AnnotationGeometry, AnnotationId, AnnotationRecord, AssetKind, AssetLocation, AssetRecord,
-    BoundingBox, Label, LabelId,
+    AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,
+    AssetRecord, BoundingBox, Label, LabelId,
 };
 use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore};
 use std::cell::RefCell;

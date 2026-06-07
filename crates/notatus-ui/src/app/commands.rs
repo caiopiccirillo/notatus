@@ -1,3 +1,4 @@
+use super::helpers::plural;
 use super::*;
 
 impl NotatusWindow {
@@ -47,6 +48,41 @@ impl NotatusWindow {
             }
             cx.notify();
         }
+    }
+
+    pub(super) fn remove_label(
+        &mut self,
+        label_id: LabelId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.remove_label(label_id) {
+            Ok(removed_annotations) => {
+                self.hovered_annotation = None;
+                self.status_message = Some(format!(
+                    "Removed label and {removed_annotations} annotation{}",
+                    plural(removed_annotations)
+                ));
+                self.sync_label_name_input(window, cx);
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn remove_asset(&mut self, asset_id: AssetId, cx: &mut Context<Self>) {
+        match self.state.remove_asset(asset_id) {
+            Ok(removed_annotations) => {
+                self.hovered_annotation = None;
+                self.tools.fit_canvas_to_view();
+                self.status_message = Some(format!(
+                    "Removed media and {removed_annotations} annotation{}",
+                    plural(removed_annotations)
+                ));
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
     }
 
     pub(super) fn update_annotation_label(

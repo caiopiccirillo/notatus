@@ -129,6 +129,38 @@ impl UiState {
         Ok(())
     }
 
+    pub fn remove_label(&mut self, label_id: LabelId) -> Result<usize, UiMutationError> {
+        let label_index = self
+            .dataset
+            .labels
+            .iter()
+            .position(|label| label.id == label_id)
+            .ok_or(UiMutationError::MissingLabel { label_id })?;
+
+        let selected_annotation_removed = self.selected_annotation.is_some_and(|annotation_id| {
+            self.dataset
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == annotation_id && annotation.label_id == label_id)
+        });
+        let original_annotation_count = self.dataset.annotations.len();
+
+        self.dataset.labels.remove(label_index);
+        self.dataset
+            .annotations
+            .retain(|annotation| annotation.label_id != label_id);
+
+        if self.selected_label == Some(label_id) {
+            self.selected_label = self.dataset.labels.first().map(|label| label.id);
+        }
+        if selected_annotation_removed {
+            self.selected_annotation = None;
+        }
+
+        self.dirty = true;
+        Ok(original_annotation_count - self.dataset.annotations.len())
+    }
+
     pub fn add_local_image_asset(
         &mut self,
         path: impl Into<String>,
@@ -150,6 +182,38 @@ impl UiState {
         self.selected_asset = Some(asset_id);
         self.selected_annotation = None;
         Ok(())
+    }
+
+    pub fn remove_asset(&mut self, asset_id: AssetId) -> Result<usize, UiMutationError> {
+        let asset_index = self
+            .dataset
+            .assets
+            .iter()
+            .position(|asset| asset.id == asset_id)
+            .ok_or(UiMutationError::MissingAsset { asset_id })?;
+
+        let selected_annotation_removed = self.selected_annotation.is_some_and(|annotation_id| {
+            self.dataset
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == annotation_id && annotation.asset_id == asset_id)
+        });
+        let original_annotation_count = self.dataset.annotations.len();
+
+        self.dataset.assets.remove(asset_index);
+        self.dataset
+            .annotations
+            .retain(|annotation| annotation.asset_id != asset_id);
+
+        if self.selected_asset == Some(asset_id) {
+            self.selected_asset = self.dataset.assets.first().map(|asset| asset.id);
+        }
+        if selected_annotation_removed {
+            self.selected_annotation = None;
+        }
+
+        self.dirty = true;
+        Ok(original_annotation_count - self.dataset.annotations.len())
     }
 
     pub fn select_annotation(
@@ -483,5 +547,109 @@ mod tests {
 
         assert!(matches!(error, UiMutationError::EmptyLabelName { .. }));
         assert_eq!(state.dataset.label_by_id(label_id).unwrap().name, "vehicle");
+    }
+
+    #[test]
+    fn removes_label_and_its_annotations() {
+        let mut state = UiState::new_project("demo");
+        let removed_label = state.add_label("vehicle");
+        let remaining_label = state.add_label("person");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let removed_annotation = state
+            .add_human_bbox(
+                asset_id,
+                removed_label,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        let remaining_annotation = state
+            .add_human_bbox(
+                asset_id,
+                remaining_label,
+                BoundingBox::from_xywh(60.0, 70.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        state.select_annotation(Some(removed_annotation)).unwrap();
+        state.mark_saved();
+
+        let removed_count = state.remove_label(removed_label).unwrap();
+
+        assert_eq!(removed_count, 1);
+        assert!(state.dataset.label_by_id(removed_label).is_none());
+        assert_eq!(state.selected_label, Some(remaining_label));
+        assert_eq!(state.selected_annotation, None);
+        assert!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .all(|annotation| annotation.label_id != removed_label)
+        );
+        assert!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == remaining_annotation)
+        );
+        assert!(state.dirty);
+        assert!(state.dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn removes_asset_and_its_annotations() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+        let removed_asset = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let remaining_asset = state
+            .add_local_image_asset("images/b.jpg", 640, 480)
+            .unwrap();
+        let removed_annotation = state
+            .add_human_bbox(
+                removed_asset,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        let remaining_annotation = state
+            .add_human_bbox(
+                remaining_asset,
+                label_id,
+                BoundingBox::from_xywh(60.0, 70.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        state.select_annotation(Some(removed_annotation)).unwrap();
+        state.mark_saved();
+
+        let removed_count = state.remove_asset(removed_asset).unwrap();
+
+        assert_eq!(removed_count, 1);
+        assert!(state.dataset.asset_by_id(removed_asset).is_none());
+        assert_eq!(state.selected_asset, Some(remaining_asset));
+        assert_eq!(state.selected_annotation, None);
+        assert!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .all(|annotation| annotation.asset_id != removed_asset)
+        );
+        assert!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == remaining_annotation)
+        );
+        assert!(state.dirty);
+        assert!(state.dataset.validate().is_ok());
     }
 }

@@ -100,12 +100,14 @@ It contains separate docks for:
 - Labels: label creation, label list, and label customization
 - Media: media import and media selection
 
-Media rows show their asset type and annotation count. They are selectable and
-update `UiState::selected_asset`. Annotation rows live in the right-side
+Media rows show their asset type, annotation count, and a compact remove action.
+They are selectable and update `UiState::selected_asset`. Removing media also
+removes annotations for that media. Annotation rows live in the right-side
 Annotations dock so media navigation stays compact.
 
 Label rows show their color swatch and annotation count. They are selectable and
-update `UiState::selected_label`.
+update `UiState::selected_label`. The selected-label editor can remove a label,
+which also removes annotations using that label.
 
 Long filenames are shortened with a middle truncation helper before rendering.
 This keeps repeated screenshot-style filenames readable in a narrow panel.

@@ -196,12 +196,18 @@ impl NotatusWindow {
                         .iter()
                         .filter(|annotation| annotation.asset_id == asset_id)
                         .count();
-                    let view = view.clone();
+                    let select_view = view.clone();
+                    let remove_view = view.clone();
                     SidebarMenuItem::new(compact_asset_name(asset))
-                        .suffix(media_asset_meta(&asset.kind, annotation_count))
+                        .suffix(media_asset_actions(
+                            &asset.kind,
+                            annotation_count,
+                            asset_id,
+                            remove_view,
+                        ))
                         .active(self.state.selected_asset == Some(asset_id))
                         .on_click(move |_, _, cx| {
-                            let _ = view.update(cx, |window, cx| {
+                            let _ = select_view.update(cx, |window, cx| {
                                 if let Err(error) = window.state.select_asset(asset_id) {
                                     window.status_message = Some(error.to_string());
                                 } else {
@@ -342,6 +348,8 @@ impl NotatusWindow {
         view: gpui::WeakEntity<NotatusWindow>,
     ) -> impl IntoElement {
         let selected_color = label.color.as_deref().unwrap_or(DEFAULT_LABEL_COLOR);
+        let label_id = label.id;
+        let remove_view = view.clone();
         div()
             .flex()
             .flex_col()
@@ -382,7 +390,57 @@ impl NotatusWindow {
                     .count()
                     .to_string(),
             ))
+            .child(
+                div().flex().justify_end().pt_1().child(
+                    Button::new("labels-remove")
+                        .small()
+                        .danger()
+                        .icon(Icon::new(IconName::Delete))
+                        .label("Remove label")
+                        .tooltip("Remove label and its annotations")
+                        .on_click(move |_, window, cx| {
+                            let _ = remove_view.update(cx, |notatus, cx| {
+                                notatus.remove_label(label_id, window, cx);
+                            });
+                        }),
+                ),
+            )
     }
+}
+
+fn media_asset_actions(
+    kind: &AssetKind,
+    annotation_count: usize,
+    asset_id: AssetId,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(media_asset_meta(kind, annotation_count))
+        .child(
+            Button::new(asset_element_id("media-remove", asset_id))
+                .xsmall()
+                .ghost()
+                .danger()
+                .icon(Icon::new(IconName::Delete))
+                .tooltip("Remove media and its annotations")
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    let _ = view.update(cx, |notatus, cx| {
+                        notatus.remove_asset(asset_id, cx);
+                    });
+                }),
+        )
+}
+
+fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId {
+    let value = asset_id.as_uuid().as_u128();
+    let high = (value >> 64) as u64;
+    let low = (value as u64).to_string();
+    (gpui::ElementId::from((prefix, high)), low).into()
 }
 
 fn project_action_button(
