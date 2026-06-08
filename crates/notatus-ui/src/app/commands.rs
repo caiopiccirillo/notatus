@@ -139,6 +139,23 @@ impl NotatusWindow {
         cx.notify();
     }
 
+    pub(super) fn update_annotation_bbox(
+        &mut self,
+        annotation_id: AnnotationId,
+        bbox: BoundingBox,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.update_annotation_bbox(annotation_id, bbox) {
+            Ok(()) => {
+                self.status_message = Some("Updated annotation".to_string());
+                self.sync_label_name_input(window, cx);
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
     pub(super) fn select_annotation(
         &mut self,
         annotation_id: Option<AnnotationId>,
@@ -189,14 +206,27 @@ impl NotatusWindow {
 
     pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
         self.tools.fit_canvas_to_view();
+        self.canvas_cursor = None;
         self.status_message = Some("Fit image to canvas".to_string());
         cx.notify();
     }
 
     pub(super) fn set_canvas_tool(&mut self, tool: AnnotationTool, cx: &mut Context<Self>) {
         self.tools.clear_for_tool(tool);
+        self.canvas_cursor = None;
         self.state.set_tool(tool);
         self.status_message = None;
         cx.notify();
+    }
+
+    pub(super) fn set_canvas_cursor(
+        &mut self,
+        cursor: Option<gpui::CursorStyle>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.canvas_cursor != cursor {
+            self.canvas_cursor = cursor;
+            cx.notify();
+        }
     }
 }

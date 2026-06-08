@@ -37,6 +37,7 @@ impl NotatusWindow {
             .collect();
         let active_tool = self.state.active_tool;
         let viewport = self.tools.viewport;
+        let canvas_cursor = self.canvas_cursor;
         let (empty_title, empty_message) = if self.state.dataset.labels.is_empty() {
             ("Create labels to continue", "No labels in this project")
         } else if self.state.dataset.assets.is_empty() {
@@ -78,6 +79,7 @@ impl NotatusWindow {
                             annotations: &state_labels,
                             active_tool,
                             viewport,
+                            canvas_cursor,
                             preview_color: preview_color.clone(),
                         }))
                     })
@@ -114,6 +116,7 @@ struct InteractiveImageCanvas<'a> {
     annotations: &'a [AnnotationOverlay],
     active_tool: AnnotationTool,
     viewport: super::tools::CanvasViewport,
+    canvas_cursor: Option<gpui::CursorStyle>,
     preview_color: String,
 }
 
@@ -126,6 +129,7 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
         annotations,
         active_tool,
         viewport,
+        canvas_cursor,
         preview_color,
     } = args;
 
@@ -147,6 +151,7 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
     let canvas = div()
         .id("image-canvas")
         .size_full()
+        .when_some(canvas_cursor, |canvas, cursor| canvas.cursor(cursor))
         .relative()
         .flex()
         .items_center()

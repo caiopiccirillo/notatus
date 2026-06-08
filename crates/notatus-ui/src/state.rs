@@ -262,6 +262,34 @@ impl UiState {
         Ok(())
     }
 
+    pub fn update_annotation_bbox(
+        &mut self,
+        annotation_id: AnnotationId,
+        bbox: BoundingBox,
+    ) -> Result<(), UiMutationError> {
+        let annotation_index = self
+            .dataset
+            .annotations
+            .iter()
+            .position(|annotation| annotation.id == annotation_id)
+            .ok_or(UiMutationError::MissingAnnotation { annotation_id })?;
+        let asset_id = self.dataset.annotations[annotation_index].asset_id;
+        let label_id = self.dataset.annotations[annotation_index].label_id;
+        let asset = self
+            .dataset
+            .asset_by_id(asset_id)
+            .ok_or(UiMutationError::MissingAsset { asset_id })?;
+
+        bbox.validate_within_image(asset.dimensions)?;
+
+        self.dataset.annotations[annotation_index].geometry = AnnotationGeometry::Bbox(bbox);
+        self.selected_annotation = Some(annotation_id);
+        self.selected_asset = Some(asset_id);
+        self.selected_label = Some(label_id);
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn add_human_bbox(
         &mut self,
         asset_id: AssetId,
@@ -503,6 +531,67 @@ mod tests {
         assert_eq!(state.selected_annotation, Some(annotation_id));
         assert_eq!(state.selected_label, Some(new_label));
         assert!(state.dirty);
+    }
+
+    #[test]
+    fn updates_annotation_bbox_and_marks_dirty() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        state.mark_saved();
+
+        let bbox = BoundingBox::from_xywh(50.0, 60.0, 70.0, 80.0).unwrap();
+        state.update_annotation_bbox(annotation_id, bbox).unwrap();
+
+        let annotation = state
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == annotation_id)
+            .unwrap();
+        assert_eq!(annotation.geometry, AnnotationGeometry::Bbox(bbox));
+        assert_eq!(state.selected_asset, Some(asset_id));
+        assert_eq!(state.selected_annotation, Some(annotation_id));
+        assert_eq!(state.selected_label, Some(label_id));
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn rejects_annotation_bbox_outside_image_bounds() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("vehicle");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 100, 100)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        let original_geometry = state.dataset.annotations[0].geometry.clone();
+
+        let error = state
+            .update_annotation_bbox(
+                annotation_id,
+                BoundingBox::from_xywh(90.0, 90.0, 20.0, 20.0).unwrap(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, UiMutationError::Geometry(_)));
+        assert_eq!(state.dataset.annotations[0].geometry, original_geometry);
     }
 
     #[test]

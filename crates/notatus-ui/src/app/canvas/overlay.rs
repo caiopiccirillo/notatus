@@ -1,6 +1,9 @@
 use super::color::{hex_to_rgba, rgba_with_alpha};
+use super::hit_test::bbox_handle_points;
 use super::layout::image_bbox_to_screen;
 use super::*;
+
+const HANDLE_DIAMETER_PX: f32 = 10.0;
 
 #[derive(Clone)]
 pub(super) struct AnnotationOverlay {
@@ -54,7 +57,46 @@ pub(super) fn paint_annotations(
                     },
                 ),
             );
+
+            if annotation.selected {
+                paint_bbox_handles(screen_rect, &annotation.color, window);
+            }
         }
+    }
+}
+
+fn paint_bbox_handles(screen_rect: Bounds<Pixels>, color: &str, window: &mut Window) {
+    let border_color = hex_to_rgba(color);
+    let fill_color = rgb(0xffffff);
+    let origin_x: f32 = screen_rect.origin.x.into();
+    let origin_y: f32 = screen_rect.origin.y.into();
+    let width: f32 = screen_rect.size.width.into();
+    let height: f32 = screen_rect.size.height.into();
+    let bbox = BoundingBox::from_xywh(
+        origin_x as f64,
+        origin_y as f64,
+        width as f64,
+        height as f64,
+    )
+    .ok();
+    let Some(bbox) = bbox else {
+        return;
+    };
+
+    for (_, (x, y)) in bbox_handle_points(bbox) {
+        let handle_bounds = bounds(
+            gpui::point(
+                px(x as f32 - HANDLE_DIAMETER_PX / 2.0),
+                px(y as f32 - HANDLE_DIAMETER_PX / 2.0),
+            ),
+            size(px(HANDLE_DIAMETER_PX), px(HANDLE_DIAMETER_PX)),
+        );
+        window.paint_quad(
+            fill(handle_bounds, fill_color)
+                .corner_radii(px(HANDLE_DIAMETER_PX / 2.0))
+                .border_color(border_color)
+                .border_widths(px(2.0)),
+        );
     }
 }
 

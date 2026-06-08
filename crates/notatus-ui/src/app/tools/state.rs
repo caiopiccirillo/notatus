@@ -82,6 +82,7 @@ pub(in crate::app) struct PanState {
 #[derive(Clone, Copy, Debug, Default)]
 pub(in crate::app) struct ToolInteractionState {
     pub(in crate::app) draw_box: Option<DrawingState>,
+    pub(in crate::app) bbox_edit: Option<super::BboxEditState>,
     pub(in crate::app) pan: Option<PanState>,
     pub(in crate::app) viewport: CanvasViewport,
 }
@@ -94,6 +95,7 @@ pub(in crate::app) struct DrawBoxCompletion {
 impl ToolInteractionState {
     pub(in crate::app) fn fit_canvas_to_view(&mut self) {
         self.draw_box = None;
+        self.bbox_edit = None;
         self.pan = None;
         self.viewport.reset();
     }
@@ -101,6 +103,9 @@ impl ToolInteractionState {
     pub(in crate::app) fn clear_for_tool(&mut self, tool: AnnotationTool) {
         if !matches!(tool, AnnotationTool::DrawBox) {
             self.draw_box = None;
+        }
+        if !matches!(tool, AnnotationTool::Select) {
+            self.bbox_edit = None;
         }
         if !matches!(tool, AnnotationTool::Pan) {
             self.pan = None;
@@ -135,6 +140,35 @@ impl ToolInteractionState {
         };
 
         Some(DrawBoxCompletion { bbox })
+    }
+
+    pub(in crate::app) fn begin_bbox_edit(
+        &mut self,
+        annotation_id: AnnotationId,
+        mode: super::BboxEditMode,
+        start_bbox: BoundingBox,
+        start_image_pos: (f64, f64),
+    ) {
+        self.bbox_edit = Some(super::BboxEditState::new(
+            annotation_id,
+            mode,
+            start_bbox,
+            start_image_pos,
+        ));
+    }
+
+    pub(in crate::app) fn update_bbox_edit(
+        &self,
+        image_pos: (f64, f64),
+        asset: &AssetRecord,
+    ) -> Option<(AnnotationId, BoundingBox)> {
+        let edit = self.bbox_edit?;
+        edit.updated_bbox(image_pos, asset)
+            .map(|bbox| (edit.annotation_id, bbox))
+    }
+
+    pub(in crate::app) fn finish_bbox_edit(&mut self) {
+        self.bbox_edit = None;
     }
 
     pub(in crate::app) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
@@ -218,12 +252,19 @@ mod tests {
     fn fit_canvas_to_view_resets_interaction_state() {
         let mut tools = ToolInteractionState::default();
         tools.begin_draw_box((10.0, 10.0));
+        tools.begin_bbox_edit(
+            AnnotationId::new(),
+            crate::app::tools::BboxEditMode::Move,
+            BoundingBox::from_xywh(10.0, 10.0, 20.0, 20.0).unwrap(),
+            (15.0, 15.0),
+        );
         tools.begin_pan(gpui::point(px(10.0), px(20.0)));
         tools.viewport.zoom_by(2.0);
 
         tools.fit_canvas_to_view();
 
         assert!(tools.draw_box.is_none());
+        assert!(tools.bbox_edit.is_none());
         assert!(tools.pan.is_none());
         assert_eq!(tools.viewport.zoom, 1.0);
         assert_eq!(tools.viewport.pan_x, 0.0);
