@@ -22,7 +22,9 @@ pub(super) fn hit_test_bbox_annotation(
             AnnotationGeometry::Bbox(bbox) => {
                 bbox_contains_point(*bbox, image_pos).then_some(annotation.id)
             }
-            AnnotationGeometry::Polygon(_) => None,
+            AnnotationGeometry::Polygon(polygon) => {
+                polygon_contains_point(polygon, image_pos).then_some(annotation.id)
+            }
         })
 }
 
@@ -33,22 +35,51 @@ pub(super) fn hit_test_bbox_edit_target(
     asset: &AssetRecord,
 ) -> Option<BboxHitTarget> {
     annotations.iter().rev().find_map(|annotation| {
-        let AnnotationGeometry::Bbox(bbox) = annotation.geometry else {
-            return None;
-        };
+        match &annotation.geometry {
+            AnnotationGeometry::Bbox(bbox) => {
+                if annotation.selected
+                    && let Some(handle) = hit_test_bbox_handle(*bbox, image_pos, img_bounds, asset)
+                {
+                    return Some(BboxHitTarget::Handle(annotation.id, handle));
+                }
 
-        if annotation.selected
-            && let Some(handle) = hit_test_bbox_handle(bbox, image_pos, img_bounds, asset)
-        {
-            return Some(BboxHitTarget::Handle(annotation.id, handle));
+                bbox_contains_point(*bbox, image_pos).then_some(BboxHitTarget::Body(annotation.id))
+            }
+            AnnotationGeometry::Polygon(polygon) => {
+                polygon_contains_point(polygon, image_pos)
+                    .then_some(BboxHitTarget::Body(annotation.id))
+            }
         }
-
-        bbox_contains_point(bbox, image_pos).then_some(BboxHitTarget::Body(annotation.id))
     })
 }
 
 fn bbox_contains_point(bbox: BoundingBox, (x, y): (f64, f64)) -> bool {
     x >= bbox.x && x <= bbox.max_x() && y >= bbox.y && y <= bbox.max_y()
+}
+
+fn polygon_contains_point(polygon: &Polygon, (x, y): (f64, f64)) -> bool {
+    if polygon.points.len() < 3 {
+        return false;
+    }
+
+    let mut inside = false;
+    let mut previous = polygon.points.len() - 1;
+    for current in 0..polygon.points.len() {
+        let current_point = polygon.points[current];
+        let previous_point = polygon.points[previous];
+        let crosses_y = (current_point.y > y) != (previous_point.y > y);
+        if crosses_y {
+            let edge_x = (previous_point.x - current_point.x) * (y - current_point.y)
+                / (previous_point.y - current_point.y)
+                + current_point.x;
+            if x < edge_x {
+                inside = !inside;
+            }
+        }
+        previous = current;
+    }
+
+    inside
 }
 
 fn hit_test_bbox_handle(
@@ -174,6 +205,35 @@ mod tests {
             Some(top_id)
         );
         assert_eq!(hit_test_bbox_annotation(&annotations, (200.0, 200.0)), None);
+    }
+
+    #[test]
+    fn hit_test_selects_polygon_body() {
+        let id = AnnotationId::new();
+        let annotations = vec![AnnotationOverlay {
+            id,
+            geometry: AnnotationGeometry::Polygon(
+                Polygon::new(vec![
+                    notatus_core::Point::new(10.0, 10.0).unwrap(),
+                    notatus_core::Point::new(80.0, 10.0).unwrap(),
+                    notatus_core::Point::new(80.0, 80.0).unwrap(),
+                    notatus_core::Point::new(10.0, 80.0).unwrap(),
+                ])
+                .unwrap(),
+            ),
+            color: DEFAULT_LABEL_COLOR.to_string(),
+            selected: false,
+            hovered: false,
+        }];
+
+        assert_eq!(
+            hit_test_bbox_edit_target(&annotations, (30.0, 30.0), img_bounds(), &asset()),
+            Some(BboxHitTarget::Body(id))
+        );
+        assert_eq!(
+            hit_test_bbox_edit_target(&annotations, (90.0, 90.0), img_bounds(), &asset()),
+            None
+        );
     }
 
     #[test]

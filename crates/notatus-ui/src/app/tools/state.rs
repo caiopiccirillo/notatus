@@ -6,6 +6,12 @@ pub(in crate::app) struct DrawingState {
     pub(in crate::app) current_image_pos: (f64, f64),
 }
 
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct PolygonDrawingState {
+    pub(in crate::app) points: Vec<(f64, f64)>,
+    pub(in crate::app) current_image_pos: Option<(f64, f64)>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(in crate::app) struct CanvasViewport {
     pub(in crate::app) zoom: f32,
@@ -79,9 +85,10 @@ pub(in crate::app) struct PanState {
     start_pan_y: f32,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ToolInteractionState {
     pub(in crate::app) draw_box: Option<DrawingState>,
+    pub(in crate::app) draw_polygon: Option<PolygonDrawingState>,
     pub(in crate::app) bbox_edit: Option<super::BboxEditState>,
     pub(in crate::app) pan: Option<PanState>,
     pub(in crate::app) viewport: CanvasViewport,
@@ -95,6 +102,7 @@ pub(in crate::app) struct DrawBoxCompletion {
 impl ToolInteractionState {
     pub(in crate::app) fn fit_canvas_to_view(&mut self) {
         self.draw_box = None;
+        self.draw_polygon = None;
         self.bbox_edit = None;
         self.pan = None;
         self.viewport.reset();
@@ -103,6 +111,9 @@ impl ToolInteractionState {
     pub(in crate::app) fn clear_for_tool(&mut self, tool: AnnotationTool) {
         if !matches!(tool, AnnotationTool::DrawBox) {
             self.draw_box = None;
+        }
+        if !matches!(tool, AnnotationTool::DrawPolygon) {
+            self.draw_polygon = None;
         }
         if !matches!(tool, AnnotationTool::Select) {
             self.bbox_edit = None;
@@ -140,6 +151,30 @@ impl ToolInteractionState {
         };
 
         Some(DrawBoxCompletion { bbox })
+    }
+
+    pub(in crate::app) fn add_polygon_point(&mut self, image_pos: (f64, f64)) {
+        let drawing = self.draw_polygon.get_or_insert_with(Default::default);
+        drawing.points.push(image_pos);
+        drawing.current_image_pos = Some(image_pos);
+    }
+
+    pub(in crate::app) fn update_polygon_cursor(&mut self, image_pos: (f64, f64)) {
+        if let Some(drawing) = &mut self.draw_polygon {
+            drawing.current_image_pos = Some(image_pos);
+        }
+    }
+
+    pub(in crate::app) fn polygon_point_count(&self) -> usize {
+        self.draw_polygon
+            .as_ref()
+            .map(|drawing| drawing.points.len())
+            .unwrap_or_default()
+    }
+
+    pub(in crate::app) fn finish_polygon(&mut self) -> Option<Polygon> {
+        let drawing = self.draw_polygon.take()?;
+        UiState::polygon_from_points(&drawing.points).ok()
     }
 
     pub(in crate::app) fn begin_bbox_edit(
@@ -252,6 +287,7 @@ mod tests {
     fn fit_canvas_to_view_resets_interaction_state() {
         let mut tools = ToolInteractionState::default();
         tools.begin_draw_box((10.0, 10.0));
+        tools.add_polygon_point((20.0, 20.0));
         tools.begin_bbox_edit(
             AnnotationId::new(),
             crate::app::tools::BboxEditMode::Move,
@@ -264,11 +300,38 @@ mod tests {
         tools.fit_canvas_to_view();
 
         assert!(tools.draw_box.is_none());
+        assert!(tools.draw_polygon.is_none());
         assert!(tools.bbox_edit.is_none());
         assert!(tools.pan.is_none());
         assert_eq!(tools.viewport.zoom, 1.0);
         assert_eq!(tools.viewport.pan_x, 0.0);
         assert_eq!(tools.viewport.pan_y, 0.0);
+    }
+
+    #[test]
+    fn finishing_polygon_returns_valid_polygon() {
+        let mut tools = ToolInteractionState::default();
+
+        tools.add_polygon_point((10.0, 10.0));
+        tools.add_polygon_point((40.0, 10.0));
+        tools.add_polygon_point((40.0, 40.0));
+        tools.add_polygon_point((10.0, 40.0));
+
+        let polygon = tools.finish_polygon().unwrap();
+
+        assert_eq!(polygon.points.len(), 4);
+        assert!(tools.draw_polygon.is_none());
+    }
+
+    #[test]
+    fn finishing_polygon_ignores_too_few_points() {
+        let mut tools = ToolInteractionState::default();
+
+        tools.add_polygon_point((10.0, 10.0));
+        tools.add_polygon_point((40.0, 10.0));
+
+        assert_eq!(tools.finish_polygon(), None);
+        assert!(tools.draw_polygon.is_none());
     }
 
     #[test]

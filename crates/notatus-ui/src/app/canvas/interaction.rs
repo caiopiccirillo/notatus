@@ -14,6 +14,9 @@ pub(super) fn attach_canvas_interactions(
         .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
             attach_draw_box_interactions(canvas, view.clone(), shared_image_layout.clone())
         })
+        .when(matches!(active_tool, AnnotationTool::DrawPolygon), |canvas| {
+            attach_draw_polygon_interactions(canvas, view.clone(), shared_image_layout.clone())
+        })
         .when(matches!(active_tool, AnnotationTool::Select), |canvas| {
             attach_select_interactions(
                 canvas,
@@ -131,6 +134,108 @@ fn attach_draw_box_interactions(
         )
 }
 
+fn attach_draw_polygon_interactions(
+    canvas: gpui::Stateful<gpui::Div>,
+    view: gpui::WeakEntity<NotatusWindow>,
+    shared_image_layout: SharedImageLayout,
+) -> gpui::Stateful<gpui::Div> {
+    let view_down = view.clone();
+    let view_move = view;
+    let layout_down = shared_image_layout.clone();
+    let layout_move = shared_image_layout;
+
+    canvas
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            move |event: &MouseDownEvent, window, cx| {
+                let layout = layout_down.borrow();
+                let Some(layout) = *layout else {
+                    return;
+                };
+
+                let mut skipped_required_step = false;
+                let mut invalid_polygon = None;
+                let _ = view_down.update(cx, |notatus, cx| {
+                    let Some(asset) = notatus.selected_asset().cloned() else {
+                        return;
+                    };
+                    let image_pos = screen_to_image(layout.image_bounds, event.position, &asset);
+
+                    if event.click_count >= 2 {
+                        if notatus.tools.polygon_point_count() >= 3 {
+                            match notatus.tools.finish_polygon() {
+                                Some(polygon) => match notatus.state.selected_label {
+                                    Some(label_id) => match notatus
+                                        .state
+                                        .add_human_polygon(asset.id, label_id, polygon, None)
+                                    {
+                                        Ok(_) => {
+                                            notatus.status_message =
+                                                Some("Created segmentation polygon".into());
+                                        }
+                                        Err(error) => {
+                                            notatus.status_message = Some(error.to_string());
+                                            invalid_polygon = Some(error.to_string());
+                                        }
+                                    },
+                                    None => {
+                                        notatus.left_dock = LeftDock::Dataset;
+                                        notatus.status_message = Some("Select a label first".into());
+                                        skipped_required_step = true;
+                                    }
+                                },
+                                None => {
+                                    invalid_polygon =
+                                        Some("Polygon needs at least three valid points".to_string());
+                                    notatus.status_message = invalid_polygon.clone();
+                                }
+                            }
+                        } else {
+                            notatus.fit_canvas_to_view(cx);
+                        }
+                    } else if notatus.state.selected_label.is_some() {
+                        notatus.tools.add_polygon_point(image_pos);
+                    } else {
+                        notatus.left_dock = LeftDock::Dataset;
+                        notatus.status_message = Some("Select a label first".into());
+                        skipped_required_step = true;
+                    }
+                    cx.notify();
+                });
+
+                if skipped_required_step {
+                    window.push_notification(
+                        Notification::warning("Select a label before drawing annotations.")
+                            .title("Label required"),
+                        cx,
+                    );
+                } else if let Some(message) = invalid_polygon {
+                    window.push_notification(
+                        Notification::warning(message).title("Invalid polygon"),
+                        cx,
+                    );
+                }
+            },
+        )
+        .on_mouse_move(move |event: &MouseMoveEvent, _window, cx| {
+            let layout = layout_move.borrow();
+            let Some(layout) = *layout else {
+                return;
+            };
+
+            let _ = view_move.update(cx, |notatus, cx| {
+                if notatus.tools.draw_polygon.is_none() {
+                    return;
+                }
+                if let Some(asset) = notatus.selected_asset().cloned() {
+                    let image_pos = screen_to_image(layout.image_bounds, event.position, &asset);
+                    notatus.tools.update_polygon_cursor(image_pos);
+                    cx.notify();
+                }
+            });
+        })
+}
+
 fn attach_select_interactions(
     canvas: gpui::Stateful<gpui::Div>,
     view: gpui::WeakEntity<NotatusWindow>,
@@ -202,6 +307,12 @@ fn attach_select_interactions(
                                         );
                                         notatus.set_canvas_cursor(
                                             Some(super::super::tools::cursor_for_edit_mode(mode)),
+                                            cx,
+                                        );
+                                    } else {
+                                        notatus.select_annotation(Some(annotation_id), window, cx);
+                                        notatus.set_canvas_cursor(
+                                            Some(gpui::CursorStyle::PointingHand),
                                             cx,
                                         );
                                     }

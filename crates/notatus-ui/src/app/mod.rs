@@ -20,7 +20,7 @@ use gpui_component::{
 };
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,
-    AssetRecord, BoundingBox, Label, LabelId,
+    AssetRecord, BoundingBox, ClassificationId, ClassificationRecord, Label, LabelId, Polygon,
 };
 use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore};
 use std::cell::RefCell;

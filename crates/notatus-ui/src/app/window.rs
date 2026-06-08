@@ -145,6 +145,18 @@ impl NotatusWindow {
             .collect()
     }
 
+    pub(super) fn classifications_for_asset(
+        &self,
+        asset: &AssetRecord,
+    ) -> Vec<&ClassificationRecord> {
+        self.state
+            .dataset
+            .classifications
+            .iter()
+            .filter(|classification| classification.asset_id == asset.id)
+            .collect()
+    }
+
     fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()

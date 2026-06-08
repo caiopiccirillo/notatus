@@ -105,6 +105,22 @@ pub(super) fn image_bbox_to_screen(
     )
 }
 
+pub(super) fn image_point_to_screen(
+    img_bounds: Bounds<Pixels>,
+    native_width: f64,
+    native_height: f64,
+    x: f64,
+    y: f64,
+) -> Point<Pixels> {
+    let display_w: f32 = img_bounds.size.width.into();
+    let display_h: f32 = img_bounds.size.height.into();
+    let scale_x = display_w / native_width as f32;
+    let scale_y = display_h / native_height as f32;
+    let sx: f32 = img_bounds.origin.x.into();
+    let sy: f32 = img_bounds.origin.y.into();
+    gpui::point(px(sx + x as f32 * scale_x), px(sy + y as f32 * scale_y))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,7 +9,7 @@ pub(in crate::app) struct CanvasToolDefinition {
     pub(in crate::app) icon: IconName,
 }
 
-pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
+pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 4] {
     [
         CanvasToolDefinition {
             tool: AnnotationTool::DrawBox,
@@ -17,6 +17,13 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
             label: "Draw Box",
             tooltip: "Draw bounding boxes",
             icon: IconName::Frame,
+        },
+        CanvasToolDefinition {
+            tool: AnnotationTool::DrawPolygon,
+            id: "tool-draw-polygon",
+            label: "Draw Polygon",
+            tooltip: "Draw segmentation polygons",
+            icon: IconName::Asterisk,
         },
         CanvasToolDefinition {
             tool: AnnotationTool::Select,
@@ -50,6 +57,7 @@ mod tests {
             tools,
             vec![
                 AnnotationTool::DrawBox,
+                AnnotationTool::DrawPolygon,
                 AnnotationTool::Select,
                 AnnotationTool::Pan
             ]

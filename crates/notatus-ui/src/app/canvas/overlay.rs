@@ -1,9 +1,10 @@
 use super::color::{hex_to_rgba, rgba_with_alpha};
 use super::hit_test::bbox_handle_points;
-use super::layout::image_bbox_to_screen;
+use super::layout::{image_bbox_to_screen, image_point_to_screen};
 use super::*;
 
 const HANDLE_DIAMETER_PX: f32 = 10.0;
+const POLYGON_VERTEX_DIAMETER_PX: f32 = 8.0;
 
 #[derive(Clone)]
 pub(super) struct AnnotationOverlay {
@@ -22,46 +23,74 @@ pub(super) fn paint_annotations(
     window: &mut Window,
 ) {
     for annotation in annotations {
-        if let AnnotationGeometry::Bbox(bbox) = &annotation.geometry {
-            let screen_rect = image_bbox_to_screen(
-                img_bounds,
-                img_width,
-                img_height,
-                bbox.x,
-                bbox.y,
-                bbox.width,
-                bbox.height,
-            );
-            let border_color = hex_to_rgba(&annotation.color);
-            let bg_alpha = if annotation.selected {
-                0.14
-            } else if annotation.hovered {
-                0.16
-            } else {
-                0.08
-            };
-            let bg_color = rgba_with_alpha(&annotation.color, bg_alpha);
-            let border_width = if annotation.selected || annotation.hovered {
-                3.0
-            } else {
-                2.0
-            };
-            window.paint_quad(fill(screen_rect, bg_color));
-            window.paint_quad(
-                outline(screen_rect, border_color, gpui::BorderStyle::Solid).border_widths(
-                    gpui::Edges {
-                        top: px(border_width),
-                        right: px(border_width),
-                        bottom: px(border_width),
-                        left: px(border_width),
-                    },
-                ),
-            );
-
-            if annotation.selected {
-                paint_bbox_handles(screen_rect, &annotation.color, window);
+        match &annotation.geometry {
+            AnnotationGeometry::Bbox(bbox) => {
+                paint_bbox_annotation(
+                    *bbox,
+                    annotation,
+                    img_bounds,
+                    img_width,
+                    img_height,
+                    window,
+                );
+            }
+            AnnotationGeometry::Polygon(polygon) => {
+                paint_polygon_annotation(
+                    polygon,
+                    annotation,
+                    img_bounds,
+                    img_width,
+                    img_height,
+                    window,
+                );
             }
         }
+    }
+}
+
+fn paint_bbox_annotation(
+    bbox: BoundingBox,
+    annotation: &AnnotationOverlay,
+    img_bounds: Bounds<Pixels>,
+    img_width: f64,
+    img_height: f64,
+    window: &mut Window,
+) {
+    let screen_rect = image_bbox_to_screen(
+        img_bounds,
+        img_width,
+        img_height,
+        bbox.x,
+        bbox.y,
+        bbox.width,
+        bbox.height,
+    );
+    let border_color = hex_to_rgba(&annotation.color);
+    let bg_alpha = if annotation.selected {
+        0.14
+    } else if annotation.hovered {
+        0.16
+    } else {
+        0.08
+    };
+    let bg_color = rgba_with_alpha(&annotation.color, bg_alpha);
+    let border_width = if annotation.selected || annotation.hovered {
+        3.0
+    } else {
+        2.0
+    };
+    window.paint_quad(fill(screen_rect, bg_color));
+    window.paint_quad(
+        outline(screen_rect, border_color, gpui::BorderStyle::Solid).border_widths(gpui::Edges {
+            top: px(border_width),
+            right: px(border_width),
+            bottom: px(border_width),
+            left: px(border_width),
+        }),
+    );
+
+    if annotation.selected {
+        paint_bbox_handles(screen_rect, &annotation.color, window);
     }
 }
 
@@ -100,6 +129,122 @@ fn paint_bbox_handles(screen_rect: Bounds<Pixels>, color: &str, window: &mut Win
     }
 }
 
+fn paint_polygon_annotation(
+    polygon: &Polygon,
+    annotation: &AnnotationOverlay,
+    img_bounds: Bounds<Pixels>,
+    img_width: f64,
+    img_height: f64,
+    window: &mut Window,
+) {
+    let points = polygon_screen_points(polygon, img_bounds, img_width, img_height);
+    if points.len() < 3 {
+        return;
+    }
+
+    let fill_alpha = if annotation.selected {
+        0.14
+    } else if annotation.hovered {
+        0.16
+    } else {
+        0.08
+    };
+    paint_closed_polygon_path(&points, rgba_with_alpha(&annotation.color, fill_alpha), window);
+    paint_polyline_path(
+        &points,
+        true,
+        if annotation.selected || annotation.hovered {
+            px(3.0)
+        } else {
+            px(2.0)
+        },
+        hex_to_rgba(&annotation.color),
+        window,
+    );
+
+    if annotation.selected {
+        paint_polygon_vertices(&points, &annotation.color, window);
+    }
+}
+
+fn polygon_screen_points(
+    polygon: &Polygon,
+    img_bounds: Bounds<Pixels>,
+    img_width: f64,
+    img_height: f64,
+) -> Vec<Point<Pixels>> {
+    polygon
+        .points
+        .iter()
+        .map(|point| image_point_to_screen(img_bounds, img_width, img_height, point.x, point.y))
+        .collect()
+}
+
+fn paint_closed_polygon_path(
+    points: &[Point<Pixels>],
+    color: gpui::Rgba,
+    window: &mut Window,
+) {
+    let mut path = gpui::PathBuilder::fill();
+    path.move_to(points[0]);
+    for point in &points[1..] {
+        path.line_to(*point);
+    }
+    path.close();
+    if let Ok(path) = path.build() {
+        window.paint_path(path, color);
+    }
+}
+
+fn paint_polyline_path(
+    points: &[Point<Pixels>],
+    closed: bool,
+    width: Pixels,
+    color: gpui::Rgba,
+    window: &mut Window,
+) {
+    if points.len() < 2 {
+        return;
+    }
+
+    let mut path = gpui::PathBuilder::stroke(width);
+    path.move_to(points[0]);
+    for point in &points[1..] {
+        path.line_to(*point);
+    }
+    if closed {
+        path.close();
+    }
+    if let Ok(path) = path.build() {
+        window.paint_path(path, color);
+    }
+}
+
+fn paint_polygon_vertices(points: &[Point<Pixels>], color: &str, window: &mut Window) {
+    let border_color = hex_to_rgba(color);
+    let fill_color = rgb(0xffffff);
+    for point in points {
+        let x: f32 = point.x.into();
+        let y: f32 = point.y.into();
+        let vertex_bounds = bounds(
+            gpui::point(
+                px(x - POLYGON_VERTEX_DIAMETER_PX / 2.0),
+                px(y - POLYGON_VERTEX_DIAMETER_PX / 2.0),
+            ),
+            size(
+                px(POLYGON_VERTEX_DIAMETER_PX),
+                px(POLYGON_VERTEX_DIAMETER_PX),
+            ),
+        );
+        window.paint_quad(
+            fill(vertex_bounds, fill_color)
+                .corner_radii(px(POLYGON_VERTEX_DIAMETER_PX / 2.0))
+                .border_color(border_color)
+                .border_widths(px(2.0)),
+        );
+    }
+}
+
 pub(super) fn paint_drawing_preview(
     drawing: super::super::tools::DrawingState,
     img_bounds: Bounds<Pixels>,
@@ -126,4 +271,29 @@ pub(super) fn paint_drawing_preview(
             left: px(2.0),
         }),
     );
+}
+
+pub(super) fn paint_polygon_preview(
+    drawing: &super::super::tools::PolygonDrawingState,
+    img_bounds: Bounds<Pixels>,
+    img_width: f64,
+    img_height: f64,
+    preview_color: &str,
+    window: &mut Window,
+) {
+    let mut points: Vec<_> = drawing
+        .points
+        .iter()
+        .map(|(x, y)| image_point_to_screen(img_bounds, img_width, img_height, *x, *y))
+        .collect();
+    if let Some((x, y)) = drawing.current_image_pos
+        && drawing.points.last().copied() != Some((x, y))
+    {
+        points.push(image_point_to_screen(img_bounds, img_width, img_height, x, y));
+    }
+
+    if points.len() >= 2 {
+        paint_polyline_path(&points, false, px(2.0), hex_to_rgba(preview_color), window);
+    }
+    paint_polygon_vertices(&points, preview_color, window);
 }

@@ -9,12 +9,13 @@ mod overlay;
 
 use interaction::attach_canvas_interactions;
 use layout::{apply_viewport_to_bounds, canvas_image_layout, compute_image_bounds};
-use overlay::{AnnotationOverlay, paint_annotations, paint_drawing_preview};
+use overlay::{AnnotationOverlay, paint_annotations, paint_drawing_preview, paint_polygon_preview};
 
 impl NotatusWindow {
     pub(super) fn canvas_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let selected_asset = self.selected_asset();
         let drawing = self.tools.draw_box;
+        let polygon_drawing = self.tools.draw_polygon.clone();
         let canvas_image_layout = self.canvas_image_layout.clone();
         let annotations: Vec<_> = selected_asset
             .map(|asset| self.annotations_for_asset(asset))
@@ -75,6 +76,7 @@ impl NotatusWindow {
                             asset,
                             view,
                             drawing,
+                            polygon_drawing,
                             shared_image_layout: canvas_image_layout,
                             annotations: &state_labels,
                             active_tool,
@@ -112,6 +114,7 @@ struct InteractiveImageCanvas<'a> {
     asset: &'a AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
     drawing: Option<super::tools::DrawingState>,
+    polygon_drawing: Option<super::tools::PolygonDrawingState>,
     shared_image_layout: SharedImageLayout,
     annotations: &'a [AnnotationOverlay],
     active_tool: AnnotationTool,
@@ -125,6 +128,7 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
         asset,
         view,
         drawing,
+        polygon_drawing,
         shared_image_layout,
         annotations,
         active_tool,
@@ -193,6 +197,16 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
                     if let Some(drawing) = drawing {
                         paint_drawing_preview(
                             drawing,
+                            img_bounds,
+                            img_width,
+                            img_height,
+                            &preview_color,
+                            window,
+                        );
+                    }
+                    if let Some(polygon_drawing) = &polygon_drawing {
+                        paint_polygon_preview(
+                            polygon_drawing,
                             img_bounds,
                             img_width,
                             img_height,

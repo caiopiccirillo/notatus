@@ -145,6 +145,36 @@ impl NotatusWindow {
         cx.notify();
     }
 
+    pub(super) fn toggle_image_classification(
+        &mut self,
+        asset_id: AssetId,
+        label_id: LabelId,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.toggle_image_classification(asset_id, label_id) {
+            Ok(Some(_)) => {
+                self.status_message = Some("Added image classification".to_string());
+            }
+            Ok(None) => {
+                self.status_message = Some("Removed image classification".to_string());
+            }
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn remove_classification(
+        &mut self,
+        classification_id: ClassificationId,
+        cx: &mut Context<Self>,
+    ) {
+        match self.state.remove_classification(classification_id) {
+            Ok(()) => self.status_message = Some("Removed image classification".to_string()),
+            Err(error) => self.status_message = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
     pub(super) fn update_annotation_bbox(
         &mut self,
         annotation_id: AnnotationId,

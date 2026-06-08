@@ -28,8 +28,19 @@ impl NotatusWindow {
     fn annotations_panel_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> gpui::Div {
         if let Some(asset) = self.selected_asset() {
             let annotations = self.annotations_for_asset(asset);
+            let classifications = self.classifications_for_asset(asset);
             let annotation_count = annotations.len();
+            let classification_count = classifications.len();
             let labels = self.state.dataset.labels.clone();
+            let classified_label_ids: Vec<_> = classifications
+                .iter()
+                .map(|classification| classification.label_id)
+                .collect();
+            let classification_rows: Vec<_> = classifications
+                .into_iter()
+                .map(|classification| self.classification_row(classification, view.clone()))
+                .map(IntoElement::into_any_element)
+                .collect();
             let rows: Vec<_> = annotations
                 .into_iter()
                 .map(|annotation| self.annotation_row(annotation, labels.clone(), view.clone()))
@@ -48,7 +59,43 @@ impl NotatusWindow {
                     "Media",
                     compact_text(&asset_display_name(asset), 28),
                 ))
-                .child(metric("Total", annotation_count_label(annotation_count)))
+                .child(metric(
+                    "Image labels",
+                    label_count_label(classification_count),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(section_title("Image labels"))
+                        .child(self.classification_label_menu(
+                            asset.id,
+                            labels.clone(),
+                            classified_label_ids,
+                            view.clone(),
+                        )),
+                )
+                .child(if classification_rows.is_empty() {
+                    div()
+                        .h(px(34.0))
+                        .flex()
+                        .items_center()
+                        .text_sm()
+                        .text_color(rgb(0x6b7280))
+                        .child("No image labels")
+                        .into_any_element()
+                } else {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .children(classification_rows)
+                        .into_any_element()
+                })
+                .child(section_title("Object annotations"))
+                .child(metric("Objects", annotation_count_label(annotation_count)))
                 .child(if rows.is_empty() {
                     div()
                         .flex_1()
@@ -74,6 +121,101 @@ impl NotatusWindow {
         } else {
             empty_panel("No media selected")
         }
+    }
+
+    fn classification_row(
+        &self,
+        classification: &ClassificationRecord,
+        view: gpui::WeakEntity<NotatusWindow>,
+    ) -> impl IntoElement {
+        let classification_id = classification.id;
+        let label = self.state.dataset.label_by_id(classification.label_id);
+        let label_name = label
+            .map(|label| label.name.as_str())
+            .unwrap_or("Unknown label")
+            .to_string();
+        let label_color = label
+            .and_then(|label| label.color.as_deref())
+            .unwrap_or(DEFAULT_LABEL_COLOR)
+            .to_string();
+        let (classification_key_high, classification_key_low) =
+            classification_element_key(classification_id);
+        let row_id = gpui::ElementId::from(("classification-row", classification_key_high));
+        let remove_view = view;
+
+        div()
+            .id((row_id, classification_key_low.to_string()))
+            .flex()
+            .items_center()
+            .gap_2()
+            .min_w_0()
+            .h(px(34.0))
+            .px_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(rgb(0xe5e7eb))
+            .bg(rgb(0xffffff))
+            .child(label_swatch(&label_color, false))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(label_name),
+            )
+            .child(
+                Button::new((
+                    gpui::ElementId::from(("remove-classification", classification_key_high)),
+                    classification_key_low.to_string(),
+                ))
+                .small()
+                .icon(Icon::new(IconName::Delete))
+                .tooltip("Remove image label")
+                .on_click(move |_, _, cx| {
+                    let _ = remove_view.update(cx, |notatus, cx| {
+                        notatus.remove_classification(classification_id, cx);
+                    });
+                }),
+            )
+    }
+
+    fn classification_label_menu(
+        &self,
+        asset_id: AssetId,
+        labels: Vec<Label>,
+        classified_label_ids: Vec<LabelId>,
+        view: gpui::WeakEntity<NotatusWindow>,
+    ) -> impl IntoElement {
+        Button::new("classification-label-menu")
+            .small()
+            .icon(Icon::new(IconName::Plus))
+            .tooltip("Add image label")
+            .dropdown_menu(move |menu, _, _| {
+                if labels.is_empty() {
+                    return menu.item(PopupMenuItem::new("Create labels in Dataset").disabled(true));
+                }
+
+                let mut menu = menu;
+                for label in labels.clone() {
+                    let label_id = label.id;
+                    let label_name = label.name.clone();
+                    let selected = classified_label_ids.contains(&label_id);
+                    let view = view.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(label_name)
+                            .checked(selected)
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |notatus, cx| {
+                                    notatus.toggle_image_classification(asset_id, label_id, cx);
+                                });
+                            }),
+                    );
+                }
+                menu
+            })
     }
 
     fn annotation_row(
@@ -282,5 +424,10 @@ impl NotatusWindow {
 
 fn annotation_element_key(annotation_id: AnnotationId) -> (u64, u64) {
     let value = annotation_id.as_uuid().as_u128();
+    ((value >> 64) as u64, value as u64)
+}
+
+fn classification_element_key(classification_id: ClassificationId) -> (u64, u64) {
+    let value = classification_id.as_uuid().as_u128();
     ((value >> 64) as u64, value as u64)
 }
