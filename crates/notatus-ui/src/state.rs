@@ -1,6 +1,7 @@
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetLocation, AssetRecord,
-    BoundingBox, Dataset, GeometryError, LabelId, ValidationError,
+    BoundingBox, ClassificationId, ClassificationRecord, Dataset, GeometryError, LabelId, Point,
+    Polygon, ValidationError,
 };
 use std::error::Error;
 use std::fmt;
@@ -9,6 +10,7 @@ use std::fmt;
 pub enum AnnotationTool {
     Select,
     DrawBox,
+    DrawPolygon,
     Pan,
 }
 
@@ -17,9 +19,16 @@ impl AnnotationTool {
         match self {
             Self::Select => "Select",
             Self::DrawBox => "Draw Box",
+            Self::DrawPolygon => "Draw Polygon",
             Self::Pan => "Pan/Zoom",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RemovalSummary {
+    pub annotations: usize,
+    pub classifications: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -129,7 +138,7 @@ impl UiState {
         Ok(())
     }
 
-    pub fn remove_label(&mut self, label_id: LabelId) -> Result<usize, UiMutationError> {
+    pub fn remove_label(&mut self, label_id: LabelId) -> Result<RemovalSummary, UiMutationError> {
         let label_index = self
             .dataset
             .labels
@@ -144,11 +153,15 @@ impl UiState {
                 .any(|annotation| annotation.id == annotation_id && annotation.label_id == label_id)
         });
         let original_annotation_count = self.dataset.annotations.len();
+        let original_classification_count = self.dataset.classifications.len();
 
         self.dataset.labels.remove(label_index);
         self.dataset
             .annotations
             .retain(|annotation| annotation.label_id != label_id);
+        self.dataset
+            .classifications
+            .retain(|classification| classification.label_id != label_id);
 
         if self.selected_label == Some(label_id) {
             self.selected_label = self.dataset.labels.first().map(|label| label.id);
@@ -158,7 +171,10 @@ impl UiState {
         }
 
         self.dirty = true;
-        Ok(original_annotation_count - self.dataset.annotations.len())
+        Ok(RemovalSummary {
+            annotations: original_annotation_count - self.dataset.annotations.len(),
+            classifications: original_classification_count - self.dataset.classifications.len(),
+        })
     }
 
     pub fn add_local_image_asset(
@@ -184,7 +200,7 @@ impl UiState {
         Ok(())
     }
 
-    pub fn remove_asset(&mut self, asset_id: AssetId) -> Result<usize, UiMutationError> {
+    pub fn remove_asset(&mut self, asset_id: AssetId) -> Result<RemovalSummary, UiMutationError> {
         let asset_index = self
             .dataset
             .assets
@@ -199,11 +215,15 @@ impl UiState {
                 .any(|annotation| annotation.id == annotation_id && annotation.asset_id == asset_id)
         });
         let original_annotation_count = self.dataset.annotations.len();
+        let original_classification_count = self.dataset.classifications.len();
 
         self.dataset.assets.remove(asset_index);
         self.dataset
             .annotations
             .retain(|annotation| annotation.asset_id != asset_id);
+        self.dataset
+            .classifications
+            .retain(|classification| classification.asset_id != asset_id);
 
         if self.selected_asset == Some(asset_id) {
             self.selected_asset = self.dataset.assets.first().map(|asset| asset.id);
@@ -213,7 +233,10 @@ impl UiState {
         }
 
         self.dirty = true;
-        Ok(original_annotation_count - self.dataset.annotations.len())
+        Ok(RemovalSummary {
+            annotations: original_annotation_count - self.dataset.annotations.len(),
+            classifications: original_classification_count - self.dataset.classifications.len(),
+        })
     }
 
     pub fn select_annotation(
@@ -319,6 +342,97 @@ impl UiState {
         self.dirty = true;
         Ok(annotation_id)
     }
+
+    pub fn add_human_polygon(
+        &mut self,
+        asset_id: AssetId,
+        label_id: LabelId,
+        polygon: Polygon,
+        user_id: Option<String>,
+    ) -> Result<AnnotationId, UiMutationError> {
+        let asset = self
+            .dataset
+            .asset_by_id(asset_id)
+            .ok_or(UiMutationError::MissingAsset { asset_id })?;
+        if self.dataset.label_by_id(label_id).is_none() {
+            return Err(UiMutationError::MissingLabel { label_id });
+        }
+        polygon.validate_within_image(asset.dimensions)?;
+
+        let annotation = AnnotationRecord::new_human(
+            asset_id,
+            label_id,
+            AnnotationGeometry::Polygon(polygon),
+            user_id,
+        );
+        let annotation_id = annotation.id;
+        self.dataset.add_annotation(annotation);
+        self.selected_annotation = None;
+        self.selected_label = Some(label_id);
+        self.dirty = true;
+        Ok(annotation_id)
+    }
+
+    pub fn toggle_image_classification(
+        &mut self,
+        asset_id: AssetId,
+        label_id: LabelId,
+    ) -> Result<Option<ClassificationId>, UiMutationError> {
+        if self.dataset.asset_by_id(asset_id).is_none() {
+            return Err(UiMutationError::MissingAsset { asset_id });
+        }
+        if self.dataset.label_by_id(label_id).is_none() {
+            return Err(UiMutationError::MissingLabel { label_id });
+        }
+
+        if let Some(index) = self
+            .dataset
+            .classifications
+            .iter()
+            .position(|classification| {
+                classification.asset_id == asset_id && classification.label_id == label_id
+            })
+        {
+            self.dataset.classifications.remove(index);
+            self.selected_label = Some(label_id);
+            self.dirty = true;
+            return Ok(None);
+        }
+
+        let classification = ClassificationRecord::new_human(asset_id, label_id, None);
+        let classification_id = classification.id;
+        self.dataset.add_classification(classification);
+        self.selected_asset = Some(asset_id);
+        self.selected_label = Some(label_id);
+        self.dirty = true;
+        Ok(Some(classification_id))
+    }
+
+    pub fn remove_classification(
+        &mut self,
+        classification_id: ClassificationId,
+    ) -> Result<(), UiMutationError> {
+        let classification_index = self
+            .dataset
+            .classifications
+            .iter()
+            .position(|classification| classification.id == classification_id)
+            .ok_or(UiMutationError::MissingClassification { classification_id })?;
+
+        let classification = self.dataset.classifications.remove(classification_index);
+        self.selected_asset = Some(classification.asset_id);
+        self.selected_label = Some(classification.label_id);
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn polygon_from_points(points: &[(f64, f64)]) -> Result<Polygon, UiMutationError> {
+        let points = points
+            .iter()
+            .map(|(x, y)| Point::new(*x, *y))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Polygon::new(points)?)
+    }
 }
 
 #[derive(Debug)]
@@ -327,6 +441,9 @@ pub enum UiMutationError {
     Validation(ValidationError),
     MissingAsset { asset_id: AssetId },
     MissingAnnotation { annotation_id: AnnotationId },
+    MissingClassification {
+        classification_id: ClassificationId,
+    },
     MissingLabel { label_id: LabelId },
     EmptyProjectName,
     EmptyLabelName { label_id: LabelId },
@@ -340,6 +457,9 @@ impl fmt::Display for UiMutationError {
             Self::MissingAsset { asset_id } => write!(f, "missing asset {asset_id}"),
             Self::MissingAnnotation { annotation_id } => {
                 write!(f, "missing annotation {annotation_id}")
+            }
+            Self::MissingClassification { classification_id } => {
+                write!(f, "missing classification {classification_id}")
             }
             Self::MissingLabel { label_id } => write!(f, "missing label {label_id}"),
             Self::EmptyProjectName => write!(f, "project needs a name"),
@@ -355,6 +475,7 @@ impl Error for UiMutationError {
             Self::Validation(source) => Some(source),
             Self::MissingAsset { .. }
             | Self::MissingAnnotation { .. }
+            | Self::MissingClassification { .. }
             | Self::MissingLabel { .. }
             | Self::EmptyProjectName
             | Self::EmptyLabelName { .. } => None,
@@ -404,6 +525,69 @@ mod tests {
         assert_eq!(state.selected_annotation, None);
         assert_eq!(state.selected_label, Some(label_id));
         assert!(state.dirty);
+        assert!(state.dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn adds_polygon_through_ui_state() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("car");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let polygon = Polygon::new(vec![
+            Point::new(10.0, 20.0).unwrap(),
+            Point::new(60.0, 20.0).unwrap(),
+            Point::new(60.0, 70.0).unwrap(),
+            Point::new(10.0, 70.0).unwrap(),
+        ])
+        .unwrap();
+
+        let annotation_id = state
+            .add_human_polygon(asset_id, label_id, polygon.clone(), None)
+            .unwrap();
+
+        let annotation = state
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == annotation_id)
+            .unwrap();
+        assert_eq!(annotation.geometry, AnnotationGeometry::Polygon(polygon));
+        assert_eq!(state.selected_annotation, None);
+        assert_eq!(state.selected_label, Some(label_id));
+        assert!(state.dirty);
+        assert!(state.dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn toggles_image_classification() {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("outdoor");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+
+        let classification_id = state
+            .toggle_image_classification(asset_id, label_id)
+            .unwrap()
+            .unwrap();
+
+        assert!(
+            state
+                .dataset
+                .classifications
+                .iter()
+                .any(|classification| classification.id == classification_id)
+        );
+        assert_eq!(state.selected_asset, Some(asset_id));
+        assert_eq!(state.selected_label, Some(label_id));
+
+        assert_eq!(
+            state.toggle_image_classification(asset_id, label_id).unwrap(),
+            None
+        );
+        assert!(state.dataset.classifications.is_empty());
         assert!(state.dataset.validate().is_ok());
     }
 
@@ -665,9 +849,17 @@ mod tests {
         state.select_annotation(Some(removed_annotation)).unwrap();
         state.mark_saved();
 
-        let removed_count = state.remove_label(removed_label).unwrap();
+        state
+            .toggle_image_classification(asset_id, removed_label)
+            .unwrap();
+        state
+            .toggle_image_classification(asset_id, remaining_label)
+            .unwrap();
 
-        assert_eq!(removed_count, 1);
+        let removed = state.remove_label(removed_label).unwrap();
+
+        assert_eq!(removed.annotations, 1);
+        assert_eq!(removed.classifications, 1);
         assert!(state.dataset.label_by_id(removed_label).is_none());
         assert_eq!(state.selected_label, Some(remaining_label));
         assert_eq!(state.selected_annotation, None);
@@ -684,6 +876,20 @@ mod tests {
                 .annotations
                 .iter()
                 .any(|annotation| annotation.id == remaining_annotation)
+        );
+        assert!(
+            state
+                .dataset
+                .classifications
+                .iter()
+                .all(|classification| classification.label_id != removed_label)
+        );
+        assert!(
+            state
+                .dataset
+                .classifications
+                .iter()
+                .any(|classification| classification.label_id == remaining_label)
         );
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());
@@ -718,9 +924,17 @@ mod tests {
         state.select_annotation(Some(removed_annotation)).unwrap();
         state.mark_saved();
 
-        let removed_count = state.remove_asset(removed_asset).unwrap();
+        state
+            .toggle_image_classification(removed_asset, label_id)
+            .unwrap();
+        state
+            .toggle_image_classification(remaining_asset, label_id)
+            .unwrap();
 
-        assert_eq!(removed_count, 1);
+        let removed = state.remove_asset(removed_asset).unwrap();
+
+        assert_eq!(removed.annotations, 1);
+        assert_eq!(removed.classifications, 1);
         assert!(state.dataset.asset_by_id(removed_asset).is_none());
         assert_eq!(state.selected_asset, Some(remaining_asset));
         assert_eq!(state.selected_annotation, None);
@@ -737,6 +951,20 @@ mod tests {
                 .annotations
                 .iter()
                 .any(|annotation| annotation.id == remaining_annotation)
+        );
+        assert!(
+            state
+                .dataset
+                .classifications
+                .iter()
+                .all(|classification| classification.asset_id != removed_asset)
+        );
+        assert!(
+            state
+                .dataset
+                .classifications
+                .iter()
+                .any(|classification| classification.asset_id == remaining_asset)
         );
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());

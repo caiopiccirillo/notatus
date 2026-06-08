@@ -94,11 +94,14 @@ impl NotatusWindow {
         cx: &mut Context<Self>,
     ) {
         match self.state.remove_label(label_id) {
-            Ok(removed_annotations) => {
+            Ok(removed) => {
                 self.hovered_annotation = None;
                 self.status_message = Some(format!(
-                    "Removed label and {removed_annotations} annotation{}",
-                    plural(removed_annotations)
+                    "Removed label, {} annotation{}, and {} classification{}",
+                    removed.annotations,
+                    plural(removed.annotations),
+                    removed.classifications,
+                    plural(removed.classifications),
                 ));
                 self.sync_label_name_input(window, cx);
             }
@@ -109,12 +112,15 @@ impl NotatusWindow {
 
     pub(super) fn remove_asset(&mut self, asset_id: AssetId, cx: &mut Context<Self>) {
         match self.state.remove_asset(asset_id) {
-            Ok(removed_annotations) => {
+            Ok(removed) => {
                 self.hovered_annotation = None;
                 self.tools.fit_canvas_to_view();
                 self.status_message = Some(format!(
-                    "Removed media and {removed_annotations} annotation{}",
-                    plural(removed_annotations)
+                    "Removed media, {} annotation{}, and {} classification{}",
+                    removed.annotations,
+                    plural(removed.annotations),
+                    removed.classifications,
+                    plural(removed.classifications),
                 ));
             }
             Err(error) => self.status_message = Some(error.to_string()),

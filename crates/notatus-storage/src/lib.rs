@@ -4,7 +4,9 @@
 //! canonical dataset in deterministic JSON/JSONL files so projects can be
 //! versioned with Git, DVC, lakeFS, object storage manifests, or similar tools.
 
-use notatus_core::{AnnotationRecord, AssetRecord, Dataset, Label, ProjectManifest};
+use notatus_core::{
+    AnnotationRecord, AssetRecord, ClassificationRecord, Dataset, Label, ProjectManifest,
+};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -14,6 +16,7 @@ pub const MANIFEST_FILE: &str = "notatus.project.json";
 pub const LABELS_FILE: &str = "labels.json";
 pub const ASSETS_FILE: &str = "assets.jsonl";
 pub const ANNOTATIONS_FILE: &str = "annotations.jsonl";
+pub const CLASSIFICATIONS_FILE: &str = "classifications.jsonl";
 
 pub trait ProjectStore {
     fn load_dataset(&self) -> Result<Dataset, StorageError>;
@@ -55,6 +58,10 @@ impl LocalProjectStore {
     fn annotations_path(&self) -> PathBuf {
         self.root.join(ANNOTATIONS_FILE)
     }
+
+    fn classifications_path(&self) -> PathBuf {
+        self.root.join(CLASSIFICATIONS_FILE)
+    }
 }
 
 impl ProjectStore for LocalProjectStore {
@@ -63,12 +70,15 @@ impl ProjectStore for LocalProjectStore {
         let labels: Vec<Label> = read_json_or_default(&self.labels_path())?;
         let assets: Vec<AssetRecord> = read_jsonl_or_default(&self.assets_path())?;
         let annotations: Vec<AnnotationRecord> = read_jsonl_or_default(&self.annotations_path())?;
+        let classifications: Vec<ClassificationRecord> =
+            read_jsonl_or_default(&self.classifications_path())?;
 
         let dataset = Dataset {
             manifest,
             labels,
             assets,
             annotations,
+            classifications,
         };
         dataset.validate()?;
         Ok(dataset)
@@ -85,6 +95,7 @@ impl ProjectStore for LocalProjectStore {
         write_json_pretty(&self.labels_path(), &dataset.labels)?;
         write_jsonl(&self.assets_path(), &dataset.assets)?;
         write_jsonl(&self.annotations_path(), &dataset.annotations)?;
+        write_jsonl(&self.classifications_path(), &dataset.classifications)?;
         Ok(())
     }
 }
