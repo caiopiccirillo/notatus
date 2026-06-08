@@ -441,9 +441,7 @@ pub enum UiMutationError {
     Validation(ValidationError),
     MissingAsset { asset_id: AssetId },
     MissingAnnotation { annotation_id: AnnotationId },
-    MissingClassification {
-        classification_id: ClassificationId,
-    },
+    MissingClassification { classification_id: ClassificationId },
     MissingLabel { label_id: LabelId },
     EmptyProjectName,
     EmptyLabelName { label_id: LabelId },
@@ -584,7 +582,9 @@ mod tests {
         assert_eq!(state.selected_label, Some(label_id));
 
         assert_eq!(
-            state.toggle_image_classification(asset_id, label_id).unwrap(),
+            state
+                .toggle_image_classification(asset_id, label_id)
+                .unwrap(),
             None
         );
         assert!(state.dataset.classifications.is_empty());

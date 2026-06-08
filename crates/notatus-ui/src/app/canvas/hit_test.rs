@@ -34,8 +34,10 @@ pub(super) fn hit_test_bbox_edit_target(
     img_bounds: Bounds<Pixels>,
     asset: &AssetRecord,
 ) -> Option<BboxHitTarget> {
-    annotations.iter().rev().find_map(|annotation| {
-        match &annotation.geometry {
+    annotations
+        .iter()
+        .rev()
+        .find_map(|annotation| match &annotation.geometry {
             AnnotationGeometry::Bbox(bbox) => {
                 if annotation.selected
                     && let Some(handle) = hit_test_bbox_handle(*bbox, image_pos, img_bounds, asset)
@@ -45,12 +47,9 @@ pub(super) fn hit_test_bbox_edit_target(
 
                 bbox_contains_point(*bbox, image_pos).then_some(BboxHitTarget::Body(annotation.id))
             }
-            AnnotationGeometry::Polygon(polygon) => {
-                polygon_contains_point(polygon, image_pos)
-                    .then_some(BboxHitTarget::Body(annotation.id))
-            }
-        }
-    })
+            AnnotationGeometry::Polygon(polygon) => polygon_contains_point(polygon, image_pos)
+                .then_some(BboxHitTarget::Body(annotation.id)),
+        })
 }
 
 fn bbox_contains_point(bbox: BoundingBox, (x, y): (f64, f64)) -> bool {

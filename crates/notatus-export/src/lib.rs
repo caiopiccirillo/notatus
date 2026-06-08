@@ -6,8 +6,8 @@
 mod error;
 mod filter;
 
-pub mod coco;
 pub mod classification;
+pub mod coco;
 pub mod yolo;
 
 pub use error::ExportError;

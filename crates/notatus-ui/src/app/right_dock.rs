@@ -195,7 +195,8 @@ impl NotatusWindow {
             .tooltip("Add image label")
             .dropdown_menu(move |menu, _, _| {
                 if labels.is_empty() {
-                    return menu.item(PopupMenuItem::new("Create labels in Dataset").disabled(true));
+                    return menu
+                        .item(PopupMenuItem::new("Create labels in Dataset").disabled(true));
                 }
 
                 let mut menu = menu;
@@ -204,15 +205,13 @@ impl NotatusWindow {
                     let label_name = label.name.clone();
                     let selected = classified_label_ids.contains(&label_id);
                     let view = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(label_name)
-                            .checked(selected)
-                            .on_click(move |_, _, cx| {
-                                let _ = view.update(cx, |notatus, cx| {
-                                    notatus.toggle_image_classification(asset_id, label_id, cx);
-                                });
-                            }),
-                    );
+                    menu = menu.item(PopupMenuItem::new(label_name).checked(selected).on_click(
+                        move |_, _, cx| {
+                            let _ = view.update(cx, |notatus, cx| {
+                                notatus.toggle_image_classification(asset_id, label_id, cx);
+                            });
+                        },
+                    ));
                 }
                 menu
             })

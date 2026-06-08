@@ -14,9 +14,12 @@ pub(super) fn attach_canvas_interactions(
         .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
             attach_draw_box_interactions(canvas, view.clone(), shared_image_layout.clone())
         })
-        .when(matches!(active_tool, AnnotationTool::DrawPolygon), |canvas| {
-            attach_draw_polygon_interactions(canvas, view.clone(), shared_image_layout.clone())
-        })
+        .when(
+            matches!(active_tool, AnnotationTool::DrawPolygon),
+            |canvas| {
+                attach_draw_polygon_interactions(canvas, view.clone(), shared_image_layout.clone())
+            },
+        )
         .when(matches!(active_tool, AnnotationTool::Select), |canvas| {
             attach_select_interactions(
                 canvas,
@@ -180,13 +183,15 @@ fn attach_draw_polygon_interactions(
                                     },
                                     None => {
                                         notatus.left_dock = LeftDock::Dataset;
-                                        notatus.status_message = Some("Select a label first".into());
+                                        notatus.status_message =
+                                            Some("Select a label first".into());
                                         skipped_required_step = true;
                                     }
                                 },
                                 None => {
-                                    invalid_polygon =
-                                        Some("Polygon needs at least three valid points".to_string());
+                                    invalid_polygon = Some(
+                                        "Polygon needs at least three valid points".to_string(),
+                                    );
                                     notatus.status_message = invalid_polygon.clone();
                                 }
                             }

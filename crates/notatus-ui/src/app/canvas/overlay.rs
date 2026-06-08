@@ -25,23 +25,11 @@ pub(super) fn paint_annotations(
     for annotation in annotations {
         match &annotation.geometry {
             AnnotationGeometry::Bbox(bbox) => {
-                paint_bbox_annotation(
-                    *bbox,
-                    annotation,
-                    img_bounds,
-                    img_width,
-                    img_height,
-                    window,
-                );
+                paint_bbox_annotation(*bbox, annotation, img_bounds, img_width, img_height, window);
             }
             AnnotationGeometry::Polygon(polygon) => {
                 paint_polygon_annotation(
-                    polygon,
-                    annotation,
-                    img_bounds,
-                    img_width,
-                    img_height,
-                    window,
+                    polygon, annotation, img_bounds, img_width, img_height, window,
                 );
             }
         }
@@ -149,7 +137,11 @@ fn paint_polygon_annotation(
     } else {
         0.08
     };
-    paint_closed_polygon_path(&points, rgba_with_alpha(&annotation.color, fill_alpha), window);
+    paint_closed_polygon_path(
+        &points,
+        rgba_with_alpha(&annotation.color, fill_alpha),
+        window,
+    );
     paint_polyline_path(
         &points,
         true,
@@ -180,11 +172,7 @@ fn polygon_screen_points(
         .collect()
 }
 
-fn paint_closed_polygon_path(
-    points: &[Point<Pixels>],
-    color: gpui::Rgba,
-    window: &mut Window,
-) {
+fn paint_closed_polygon_path(points: &[Point<Pixels>], color: gpui::Rgba, window: &mut Window) {
     let mut path = gpui::PathBuilder::fill();
     path.move_to(points[0]);
     for point in &points[1..] {
@@ -289,7 +277,9 @@ pub(super) fn paint_polygon_preview(
     if let Some((x, y)) = drawing.current_image_pos
         && drawing.points.last().copied() != Some((x, y))
     {
-        points.push(image_point_to_screen(img_bounds, img_width, img_height, x, y));
+        points.push(image_point_to_screen(
+            img_bounds, img_width, img_height, x, y,
+        ));
     }
 
     if points.len() >= 2 {

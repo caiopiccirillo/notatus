@@ -31,16 +31,18 @@ pub fn export_classifications(
         .iter()
         .filter(|classification| classification.review_state != ReviewState::Rejected)
     {
-        let asset = dataset
-            .asset_by_id(classification.asset_id)
-            .ok_or(ExportError::UnknownAsset {
-                asset_id: classification.asset_id,
-            })?;
-        let label = dataset
-            .label_by_id(classification.label_id)
-            .ok_or(ExportError::UnknownLabel {
-                label_id: classification.label_id,
-            })?;
+        let asset =
+            dataset
+                .asset_by_id(classification.asset_id)
+                .ok_or(ExportError::UnknownAsset {
+                    asset_id: classification.asset_id,
+                })?;
+        let label =
+            dataset
+                .label_by_id(classification.label_id)
+                .ok_or(ExportError::UnknownLabel {
+                    label_id: classification.label_id,
+                })?;
 
         rows.push(ClassificationExportRow {
             classification_id: classification.id,

@@ -557,9 +557,7 @@ pub enum ValidationError {
     #[error("duplicate annotation id {annotation_id}")]
     DuplicateAnnotation { annotation_id: AnnotationId },
     #[error("duplicate classification id {classification_id}")]
-    DuplicateClassification {
-        classification_id: ClassificationId,
-    },
+    DuplicateClassification { classification_id: ClassificationId },
     #[error("label {label_id} has an empty name")]
     EmptyLabelName { label_id: LabelId },
     #[error("asset {asset_id} has invalid dimensions {width}x{height}")]
