@@ -40,5 +40,6 @@ macro_rules! id_type {
 
 id_type!(AnnotationId);
 id_type!(AssetId);
+id_type!(ClassificationId);
 id_type!(LabelId);
 id_type!(ProjectId);

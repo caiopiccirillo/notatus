@@ -183,11 +183,58 @@ impl Polygon {
             });
         }
 
+        if self.area() <= COORD_EPSILON {
+            return Err(GeometryError::DegeneratePolygon);
+        }
+
         for point in &self.points {
             point.validate_within_image(dimensions)?;
         }
 
         Ok(())
+    }
+
+    pub fn area(&self) -> f64 {
+        if self.points.len() < 3 {
+            return 0.0;
+        }
+
+        let mut sum = 0.0;
+        for index in 0..self.points.len() {
+            let current = self.points[index];
+            let next = self.points[(index + 1) % self.points.len()];
+            sum += current.x * next.y - next.x * current.y;
+        }
+        sum.abs() / 2.0
+    }
+
+    pub fn bounding_box(&self) -> Result<BoundingBox, GeometryError> {
+        if self.points.len() < 3 {
+            return Err(GeometryError::PolygonTooSmall {
+                points: self.points.len(),
+            });
+        }
+
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+
+        for point in &self.points {
+            if !point.x.is_finite() || !point.y.is_finite() {
+                return Err(GeometryError::NonFiniteCoordinate);
+            }
+            min_x = min_x.min(point.x);
+            min_y = min_y.min(point.y);
+            max_x = max_x.max(point.x);
+            max_y = max_y.max(point.y);
+        }
+
+        if max_x - min_x <= COORD_EPSILON || max_y - min_y <= COORD_EPSILON {
+            return Err(GeometryError::DegeneratePolygon);
+        }
+
+        BoundingBox::from_xywh(min_x, min_y, max_x - min_x, max_y - min_y)
     }
 }
 
@@ -230,6 +277,8 @@ pub enum GeometryError {
     OutsideImage { width: u32, height: u32 },
     #[error("polygon must have at least 3 points, got {points}")]
     PolygonTooSmall { points: usize },
+    #[error("polygon area must be positive")]
+    DegeneratePolygon,
 }
 
 #[cfg(test)]
@@ -257,5 +306,38 @@ mod tests {
             bbox.validate_within_image(dimensions),
             Err(GeometryError::OutsideImage { .. })
         ));
+    }
+
+    #[test]
+    fn computes_polygon_area_and_bounds() {
+        let polygon = Polygon::new(vec![
+            Point::new(10.0, 20.0).unwrap(),
+            Point::new(50.0, 20.0).unwrap(),
+            Point::new(50.0, 60.0).unwrap(),
+            Point::new(10.0, 60.0).unwrap(),
+        ])
+        .unwrap();
+
+        assert_eq!(polygon.area(), 1600.0);
+        assert_eq!(
+            polygon.bounding_box().unwrap(),
+            BoundingBox::from_xywh(10.0, 20.0, 40.0, 40.0).unwrap()
+        );
+    }
+
+    #[test]
+    fn rejects_degenerate_polygons() {
+        let dimensions = ImageDimensions::new(100, 100).unwrap();
+        let polygon = Polygon::new(vec![
+            Point::new(10.0, 10.0).unwrap(),
+            Point::new(20.0, 20.0).unwrap(),
+            Point::new(30.0, 30.0).unwrap(),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            polygon.validate_within_image(dimensions),
+            Err(GeometryError::DegeneratePolygon)
+        );
     }
 }

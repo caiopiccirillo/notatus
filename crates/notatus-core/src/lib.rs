@@ -10,12 +10,12 @@ mod ids;
 
 pub use dataset::{
     AnnotationRecord, AnnotationSource, AssetKind, AssetLocation, AssetRecord,
-    CURRENT_SCHEMA_VERSION, Dataset, DatasetSplit, ImportProvenance, Label, Metadata,
-    ModelProvenance, ProjectManifest, ProjectMetadata, ReviewState, ValidationError,
+    CURRENT_SCHEMA_VERSION, ClassificationRecord, Dataset, DatasetSplit, ImportProvenance, Label,
+    Metadata, ModelProvenance, ProjectManifest, ProjectMetadata, ReviewState, ValidationError,
 };
 pub use geometry::{
     AnnotationGeometry, BoundingBox, GeometryError, ImageDimensions, Point, Polygon,
 };
-pub use ids::{AnnotationId, AssetId, LabelId, ProjectId};
+pub use ids::{AnnotationId, AssetId, ClassificationId, LabelId, ProjectId};
 
 pub type Result<T> = std::result::Result<T, ValidationError>;

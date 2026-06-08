@@ -1,5 +1,5 @@
 use crate::geometry::{AnnotationGeometry, GeometryError, ImageDimensions};
-use crate::ids::{AnnotationId, AssetId, LabelId, ProjectId};
+use crate::ids::{AnnotationId, AssetId, ClassificationId, LabelId, ProjectId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -67,6 +67,8 @@ pub struct Dataset {
     pub assets: Vec<AssetRecord>,
     #[serde(default)]
     pub annotations: Vec<AnnotationRecord>,
+    #[serde(default)]
+    pub classifications: Vec<ClassificationRecord>,
 }
 
 impl Dataset {
@@ -76,6 +78,7 @@ impl Dataset {
             labels: Vec::new(),
             assets: Vec::new(),
             annotations: Vec::new(),
+            classifications: Vec::new(),
         }
     }
 
@@ -100,6 +103,12 @@ impl Dataset {
     pub fn add_annotation(&mut self, annotation: AnnotationRecord) -> AnnotationId {
         let id = annotation.id;
         self.annotations.push(annotation);
+        id
+    }
+
+    pub fn add_classification(&mut self, classification: ClassificationRecord) -> ClassificationId {
+        let id = classification.id;
+        self.classifications.push(classification);
         id
     }
 
@@ -187,6 +196,35 @@ impl Dataset {
                     annotation_id: annotation.id,
                     source,
                 })?;
+        }
+
+        let mut classification_ids = BTreeSet::new();
+        for classification in &self.classifications {
+            if !classification_ids.insert(classification.id) {
+                return Err(ValidationError::DuplicateClassification {
+                    classification_id: classification.id,
+                });
+            }
+            if !asset_ids.contains(&classification.asset_id) {
+                return Err(ValidationError::UnknownClassificationAsset {
+                    classification_id: classification.id,
+                    asset_id: classification.asset_id,
+                });
+            }
+            if !label_ids.contains(&classification.label_id) {
+                return Err(ValidationError::UnknownClassificationLabel {
+                    classification_id: classification.id,
+                    label_id: classification.label_id,
+                });
+            }
+            if let Some(confidence) = classification.confidence
+                && (!confidence.is_finite() || !(0.0..=1.0).contains(&confidence))
+            {
+                return Err(ValidationError::InvalidClassificationConfidence {
+                    classification_id: classification.id,
+                    confidence,
+                });
+            }
         }
 
         Ok(())
@@ -422,6 +460,90 @@ impl AnnotationRecord {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ClassificationRecord {
+    pub id: ClassificationId,
+    pub asset_id: AssetId,
+    pub label_id: LabelId,
+    pub source: AnnotationSource,
+    pub confidence: Option<f32>,
+    pub review_state: ReviewState,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+    #[serde(default)]
+    pub metadata: Metadata,
+}
+
+impl ClassificationRecord {
+    pub fn new_human(asset_id: AssetId, label_id: LabelId, user_id: Option<String>) -> Self {
+        Self::new(
+            asset_id,
+            label_id,
+            AnnotationSource::Human { user_id },
+            None,
+            ReviewState::Draft,
+        )
+    }
+
+    pub fn new_model(
+        asset_id: AssetId,
+        label_id: LabelId,
+        model: ModelProvenance,
+        confidence: Option<f32>,
+    ) -> Self {
+        Self::new(
+            asset_id,
+            label_id,
+            AnnotationSource::Model(model),
+            confidence,
+            ReviewState::Draft,
+        )
+    }
+
+    pub fn new_imported(
+        asset_id: AssetId,
+        label_id: LabelId,
+        format: impl Into<String>,
+        source_id: Option<String>,
+    ) -> Self {
+        Self::new(
+            asset_id,
+            label_id,
+            AnnotationSource::Imported(ImportProvenance {
+                format: format.into(),
+                source_id,
+                metadata: Metadata::new(),
+            }),
+            None,
+            ReviewState::Draft,
+        )
+    }
+
+    fn new(
+        asset_id: AssetId,
+        label_id: LabelId,
+        source: AnnotationSource,
+        confidence: Option<f32>,
+        review_state: ReviewState,
+    ) -> Self {
+        let now = now_utc();
+
+        Self {
+            id: ClassificationId::new(),
+            asset_id,
+            label_id,
+            source,
+            confidence,
+            review_state,
+            created_at: now,
+            updated_at: now,
+            metadata: Metadata::new(),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ValidationError {
     #[error("unsupported schema version {found}, supported version is {supported}")]
@@ -434,6 +556,10 @@ pub enum ValidationError {
     DuplicateAsset { asset_id: AssetId },
     #[error("duplicate annotation id {annotation_id}")]
     DuplicateAnnotation { annotation_id: AnnotationId },
+    #[error("duplicate classification id {classification_id}")]
+    DuplicateClassification {
+        classification_id: ClassificationId,
+    },
     #[error("label {label_id} has an empty name")]
     EmptyLabelName { label_id: LabelId },
     #[error("asset {asset_id} has invalid dimensions {width}x{height}")]
@@ -452,9 +578,24 @@ pub enum ValidationError {
         annotation_id: AnnotationId,
         label_id: LabelId,
     },
+    #[error("classification {classification_id} references unknown asset {asset_id}")]
+    UnknownClassificationAsset {
+        classification_id: ClassificationId,
+        asset_id: AssetId,
+    },
+    #[error("classification {classification_id} references unknown label {label_id}")]
+    UnknownClassificationLabel {
+        classification_id: ClassificationId,
+        label_id: LabelId,
+    },
     #[error("annotation {annotation_id} has invalid confidence {confidence}")]
     InvalidConfidence {
         annotation_id: AnnotationId,
+        confidence: f32,
+    },
+    #[error("classification {classification_id} has invalid confidence {confidence}")]
+    InvalidClassificationConfidence {
+        classification_id: ClassificationId,
         confidence: f32,
     },
     #[error("annotation {annotation_id} has invalid geometry: {source}")]
@@ -488,6 +629,17 @@ mod tests {
     }
 
     #[test]
+    fn validates_classification_references() {
+        let mut dataset = Dataset::new("demo");
+        let label_id = dataset.add_label("outdoor");
+        let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
+        let asset_id = dataset.add_asset(asset);
+        dataset.add_classification(ClassificationRecord::new_human(asset_id, label_id, None));
+
+        assert!(dataset.validate().is_ok());
+    }
+
+    #[test]
     fn rejects_unknown_label_reference() {
         let mut dataset = Dataset::new("demo");
         let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
@@ -503,6 +655,39 @@ mod tests {
         assert!(matches!(
             dataset.validate(),
             Err(ValidationError::UnknownLabel { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_unknown_classification_label_reference() {
+        let mut dataset = Dataset::new("demo");
+        let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
+        let asset_id = dataset.add_asset(asset);
+        dataset.add_classification(ClassificationRecord::new_human(
+            asset_id,
+            LabelId::new(),
+            None,
+        ));
+
+        assert!(matches!(
+            dataset.validate(),
+            Err(ValidationError::UnknownClassificationLabel { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_classification_confidence() {
+        let mut dataset = Dataset::new("demo");
+        let label_id = dataset.add_label("outdoor");
+        let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
+        let asset_id = dataset.add_asset(asset);
+        let mut classification = ClassificationRecord::new_human(asset_id, label_id, None);
+        classification.confidence = Some(1.5);
+        dataset.add_classification(classification);
+
+        assert!(matches!(
+            dataset.validate(),
+            Err(ValidationError::InvalidClassificationConfidence { .. })
         ));
     }
 
