@@ -1,5 +1,5 @@
 use crate::{AnnotationFilter, ExportError};
-use notatus_core::{AssetId, Dataset, LabelId, Metadata};
+use notatus_core::{AnnotationGeometry, AssetId, BoundingBox, Dataset, LabelId, Metadata, Polygon};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -35,6 +35,8 @@ pub struct CocoAnnotation {
     pub category_id: u64,
     pub bbox: [f64; 4],
     pub area: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub segmentation: Vec<Vec<f64>>,
     pub iscrowd: u8,
     #[serde(skip_serializing_if = "Metadata::is_empty", default)]
     pub attributes: Metadata,
@@ -104,9 +106,7 @@ pub fn export_detection(
         .iter()
         .filter(|annotation| filter.accepts(annotation))
     {
-        let Some(bbox) = annotation.geometry.as_bbox() else {
-            continue;
-        };
+        let geometry = coco_geometry(&annotation.geometry)?;
 
         let mut attributes = annotation.metadata.clone();
         attributes.insert(
@@ -133,8 +133,14 @@ pub fn export_detection(
                     label_id: annotation.label_id,
                 },
             )?,
-            bbox: [bbox.x, bbox.y, bbox.width, bbox.height],
-            area: bbox.area(),
+            bbox: [
+                geometry.bbox.x,
+                geometry.bbox.y,
+                geometry.bbox.width,
+                geometry.bbox.height,
+            ],
+            area: geometry.area,
+            segmentation: geometry.segmentation,
             iscrowd: 0,
             attributes,
         });
@@ -149,6 +155,35 @@ pub fn export_detection(
         annotations,
         categories,
     })
+}
+
+struct CocoGeometry {
+    bbox: BoundingBox,
+    area: f64,
+    segmentation: Vec<Vec<f64>>,
+}
+
+fn coco_geometry(geometry: &AnnotationGeometry) -> Result<CocoGeometry, ExportError> {
+    match geometry {
+        AnnotationGeometry::Bbox(bbox) => Ok(CocoGeometry {
+            bbox: *bbox,
+            area: bbox.area(),
+            segmentation: Vec::new(),
+        }),
+        AnnotationGeometry::Polygon(polygon) => Ok(CocoGeometry {
+            bbox: polygon.bounding_box()?,
+            area: polygon.area(),
+            segmentation: vec![flatten_polygon(polygon)],
+        }),
+    }
+}
+
+fn flatten_polygon(polygon: &Polygon) -> Vec<f64> {
+    polygon
+        .points
+        .iter()
+        .flat_map(|point| [point.x, point.y])
+        .collect()
 }
 
 pub fn write_detection_export(

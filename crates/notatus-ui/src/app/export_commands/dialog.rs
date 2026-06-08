@@ -45,9 +45,11 @@ fn export_dialog_snapshot(
         media_count: notatus.state.dataset.assets.len(),
         label_count: notatus.state.dataset.labels.len(),
         annotation_count: notatus.state.dataset.annotations.len(),
+        classification_count: notatus.state.dataset.classifications.len(),
         exportable_count: exportable_annotation_count(&notatus.state.dataset),
         yolo: notatus.export_yolo,
         coco: notatus.export_coco,
+        classifications: notatus.export_classifications,
     })
     .ok()
 }
@@ -72,6 +74,7 @@ fn export_dialog_content(
                     snapshot.clone(),
                     snapshot_read.yolo,
                     snapshot_read.coco,
+                    snapshot_read.classifications,
                 )),
         )
         .child(
@@ -93,7 +96,11 @@ fn export_dialog_content(
                     annotation_count_label(snapshot_read.annotation_count),
                 ))
                 .child(metric(
-                    "Exportable",
+                    "Image labels",
+                    label_count_label(snapshot_read.classification_count),
+                ))
+                .child(metric(
+                    "Exportable objects",
                     annotation_count_label(snapshot_read.exportable_count),
                 ))
                 .child(metric("Filter", "All non-rejected".to_string()))
@@ -107,9 +114,14 @@ fn export_dialog_format_buttons(
     snapshot: Rc<RefCell<ExportDialogSnapshot>>,
     yolo: bool,
     coco: bool,
+    classifications: bool,
 ) -> impl IntoElement {
     let yolo_view = view.clone();
     let yolo_snapshot = snapshot.clone();
+    let coco_view = view.clone();
+    let coco_snapshot = snapshot.clone();
+    let classification_view = view;
+    let classification_snapshot = snapshot;
     div()
         .flex()
         .items_center()
@@ -123,7 +135,7 @@ fn export_dialog_format_buttons(
                     {
                         let mut snapshot = yolo_snapshot.borrow_mut();
                         snapshot.yolo = !snapshot.yolo;
-                        if !snapshot.yolo && !snapshot.coco {
+                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
                             snapshot.yolo = true;
                         }
                     }
@@ -139,14 +151,32 @@ fn export_dialog_format_buttons(
                 .selected(coco)
                 .on_click(move |_, _, cx| {
                     {
-                        let mut snapshot = snapshot.borrow_mut();
+                        let mut snapshot = coco_snapshot.borrow_mut();
                         snapshot.coco = !snapshot.coco;
-                        if !snapshot.yolo && !snapshot.coco {
+                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
                             snapshot.coco = true;
                         }
                     }
-                    let _ = view.update(cx, |notatus, cx| {
+                    let _ = coco_view.update(cx, |notatus, cx| {
                         notatus.toggle_export_coco(cx);
+                    });
+                }),
+        )
+        .child(
+            Button::new("export-dialog-format-classification")
+                .small()
+                .label("Classification")
+                .selected(classifications)
+                .on_click(move |_, _, cx| {
+                    {
+                        let mut snapshot = classification_snapshot.borrow_mut();
+                        snapshot.classifications = !snapshot.classifications;
+                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
+                            snapshot.classifications = true;
+                        }
+                    }
+                    let _ = classification_view.update(cx, |notatus, cx| {
+                        notatus.toggle_export_classifications(cx);
                     });
                 }),
         )
@@ -156,18 +186,31 @@ struct ExportDialogSnapshot {
     media_count: usize,
     label_count: usize,
     annotation_count: usize,
+    classification_count: usize,
     exportable_count: usize,
     yolo: bool,
     coco: bool,
+    classifications: bool,
 }
 
 impl ExportDialogSnapshot {
     fn output_label(&self) -> String {
-        match (self.yolo, self.coco) {
-            (true, true) => "YOLO and COCO".to_string(),
-            (true, false) => "YOLO".to_string(),
-            (false, true) => "COCO".to_string(),
-            (false, false) => "None".to_string(),
+        let mut formats = Vec::new();
+        if self.yolo {
+            formats.push("YOLO");
+        }
+        if self.coco {
+            formats.push("COCO");
+        }
+        if self.classifications {
+            formats.push("Classification");
+        }
+
+        match formats.len() {
+            0 => "None".to_string(),
+            1 => formats[0].to_string(),
+            2 => format!("{} and {}", formats[0], formats[1]),
+            _ => format!("{}, {}, and {}", formats[0], formats[1], formats[2]),
         }
     }
 }

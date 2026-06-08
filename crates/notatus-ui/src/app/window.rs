@@ -30,6 +30,7 @@ pub(super) struct NotatusWindow {
     pub(super) canvas_cursor: Option<gpui::CursorStyle>,
     pub(super) export_yolo: bool,
     pub(super) export_coco: bool,
+    pub(super) export_classifications: bool,
     pub(super) canvas_image_layout: SharedImageLayout,
     pub(super) _subscriptions: Vec<Subscription>,
 }
@@ -119,6 +120,7 @@ impl NotatusWindow {
             canvas_cursor: None,
             export_yolo: true,
             export_coco: true,
+            export_classifications: true,
             canvas_image_layout: Rc::new(RefCell::new(None)),
             _subscriptions,
         }

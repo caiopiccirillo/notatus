@@ -57,10 +57,34 @@ fn export_workflow_issue_tracks_required_steps(cx: &mut TestAppContext) {
 
         notatus.export_yolo = false;
         notatus.export_coco = false;
+        notatus.export_classifications = false;
         assert_eq!(
             notatus.export_workflow_issue(),
             Some(export_commands::ExportWorkflowIssue::Format)
         );
+    });
+}
+
+#[gpui::test]
+fn classification_only_project_can_export(cx: &mut TestAppContext) {
+    let (_, view) = open_test_window(cx);
+
+    view.update(cx, |notatus, _| {
+        let label_id = notatus.state.add_label("Outdoor");
+        let asset_id = notatus
+            .state
+            .add_local_image_asset("/tmp/notatus-test.png", 100, 100)
+            .unwrap();
+        notatus
+            .state
+            .toggle_image_classification(asset_id, label_id)
+            .unwrap();
+
+        notatus.export_yolo = false;
+        notatus.export_coco = false;
+        notatus.export_classifications = true;
+
+        assert_eq!(notatus.export_workflow_issue(), None);
     });
 }
 
@@ -71,14 +95,23 @@ fn export_format_toggles_keep_at_least_one_format(cx: &mut TestAppContext) {
     view.update(cx, |notatus, cx| {
         assert!(notatus.export_yolo);
         assert!(notatus.export_coco);
+        assert!(notatus.export_classifications);
 
         notatus.toggle_export_yolo(cx);
         assert!(!notatus.export_yolo);
         assert!(notatus.export_coco);
+        assert!(notatus.export_classifications);
 
         notatus.toggle_export_coco(cx);
         assert!(!notatus.export_yolo);
-        assert!(notatus.export_coco);
+        assert!(!notatus.export_coco);
+        assert!(notatus.export_classifications);
+        assert_eq!(notatus.status_message, None);
+
+        notatus.toggle_export_classifications(cx);
+        assert!(!notatus.export_yolo);
+        assert!(!notatus.export_coco);
+        assert!(notatus.export_classifications);
         assert_eq!(
             notatus.status_message.as_deref(),
             Some("Select an export format")
@@ -86,7 +119,8 @@ fn export_format_toggles_keep_at_least_one_format(cx: &mut TestAppContext) {
 
         notatus.toggle_export_yolo(cx);
         assert!(notatus.export_yolo);
-        assert!(notatus.export_coco);
+        assert!(!notatus.export_coco);
+        assert!(notatus.export_classifications);
         assert_eq!(notatus.status_message, None);
     });
 }

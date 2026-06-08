@@ -126,7 +126,6 @@ pub(super) fn exportable_annotation_count(dataset: &notatus_core::Dataset) -> us
         .annotations
         .iter()
         .filter(|annotation| filter.accepts(annotation))
-        .filter(|annotation| matches!(annotation.geometry, AnnotationGeometry::Bbox(_)))
         .count()
 }
 

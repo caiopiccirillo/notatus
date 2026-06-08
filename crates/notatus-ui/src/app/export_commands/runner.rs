@@ -43,6 +43,7 @@ pub(in crate::app) fn export_annotations(
                     dataset: notatus.state.dataset.clone(),
                     yolo: notatus.export_yolo,
                     coco: notatus.export_coco,
+                    classifications: notatus.export_classifications,
                 });
                 let result = export_request
                     .map_err(|_| "window closed".to_string())
@@ -92,6 +93,7 @@ struct ExportRequest {
     dataset: notatus_core::Dataset,
     yolo: bool,
     coco: bool,
+    classifications: bool,
 }
 
 struct ExportResultNotification;
@@ -127,6 +129,7 @@ fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, Strin
     let filter = notatus_export::AnnotationFilter::all_non_rejected();
     let mut formats = Vec::new();
     let mut annotation_count = 0;
+    let mut classification_count = 0;
 
     if request.yolo {
         let summary = notatus_export::yolo::write_detection_export(
@@ -150,10 +153,22 @@ fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, Strin
         annotation_count = annotation_count.max(summary.annotation_count);
     }
 
+    if request.classifications {
+        let summary = notatus_export::classification::write_classification_export(
+            &request.dataset,
+            output_dir.join("classification"),
+        )
+        .map_err(|error| error.to_string())?;
+        formats.push("Classification");
+        classification_count = summary.classification_count;
+    }
+
     Ok(format!(
-        "Exported {} annotation{} as {}",
+        "Exported {} object annotation{} and {} image label{} as {}",
         annotation_count,
         plural(annotation_count),
+        classification_count,
+        plural(classification_count),
         formats.join(" and ")
     ))
 }

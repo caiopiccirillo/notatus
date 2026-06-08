@@ -52,9 +52,11 @@ impl NotatusWindow {
             Some(ExportWorkflowIssue::Labels)
         } else if self.state.dataset.assets.is_empty() {
             Some(ExportWorkflowIssue::Media)
-        } else if exportable_annotation_count(&self.state.dataset) == 0 {
+        } else if exportable_annotation_count(&self.state.dataset) == 0
+            && exportable_classification_count(&self.state.dataset) == 0
+        {
             Some(ExportWorkflowIssue::Annotations)
-        } else if !self.export_yolo && !self.export_coco {
+        } else if !self.export_yolo && !self.export_coco && !self.export_classifications {
             Some(ExportWorkflowIssue::Format)
         } else {
             None
@@ -73,7 +75,7 @@ impl NotatusWindow {
 
     pub(in crate::app) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
         self.export_yolo = !self.export_yolo;
-        if !self.export_yolo && !self.export_coco {
+        if !self.export_yolo && !self.export_coco && !self.export_classifications {
             self.export_yolo = true;
             self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
         } else {
@@ -84,7 +86,7 @@ impl NotatusWindow {
 
     pub(in crate::app) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
         self.export_coco = !self.export_coco;
-        if !self.export_yolo && !self.export_coco {
+        if !self.export_yolo && !self.export_coco && !self.export_classifications {
             self.export_coco = true;
             self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
         } else {
@@ -92,6 +94,25 @@ impl NotatusWindow {
         }
         cx.notify();
     }
+
+    pub(in crate::app) fn toggle_export_classifications(&mut self, cx: &mut Context<Self>) {
+        self.export_classifications = !self.export_classifications;
+        if !self.export_yolo && !self.export_coco && !self.export_classifications {
+            self.export_classifications = true;
+            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
+        } else {
+            self.status_message = None;
+        }
+        cx.notify();
+    }
+}
+
+fn exportable_classification_count(dataset: &notatus_core::Dataset) -> usize {
+    dataset
+        .classifications
+        .iter()
+        .filter(|classification| classification.review_state != notatus_core::ReviewState::Rejected)
+        .count()
 }
 
 pub(super) fn push_export_workflow_notification(
