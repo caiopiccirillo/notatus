@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use time::OffsetDateTime;
+use tracing;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -72,7 +73,12 @@ pub struct Dataset {
 }
 
 impl Dataset {
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        tracing::Span::current().record("name", &name);
+        tracing::debug!(name, "creating dataset");
+
         Self {
             manifest: ProjectManifest::new(name),
             labels: Vec::new(),
@@ -82,46 +88,77 @@ impl Dataset {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn rename_project(&mut self, name: impl Into<String>) {
-        self.manifest.project.name = name.into();
+        let name = name.into();
+        tracing::Span::current().record("name", &name);
+        tracing::debug!(name, "renaming project");
+
+        self.manifest.project.name = name;
         self.manifest.project.updated_at = now_utc();
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
+        let name = name.into();
+        tracing::Span::current().record("name", &name);
+
         let label = Label::new(name);
         let id = label.id;
+        tracing::debug!(%id, name = label.name, "adding label");
         self.labels.push(label);
         id
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset.id, asset_kind = ?asset.kind))]
     pub fn add_asset(&mut self, asset: AssetRecord) -> AssetId {
         let id = asset.id;
+        tracing::debug!(%id, "adding asset");
         self.assets.push(asset);
         id
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %annotation.id, asset_id = %annotation.asset_id, label_id = %annotation.label_id))]
     pub fn add_annotation(&mut self, annotation: AnnotationRecord) -> AnnotationId {
         let id = annotation.id;
+        tracing::debug!(%id, "adding annotation");
         self.annotations.push(annotation);
         id
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(classification_id = %classification.id, asset_id = %classification.asset_id, label_id = %classification.label_id))]
     pub fn add_classification(&mut self, classification: ClassificationRecord) -> ClassificationId {
         let id = classification.id;
+        tracing::debug!(%id, "adding classification");
         self.classifications.push(classification);
         id
     }
 
     pub fn asset_by_id(&self, id: AssetId) -> Option<&AssetRecord> {
-        self.assets.iter().find(|asset| asset.id == id)
+        let found = self.assets.iter().find(|asset| asset.id == id);
+        if found.is_none() {
+            tracing::debug!(%id, "asset not found by id");
+        }
+        found
     }
 
     pub fn label_by_id(&self, id: LabelId) -> Option<&Label> {
-        self.labels.iter().find(|label| label.id == id)
+        let found = self.labels.iter().find(|label| label.id == id);
+        if found.is_none() {
+            tracing::debug!(%id, "label not found by id");
+        }
+        found
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        labels = self.labels.len(),
+        assets = self.assets.len(),
+        annotations = self.annotations.len(),
+        classifications = self.classifications.len(),
+    ))]
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.manifest.schema_version != CURRENT_SCHEMA_VERSION {
+            tracing::warn!(found = self.manifest.schema_version, supported = CURRENT_SCHEMA_VERSION, "unsupported schema version");
             return Err(ValidationError::UnsupportedSchemaVersion {
                 found: self.manifest.schema_version,
                 supported: CURRENT_SCHEMA_VERSION,
@@ -129,6 +166,7 @@ impl Dataset {
         }
 
         if self.manifest.project.name.trim().is_empty() {
+            tracing::warn!(project_id = %self.manifest.project.id, "empty project name");
             return Err(ValidationError::EmptyProjectName {
                 project_id: self.manifest.project.id,
             });
@@ -137,9 +175,11 @@ impl Dataset {
         let mut label_ids = BTreeSet::new();
         for label in &self.labels {
             if label.name.trim().is_empty() {
+                tracing::warn!(label_id = %label.id, "empty label name");
                 return Err(ValidationError::EmptyLabelName { label_id: label.id });
             }
             if !label_ids.insert(label.id) {
+                tracing::warn!(label_id = %label.id, "duplicate label id");
                 return Err(ValidationError::DuplicateLabel { label_id: label.id });
             }
         }
@@ -147,9 +187,11 @@ impl Dataset {
         let mut asset_ids = BTreeSet::new();
         for asset in &self.assets {
             if !asset_ids.insert(asset.id) {
+                tracing::warn!(asset_id = %asset.id, "duplicate asset id");
                 return Err(ValidationError::DuplicateAsset { asset_id: asset.id });
             }
             if asset.dimensions.width == 0 || asset.dimensions.height == 0 {
+                tracing::warn!(asset_id = %asset.id, width = asset.dimensions.width, height = asset.dimensions.height, "invalid asset dimensions");
                 return Err(ValidationError::InvalidAssetDimensions {
                     asset_id: asset.id,
                     width: asset.dimensions.width,
@@ -161,17 +203,20 @@ impl Dataset {
         let mut annotation_ids = BTreeSet::new();
         for annotation in &self.annotations {
             if !annotation_ids.insert(annotation.id) {
+                tracing::warn!(annotation_id = %annotation.id, "duplicate annotation id");
                 return Err(ValidationError::DuplicateAnnotation {
                     annotation_id: annotation.id,
                 });
             }
             if !asset_ids.contains(&annotation.asset_id) {
+                tracing::warn!(annotation_id = %annotation.id, asset_id = %annotation.asset_id, "unknown asset reference");
                 return Err(ValidationError::UnknownAsset {
                     annotation_id: annotation.id,
                     asset_id: annotation.asset_id,
                 });
             }
             if !label_ids.contains(&annotation.label_id) {
+                tracing::warn!(annotation_id = %annotation.id, label_id = %annotation.label_id, "unknown label reference");
                 return Err(ValidationError::UnknownLabel {
                     annotation_id: annotation.id,
                     label_id: annotation.label_id,
@@ -180,6 +225,7 @@ impl Dataset {
             if let Some(confidence) = annotation.confidence
                 && (!confidence.is_finite() || !(0.0..=1.0).contains(&confidence))
             {
+                tracing::warn!(annotation_id = %annotation.id, confidence, "invalid confidence value");
                 return Err(ValidationError::InvalidConfidence {
                     annotation_id: annotation.id,
                     confidence,
@@ -201,17 +247,20 @@ impl Dataset {
         let mut classification_ids = BTreeSet::new();
         for classification in &self.classifications {
             if !classification_ids.insert(classification.id) {
+                tracing::warn!(classification_id = %classification.id, "duplicate classification id");
                 return Err(ValidationError::DuplicateClassification {
                     classification_id: classification.id,
                 });
             }
             if !asset_ids.contains(&classification.asset_id) {
+                tracing::warn!(classification_id = %classification.id, asset_id = %classification.asset_id, "unknown classification asset");
                 return Err(ValidationError::UnknownClassificationAsset {
                     classification_id: classification.id,
                     asset_id: classification.asset_id,
                 });
             }
             if !label_ids.contains(&classification.label_id) {
+                tracing::warn!(classification_id = %classification.id, label_id = %classification.label_id, "unknown classification label");
                 return Err(ValidationError::UnknownClassificationLabel {
                     classification_id: classification.id,
                     label_id: classification.label_id,
@@ -220,6 +269,7 @@ impl Dataset {
             if let Some(confidence) = classification.confidence
                 && (!confidence.is_finite() || !(0.0..=1.0).contains(&confidence))
             {
+                tracing::warn!(classification_id = %classification.id, confidence, "invalid classification confidence");
                 return Err(ValidationError::InvalidClassificationConfidence {
                     classification_id: classification.id,
                     confidence,
@@ -227,6 +277,7 @@ impl Dataset {
             }
         }
 
+        tracing::debug!("dataset validation passed");
         Ok(())
     }
 }
@@ -307,12 +358,13 @@ pub struct AssetRecord {
 }
 
 impl AssetRecord {
+    #[tracing::instrument(level = "debug", skip_all, fields(width = width, height = height))]
     pub fn new_image(
         location: AssetLocation,
         width: u32,
         height: u32,
     ) -> Result<Self, GeometryError> {
-        Ok(Self {
+        let record = Self {
             id: AssetId::new(),
             kind: AssetKind::Image,
             location,
@@ -320,7 +372,9 @@ impl AssetRecord {
             content_hash: None,
             split: DatasetSplit::Unassigned,
             metadata: Metadata::new(),
-        })
+        };
+        tracing::debug!(asset_id = %record.id, "created image asset");
+        Ok(record)
     }
 }
 
@@ -376,22 +430,33 @@ pub struct AnnotationRecord {
 }
 
 impl AnnotationRecord {
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+    ))]
     pub fn new_human(
         asset_id: AssetId,
         label_id: LabelId,
         geometry: AnnotationGeometry,
         user_id: Option<String>,
     ) -> Self {
-        Self::new(
+        let record = Self::new(
             asset_id,
             label_id,
             geometry,
             AnnotationSource::Human { user_id },
             None,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(annotation_id = %record.id, "created human annotation");
+        record
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+        model_name = %model.name,
+    ))]
     pub fn new_model(
         asset_id: AssetId,
         label_id: LabelId,
@@ -399,16 +464,23 @@ impl AnnotationRecord {
         model: ModelProvenance,
         confidence: Option<f32>,
     ) -> Self {
-        Self::new(
+        let record = Self::new(
             asset_id,
             label_id,
             geometry,
             AnnotationSource::Model(model),
             confidence,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(annotation_id = %record.id, confidence, "created model annotation");
+        record
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+        format = tracing::field::Empty,
+    ))]
     pub fn new_imported(
         asset_id: AssetId,
         label_id: LabelId,
@@ -416,21 +488,26 @@ impl AnnotationRecord {
         format: impl Into<String>,
         source_id: Option<String>,
     ) -> Self {
-        Self::new(
+        let format = format.into();
+        let record = Self::new(
             asset_id,
             label_id,
             geometry,
             AnnotationSource::Imported(ImportProvenance {
-                format: format.into(),
+                format: format.clone(),
                 source_id,
                 metadata: Metadata::new(),
             }),
             None,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(annotation_id = %record.id, %format, "created imported annotation");
+        record
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %self.id))]
     pub fn accept(&mut self) {
+        tracing::debug!(annotation_id = %self.id, "accepting annotation");
         self.review_state = ReviewState::Accepted;
         self.updated_at = now_utc();
     }
@@ -477,48 +554,69 @@ pub struct ClassificationRecord {
 }
 
 impl ClassificationRecord {
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+    ))]
     pub fn new_human(asset_id: AssetId, label_id: LabelId, user_id: Option<String>) -> Self {
-        Self::new(
+        let record = Self::new(
             asset_id,
             label_id,
             AnnotationSource::Human { user_id },
             None,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(classification_id = %record.id, "created human classification");
+        record
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+        model_name = %model.name,
+    ))]
     pub fn new_model(
         asset_id: AssetId,
         label_id: LabelId,
         model: ModelProvenance,
         confidence: Option<f32>,
     ) -> Self {
-        Self::new(
+        let record = Self::new(
             asset_id,
             label_id,
             AnnotationSource::Model(model),
             confidence,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(classification_id = %record.id, confidence, "created model classification");
+        record
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        asset_id = %asset_id,
+        label_id = %label_id,
+        format = tracing::field::Empty,
+    ))]
     pub fn new_imported(
         asset_id: AssetId,
         label_id: LabelId,
         format: impl Into<String>,
         source_id: Option<String>,
     ) -> Self {
-        Self::new(
+        let format = format.into();
+        let record = Self::new(
             asset_id,
             label_id,
             AnnotationSource::Imported(ImportProvenance {
-                format: format.into(),
+                format: format.clone(),
                 source_id,
                 metadata: Metadata::new(),
             }),
             None,
             ReviewState::Draft,
-        )
+        );
+        tracing::debug!(classification_id = %record.id, %format, "created imported classification");
+        record
     }
 
     fn new(
