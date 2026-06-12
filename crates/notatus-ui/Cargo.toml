@@ -15,6 +15,8 @@ notatus-core.workspace = true
 notatus-export.workspace = true
 notatus-infer.workspace = true
 notatus-storage.workspace = true
+notatus-telemetry.workspace = true
+tracing.workspace = true
 gpui = { version = "0.2", optional = true }
 gpui-component = { version = "0.5.1", optional = true }
 gpui-component-assets = { version = "0.5.1", optional = true }

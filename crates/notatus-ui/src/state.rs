@@ -5,6 +5,7 @@ use notatus_core::{
 };
 use std::error::Error;
 use std::fmt;
+use tracing;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AnnotationTool {
@@ -42,7 +43,10 @@ pub struct UiState {
 }
 
 impl UiState {
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn new_project(name: impl Into<String>) -> Self {
+        let name = name.into();
+        tracing::debug!(name, "creating new project");
         Self {
             dataset: Dataset::new(name),
             active_tool: AnnotationTool::Select,
@@ -53,8 +57,15 @@ impl UiState {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        project_name = %dataset.manifest.project.name,
+        labels = dataset.labels.len(),
+        assets = dataset.assets.len(),
+        annotations = dataset.annotations.len(),
+    ))]
     pub fn from_dataset(dataset: Dataset) -> Result<Self, UiMutationError> {
         dataset.validate()?;
+        tracing::debug!("loading dataset into UI state");
         Ok(Self {
             dataset,
             active_tool: AnnotationTool::Select,
@@ -65,34 +76,45 @@ impl UiState {
         })
     }
 
+    #[tracing::instrument(level = "trace", skip_all, fields(tool = ?tool))]
     pub fn set_tool(&mut self, tool: AnnotationTool) {
+        tracing::trace!(tool = %tool.display_name(), "tool changed");
         self.active_tool = tool;
     }
 
     pub fn mark_saved(&mut self) {
+        tracing::trace!("marking dataset as saved");
         self.dirty = false;
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn rename_project(&mut self, name: impl Into<String>) -> Result<(), UiMutationError> {
         let name = name.into();
         if name.trim().is_empty() {
+            tracing::warn!("attempted to rename project to empty name");
             return Err(UiMutationError::EmptyProjectName);
         }
 
+        tracing::debug!(name, "renaming project");
         self.dataset.rename_project(name);
         self.dirty = true;
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
+        let name = name.into();
         let label_id = self.dataset.add_label(name);
         self.selected_label = Some(label_id);
         self.dirty = true;
+        tracing::debug!(label_id = %label_id, "label added via UI");
         label_id
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(label_id = %label_id))]
     pub fn select_label(&mut self, label_id: LabelId) -> Result<(), UiMutationError> {
         if self.dataset.label_by_id(label_id).is_none() {
+            tracing::warn!(%label_id, "selected missing label");
             return Err(UiMutationError::MissingLabel { label_id });
         }
 
@@ -101,6 +123,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(label_id = %label_id, name = tracing::field::Empty))]
     pub fn update_label_name(
         &mut self,
         label_id: LabelId,
@@ -108,6 +131,7 @@ impl UiState {
     ) -> Result<(), UiMutationError> {
         let name = name.into();
         if name.trim().is_empty() {
+            tracing::warn!(%label_id, "attempted to set empty label name");
             return Err(UiMutationError::EmptyLabelName { label_id });
         }
 
@@ -122,6 +146,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(label_id = %label_id))]
     pub fn update_label_color(
         &mut self,
         label_id: LabelId,
@@ -138,6 +163,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(label_id = %label_id))]
     pub fn remove_label(&mut self, label_id: LabelId) -> Result<RemovalSummary, UiMutationError> {
         let label_index = self
             .dataset
@@ -171,27 +197,34 @@ impl UiState {
         }
 
         self.dirty = true;
-        Ok(RemovalSummary {
+        let summary = RemovalSummary {
             annotations: original_annotation_count - self.dataset.annotations.len(),
             classifications: original_classification_count - self.dataset.classifications.len(),
-        })
+        };
+        tracing::info!(label_id = %label_id, removed_annotations = summary.annotations, removed_classifications = summary.classifications, "label removed");
+        Ok(summary)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(width = width, height = height))]
     pub fn add_local_image_asset(
         &mut self,
         path: impl Into<String>,
         width: u32,
         height: u32,
     ) -> Result<AssetId, UiMutationError> {
+        let path = path.into();
         let asset = AssetRecord::new_image(AssetLocation::local(path), width, height)?;
         let asset_id = self.dataset.add_asset(asset);
         self.selected_asset = Some(asset_id);
         self.dirty = true;
+        tracing::debug!(asset_id = %asset_id, "image asset added via UI");
         Ok(asset_id)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id))]
     pub fn select_asset(&mut self, asset_id: AssetId) -> Result<(), UiMutationError> {
         if self.dataset.asset_by_id(asset_id).is_none() {
+            tracing::warn!(%asset_id, "selected missing asset");
             return Err(UiMutationError::MissingAsset { asset_id });
         }
 
@@ -200,6 +233,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id))]
     pub fn remove_asset(&mut self, asset_id: AssetId) -> Result<RemovalSummary, UiMutationError> {
         let asset_index = self
             .dataset
@@ -233,12 +267,15 @@ impl UiState {
         }
 
         self.dirty = true;
-        Ok(RemovalSummary {
+        let summary = RemovalSummary {
             annotations: original_annotation_count - self.dataset.annotations.len(),
             classifications: original_classification_count - self.dataset.classifications.len(),
-        })
+        };
+        tracing::info!(asset_id = %asset_id, removed_annotations = summary.annotations, removed_classifications = summary.classifications, "asset removed");
+        Ok(summary)
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn select_annotation(
         &mut self,
         annotation_id: Option<AnnotationId>,
@@ -261,12 +298,14 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %annotation_id, label_id = %label_id))]
     pub fn update_annotation_label(
         &mut self,
         annotation_id: AnnotationId,
         label_id: LabelId,
     ) -> Result<(), UiMutationError> {
         if self.dataset.label_by_id(label_id).is_none() {
+            tracing::warn!(%label_id, "annotation update: missing label");
             return Err(UiMutationError::MissingLabel { label_id });
         }
 
@@ -285,6 +324,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %annotation_id))]
     pub fn update_annotation_bbox(
         &mut self,
         annotation_id: AnnotationId,
@@ -313,6 +353,7 @@ impl UiState {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id, label_id = %label_id))]
     pub fn add_human_bbox(
         &mut self,
         asset_id: AssetId,
@@ -340,9 +381,11 @@ impl UiState {
         self.selected_annotation = None;
         self.selected_label = Some(label_id);
         self.dirty = true;
+        tracing::info!(%annotation_id, asset_id = %asset_id, label_id = %label_id, "human bbox annotation created");
         Ok(annotation_id)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id, label_id = %label_id))]
     pub fn add_human_polygon(
         &mut self,
         asset_id: AssetId,
@@ -370,9 +413,11 @@ impl UiState {
         self.selected_annotation = None;
         self.selected_label = Some(label_id);
         self.dirty = true;
+        tracing::info!(%annotation_id, asset_id = %asset_id, label_id = %label_id, "human polygon annotation created");
         Ok(annotation_id)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id, label_id = %label_id))]
     pub fn toggle_image_classification(
         &mut self,
         asset_id: AssetId,
@@ -396,6 +441,7 @@ impl UiState {
             self.dataset.classifications.remove(index);
             self.selected_label = Some(label_id);
             self.dirty = true;
+            tracing::debug!(asset_id = %asset_id, label_id = %label_id, "classification toggled off");
             return Ok(None);
         }
 
@@ -405,9 +451,11 @@ impl UiState {
         self.selected_asset = Some(asset_id);
         self.selected_label = Some(label_id);
         self.dirty = true;
+        tracing::debug!(%classification_id, asset_id = %asset_id, label_id = %label_id, "classification toggled on");
         Ok(Some(classification_id))
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(classification_id = %classification_id))]
     pub fn remove_classification(
         &mut self,
         classification_id: ClassificationId,
@@ -423,6 +471,7 @@ impl UiState {
         self.selected_asset = Some(classification.asset_id);
         self.selected_label = Some(classification.label_id);
         self.dirty = true;
+        tracing::debug!(%classification_id, "classification removed");
         Ok(())
     }
 
