@@ -51,19 +51,26 @@ pub struct InferenceRequest {
 }
 
 impl InferenceRequest {
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        request_id = tracing::field::Empty,
+        asset_id = %asset.id,
+        label_count = labels.len(),
+    ))]
     pub fn object_detection(
         asset: AssetRecord,
         labels: Vec<Label>,
         resolved_local_path: Option<String>,
     ) -> Self {
-        Self {
+        let request = Self {
             request_id: InferenceRequestId::new(),
             task: InferenceTask::ObjectDetection,
             asset,
             resolved_local_path,
             labels,
             metadata: Metadata::new(),
-        }
+        };
+        tracing::debug!(request_id = %request.request_id.0, "created inference request");
+        request
     }
 }
 
@@ -141,20 +148,30 @@ pub struct ExternalModelSpec {
     pub env: BTreeMap<String, String>,
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(request_id = %request.request_id.0))]
 pub fn encode_request(request: &InferenceRequest) -> Result<String, InferenceProtocolError> {
+    tracing::debug!(request_id = %request.request_id.0, "encoding inference request");
     encode_line(request)
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn decode_request(line: &str) -> Result<InferenceRequest, InferenceProtocolError> {
-    decode_line(line)
+    let request: InferenceRequest = decode_line(line)?;
+    tracing::debug!(request_id = %request.request_id.0, "decoded inference request");
+    Ok(request)
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(request_id = %response.request_id.0))]
 pub fn encode_response(response: &InferenceResponse) -> Result<String, InferenceProtocolError> {
+    tracing::debug!(request_id = %response.request_id.0, predictions = response.predictions.len(), "encoding inference response");
     encode_line(response)
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn decode_response(line: &str) -> Result<InferenceResponse, InferenceProtocolError> {
-    decode_line(line)
+    let response: InferenceResponse = decode_line(line)?;
+    tracing::debug!(request_id = %response.request_id.0, predictions = response.predictions.len(), "decoded inference response");
+    Ok(response)
 }
 
 fn encode_line<T>(value: &T) -> Result<String, InferenceProtocolError>
