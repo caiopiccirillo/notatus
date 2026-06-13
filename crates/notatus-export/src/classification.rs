@@ -20,6 +20,9 @@ pub struct ClassificationExportSummary {
     pub classification_count: usize,
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(
+    classifications = dataset.classifications.len(),
+))]
 pub fn export_classifications(
     dataset: &Dataset,
 ) -> Result<Vec<ClassificationExportRow>, ExportError> {
@@ -55,9 +58,11 @@ pub fn export_classifications(
         });
     }
 
+    tracing::info!(count = rows.len(), "classification export complete");
     Ok(rows)
 }
 
+#[tracing::instrument(level = "info", skip_all, fields(output_dir = %output_dir.as_ref().display()))]
 pub fn write_classification_export(
     dataset: &Dataset,
     output_dir: impl AsRef<Path>,
@@ -76,9 +81,12 @@ pub fn write_classification_export(
     let csv_path = output_dir.join("classifications.csv");
     write_file(&csv_path, &classification_csv(&rows))?;
 
-    Ok(ClassificationExportSummary {
+    let summary = ClassificationExportSummary {
         classification_count: rows.len(),
-    })
+    };
+
+    tracing::info!(count = summary.classification_count, "classification export written");
+    Ok(summary)
 }
 
 fn classification_csv(rows: &[ClassificationExportRow]) -> String {

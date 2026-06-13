@@ -56,6 +56,11 @@ pub struct CocoExportSummary {
     pub annotation_count: usize,
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(
+    assets = dataset.assets.len(),
+    labels = dataset.labels.len(),
+    annotations = dataset.annotations.len(),
+))]
 pub fn export_detection(
     dataset: &Dataset,
     filter: &AnnotationFilter,
@@ -75,7 +80,7 @@ pub fn export_detection(
         .map(|(index, asset)| (asset.id, index as u64 + 1))
         .collect();
 
-    let images = dataset
+    let images: Vec<CocoImage> = dataset
         .assets
         .iter()
         .map(|asset| CocoImage {
@@ -88,7 +93,7 @@ pub fn export_detection(
         })
         .collect();
 
-    let categories = dataset
+    let categories: Vec<CocoCategory> = dataset
         .labels
         .iter()
         .map(|label| CocoCategory {
@@ -146,6 +151,12 @@ pub fn export_detection(
         });
     }
 
+    tracing::info!(
+        image_count = images.len(),
+        category_count = categories.len(),
+        annotation_count = annotations.len(),
+        "COCO detection export complete"
+    );
     Ok(CocoDataset {
         info: CocoInfo {
             description: dataset.manifest.project.name.clone(),
@@ -186,6 +197,7 @@ fn flatten_polygon(polygon: &Polygon) -> Vec<f64> {
         .collect()
 }
 
+#[tracing::instrument(level = "info", skip_all, fields(output_dir = %output_dir.as_ref().display()))]
 pub fn write_detection_export(
     dataset: &Dataset,
     filter: &AnnotationFilter,
@@ -202,11 +214,19 @@ pub fn write_detection_export(
     })?;
     write_file(&path, &contents)?;
 
-    Ok(CocoExportSummary {
+    let summary = CocoExportSummary {
         image_count: exported.images.len(),
         category_count: exported.categories.len(),
         annotation_count: exported.annotations.len(),
-    })
+    };
+
+    tracing::info!(
+        image_count = summary.image_count,
+        category_count = summary.category_count,
+        annotation_count = summary.annotation_count,
+        "COCO detection export written"
+    );
+    Ok(summary)
 }
 
 fn create_dir_all(path: &Path) -> Result<(), ExportError> {

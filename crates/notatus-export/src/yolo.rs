@@ -24,6 +24,10 @@ pub struct YoloExportSummary {
     pub annotation_count: usize,
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(
+    assets = dataset.assets.len(),
+    annotations = dataset.annotations.len(),
+))]
 pub fn export_detection(
     dataset: &Dataset,
     filter: &AnnotationFilter,
@@ -64,9 +68,11 @@ pub fn export_detection(
         });
     }
 
+    tracing::info!(file_count = files.len(), "YOLO detection export complete");
     Ok(files)
 }
 
+#[tracing::instrument(level = "info", skip_all, fields(output_dir = %output_dir.as_ref().display()))]
 pub fn write_detection_export(
     dataset: &Dataset,
     filter: &AnnotationFilter,
@@ -88,13 +94,22 @@ pub fn write_detection_export(
         write_file(&path, &file.contents)?;
     }
 
-    Ok(YoloExportSummary {
+    let summary = YoloExportSummary {
         class_count: dataset.labels.len(),
         annotation_file_count: files.len(),
         annotation_count,
-    })
+    };
+
+    tracing::info!(
+        class_count = summary.class_count,
+        file_count = summary.annotation_file_count,
+        annotation_count = summary.annotation_count,
+        "YOLO detection export written"
+    );
+    Ok(summary)
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(file_count = files.len()))]
 pub fn import_detection(
     dataset: &Dataset,
     files: &[YoloImportFile],
@@ -160,6 +175,7 @@ pub fn import_detection(
         }
     }
 
+    tracing::info!(count = annotations.len(), "YOLO detection import complete");
     Ok(annotations)
 }
 
