@@ -30,14 +30,19 @@ pub struct LocalProjectStore {
 
 impl LocalProjectStore {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        let root = root.into();
+        tracing::debug!(root = %root.display(), "creating local project store");
+        Self { root }
     }
 
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    #[tracing::instrument(skip_all, fields(name = tracing::field::Empty))]
     pub fn initialize(&self, name: impl Into<String>) -> Result<Dataset, StorageError> {
+        let name = name.into();
+        tracing::debug!(name, "initializing project");
         let dataset = Dataset::new(name);
         self.save_dataset(&dataset)?;
         Ok(dataset)
@@ -65,7 +70,10 @@ impl LocalProjectStore {
 }
 
 impl ProjectStore for LocalProjectStore {
+    #[tracing::instrument(level = "debug", skip_all, fields(root = %self.root.display()))]
     fn load_dataset(&self) -> Result<Dataset, StorageError> {
+        tracing::info!(root = %self.root.display(), "loading dataset from disk");
+
         let manifest: ProjectManifest = read_json(&self.manifest_path())?;
         let labels: Vec<Label> = read_json_or_default(&self.labels_path())?;
         let assets: Vec<AssetRecord> = read_jsonl_or_default(&self.assets_path())?;
@@ -81,10 +89,27 @@ impl ProjectStore for LocalProjectStore {
             classifications,
         };
         dataset.validate()?;
+
+        tracing::info!(
+            labels = dataset.labels.len(),
+            assets = dataset.assets.len(),
+            annotations = dataset.annotations.len(),
+            classifications = dataset.classifications.len(),
+            "dataset loaded successfully"
+        );
         Ok(dataset)
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(
+        root = %self.root.display(),
+        labels = dataset.labels.len(),
+        assets = dataset.assets.len(),
+        annotations = dataset.annotations.len(),
+        classifications = dataset.classifications.len(),
+    ))]
     fn save_dataset(&self, dataset: &Dataset) -> Result<(), StorageError> {
+        tracing::info!(root = %self.root.display(), "saving dataset to disk");
+
         dataset.validate()?;
         fs::create_dir_all(&self.root).map_err(|source| StorageError::Io {
             path: self.root.clone(),
@@ -96,14 +121,19 @@ impl ProjectStore for LocalProjectStore {
         write_jsonl(&self.assets_path(), &dataset.assets)?;
         write_jsonl(&self.annotations_path(), &dataset.annotations)?;
         write_jsonl(&self.classifications_path(), &dataset.classifications)?;
+
+        tracing::info!("dataset saved successfully");
         Ok(())
     }
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
 fn read_json<T>(path: &Path) -> Result<T, StorageError>
 where
     T: serde::de::DeserializeOwned,
 {
+    tracing::debug!(path = %path.display(), "reading JSON file");
+
     let file = File::open(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
@@ -116,24 +146,30 @@ where
     })
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
 fn read_json_or_default<T>(path: &Path) -> Result<T, StorageError>
 where
     T: serde::de::DeserializeOwned + Default,
 {
     if !path.exists() {
+        tracing::debug!(path = %path.display(), "file does not exist, returning default");
         return Ok(T::default());
     }
 
     read_json(path)
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
 fn read_jsonl_or_default<T>(path: &Path) -> Result<Vec<T>, StorageError>
 where
     T: serde::de::DeserializeOwned,
 {
     if !path.exists() {
+        tracing::debug!(path = %path.display(), "file does not exist, returning empty");
         return Ok(Vec::new());
     }
+
+    tracing::debug!(path = %path.display(), "reading JSONL file");
 
     let file = File::open(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
@@ -160,13 +196,17 @@ where
         values.push(value);
     }
 
+    tracing::debug!(count = values.len(), "read JSONL records");
     Ok(values)
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
 fn write_json_pretty<T>(path: &Path, value: &T) -> Result<(), StorageError>
 where
     T: serde::Serialize,
 {
+    tracing::debug!(path = %path.display(), "writing JSON file");
+
     let file = File::create(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
@@ -178,10 +218,13 @@ where
     })
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display(), count = values.len()))]
 fn write_jsonl<T>(path: &Path, values: &[T]) -> Result<(), StorageError>
 where
     T: serde::Serialize,
 {
+    tracing::debug!(path = %path.display(), count = values.len(), "writing JSONL file");
+
     let file = File::create(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
