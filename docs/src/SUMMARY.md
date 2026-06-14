@@ -14,6 +14,7 @@
 - [Import and Export](import-export.md)
 - [Pre-Annotation Protocol](inference.md)
 - [Desktop UI](ui.md)
+- [Telemetry](telemetry.md)
 
 # Operations
 

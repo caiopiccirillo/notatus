@@ -10,6 +10,7 @@ notatus/
     notatus-storage/
     notatus-export/
     notatus-infer/
+    notatus-telemetry/
     notatus-ui/
 ```
 
@@ -22,6 +23,8 @@ The root `Cargo.toml` defines shared package metadata:
 - License: `MIT`
 - Shared dependencies such as `serde`, `serde_json`, `time`, `uuid`,
   `thiserror`, and `tempfile`
+- Observability stack: `tracing`, `tracing-subscriber`, `tracing-opentelemetry`,
+  `opentelemetry`, `opentelemetry_sdk`, and `opentelemetry-otlp`
 
 ## `notatus-core`
 
@@ -69,6 +72,24 @@ runners.
 
 It does not run models directly. It serializes and deserializes JSON-lines
 messages that a model runner can consume.
+
+## `notatus-telemetry`
+
+Initializes OpenTelemetry tracing and metrics for the desktop binary.
+
+Responsibilities:
+
+- configure an `EnvFilter` from `RUST_LOG` (defaulting to `notatus=info`)
+- attach a human-readable `tracing-subscriber` console layer
+- build OTLP/HTTP exporters for spans and metrics when
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+- silently fall back to console-only logging when the endpoint is missing or
+  the OTLP build fails
+- return a `TelemetryGuard` that flushes spans and shuts down the meter
+  provider on drop
+
+The binary shells in `notatus-ui` are expected to call `init_telemetry()`
+during startup and hold the guard for the lifetime of the process.
 
 ## `notatus-ui`
 

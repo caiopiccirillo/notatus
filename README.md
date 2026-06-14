@@ -18,6 +18,8 @@ This repository is a Rust workspace split by responsibility:
 - `notatus-export`: YOLO detection import/export and COCO detection export.
 - `notatus-infer`: JSON-lines protocol for external pre-annotation model
   runners.
+- `notatus-telemetry`: OpenTelemetry tracing and metrics init with OTLP/HTTP
+  export and a console fallback when no endpoint is configured.
 - `notatus-ui`: testable desktop UI state plus an optional GPUI launch feature.
 
 The core design rule is that YOLO, COCO, CVAT, model outputs, and UI state are
@@ -76,7 +78,9 @@ mdbook serve docs
 
 ## Near-Term Roadmap
 
-- Add image-folder import with dimension probing and content hashing.
-- Add write-to-disk export helpers for YOLO and COCO.
-- Add an external model runner process manager around the existing protocol.
-- Add polygon annotation once the bounding-box workflow is reliable.
+- Add image-folder import and content hashing (single-image import with
+  dimension probing already ships in the Media dock).
+- Add an external model runner process manager around the existing
+  `notatus-infer` protocol.
+- Add polygon annotation in the canvas tool layer once the bounding-box
+  workflow is reliable.

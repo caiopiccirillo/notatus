@@ -13,9 +13,17 @@ Notatus is organized around a clean adapter boundary:
 +-------v------+   +-------v------+   +-------v------+
 | notatus-ui   |   | notatus-     |   | notatus-     |
 | GPUI app     |   | storage      |   | export       |
-+--------------+   +--------------+   +--------------+
-                           |
-                    +------v-------+
++------+-------+   +--------------+   +--------------+
+       |
+       |  (initializes on startup)
+       v
++------+--------+
+| notatus-      |
+| telemetry     |
+| OTLP + console|
++---------------+
+
+                    +--------------+
                     | notatus-     |
                     | infer        |
                     +--------------+
@@ -69,3 +77,11 @@ dataset itself remains the authoritative data structure.
 Model execution is intentionally outside the desktop binary. A runner may be
 Python, ONNX Runtime, TensorRT, a container, or a remote shim, as long as it
 speaks the JSON-lines protocol in `notatus-infer`.
+
+### Observability Boundary
+
+Telemetry is initialized through `notatus-telemetry`, not directly by the UI
+shell. The crate owns OTLP exporter configuration and the console fallback so
+that the UI does not need to know whether an OTLP collector is reachable. It
+returns a `TelemetryGuard` that the binary must hold for the lifetime of the
+process so spans and metrics flush on shutdown.
