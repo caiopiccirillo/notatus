@@ -12,7 +12,6 @@ pub enum AnnotationTool {
     Select,
     DrawBox,
     DrawPolygon,
-    Pan,
 }
 
 impl AnnotationTool {
@@ -21,7 +20,6 @@ impl AnnotationTool {
             Self::Select => "Select",
             Self::DrawBox => "Draw Box",
             Self::DrawPolygon => "Draw Polygon",
-            Self::Pan => "Pan/Zoom",
         }
     }
 }

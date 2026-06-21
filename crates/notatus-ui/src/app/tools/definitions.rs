@@ -9,7 +9,7 @@ pub(in crate::app) struct CanvasToolDefinition {
     pub(in crate::app) icon: IconName,
 }
 
-pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 4] {
+pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
     [
         CanvasToolDefinition {
             tool: AnnotationTool::DrawBox,
@@ -29,15 +29,8 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 4] {
             tool: AnnotationTool::Select,
             id: "tool-select",
             label: "Select",
-            tooltip: "Select annotations",
+            tooltip: "Select, move, resize, pan, and zoom the canvas",
             icon: IconName::Inspector,
-        },
-        CanvasToolDefinition {
-            tool: AnnotationTool::Pan,
-            id: "tool-pan",
-            label: "Pan/Zoom",
-            tooltip: "Pan and zoom the canvas",
-            icon: IconName::Map,
         },
     ]
 }
@@ -59,7 +52,6 @@ mod tests {
                 AnnotationTool::DrawBox,
                 AnnotationTool::DrawPolygon,
                 AnnotationTool::Select,
-                AnnotationTool::Pan
             ]
         );
     }

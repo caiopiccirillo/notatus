@@ -10,6 +10,7 @@ pub(super) fn attach_canvas_interactions(
     shared_image_layout: SharedImageLayout,
     annotations: Vec<AnnotationOverlay>,
 ) -> gpui::Stateful<gpui::Div> {
+    let zoom_view = view.clone();
     canvas
         .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
             attach_draw_box_interactions(canvas, view.clone(), shared_image_layout.clone())
@@ -28,8 +29,8 @@ pub(super) fn attach_canvas_interactions(
                 annotations.clone(),
             )
         })
-        .when(matches!(active_tool, AnnotationTool::Pan), |canvas| {
-            attach_pan_interactions(canvas, view)
+        .on_scroll_wheel(move |event: &ScrollWheelEvent, window, cx| {
+            apply_canvas_zoom(&zoom_view, event, window, cx);
         })
 }
 
@@ -251,7 +252,7 @@ fn attach_select_interactions(
     let view_move = view.clone();
     let view_up = view;
     let layout_down = shared_image_layout.clone();
-    let layout_move = shared_image_layout.clone();
+    let layout_move = shared_image_layout;
     let annotations_down = annotations.clone();
     let annotations_move = annotations;
 
@@ -324,7 +325,11 @@ fn attach_select_interactions(
                                 }
                                 None => {
                                     notatus.select_annotation(None, window, cx);
-                                    notatus.set_canvas_cursor(None, cx);
+                                    notatus.set_canvas_cursor(
+                                        Some(gpui::CursorStyle::ClosedHand),
+                                        cx,
+                                    );
+                                    notatus.tools.begin_pan(event.position);
                                 }
                             }
                             cx.notify();
@@ -347,6 +352,9 @@ fn attach_select_interactions(
                         let cursor = notatus.tools.bbox_edit.map(|edit| edit.cursor_style());
                         notatus.set_canvas_cursor(cursor, cx);
                         notatus.update_annotation_bbox(annotation_id, bbox, window, cx);
+                    } else if notatus.tools.pan.is_some() {
+                        notatus.tools.update_pan(event.position);
+                        cx.notify();
                     } else {
                         let cursor = match hit_test_bbox_edit_target(
                             &annotations_move,
@@ -358,7 +366,7 @@ fn attach_select_interactions(
                                 Some(super::super::tools::cursor_for_resize_handle(handle))
                             }
                             Some(BboxHitTarget::Body(_)) => Some(gpui::CursorStyle::OpenHand),
-                            None => None,
+                            None => Some(gpui::CursorStyle::OpenHand),
                         };
                         notatus.set_canvas_cursor(cursor, cx);
                     }
@@ -369,7 +377,7 @@ fn attach_select_interactions(
             gpui::MouseButton::Left,
             move |_event: &MouseUpEvent, _window, cx| {
                 let _ = view_up.update(cx, |notatus, cx| {
-                    notatus.tools.finish_bbox_edit();
+                    notatus.tools.cancel_interactions();
                     notatus.set_canvas_cursor(None, cx);
                     cx.notify();
                 });
@@ -388,63 +396,27 @@ fn bbox_for_annotation(
     })
 }
 
-fn attach_pan_interactions(
-    canvas: gpui::Stateful<gpui::Div>,
-    view: gpui::WeakEntity<NotatusWindow>,
-) -> gpui::Stateful<gpui::Div> {
-    let view_down = view.clone();
-    let view_move = view.clone();
-    let view_up = view.clone();
-    let view_scroll = view;
-
-    canvas
-        .on_mouse_down(
-            gpui::MouseButton::Left,
-            move |event: &MouseDownEvent, _window, cx| {
-                let _ = view_down.update(cx, |notatus, cx| {
-                    if event.click_count >= 2 {
-                        notatus.fit_canvas_to_view(cx);
-                    } else {
-                        notatus.tools.begin_pan(event.position);
-                        cx.notify();
-                    }
-                });
-            },
-        )
-        .on_mouse_move(move |event: &MouseMoveEvent, _window, cx| {
-            let _ = view_move.update(cx, |notatus, cx| {
-                if notatus.tools.pan.is_some() {
-                    notatus.tools.update_pan(event.position);
-                    cx.notify();
-                }
-            });
-        })
-        .on_mouse_up(
-            gpui::MouseButton::Left,
-            move |_event: &MouseUpEvent, _window, cx| {
-                let _ = view_up.update(cx, |notatus, cx| {
-                    notatus.tools.finish_pan();
-                    cx.notify();
-                });
-            },
-        )
-        .on_scroll_wheel(move |event: &ScrollWheelEvent, window, cx| {
-            let delta = event.delta.pixel_delta(window.line_height());
-            let dy: f32 = delta.y.into();
-            if dy.abs() < f32::EPSILON {
-                return;
-            }
-            let factor = if dy < 0.0 { 1.1 } else { 1.0 / 1.1 };
-            let _ = view_scroll.update(cx, |notatus, cx| {
-                if let Some(layout) = *notatus.canvas_image_layout.borrow() {
-                    notatus
-                        .tools
-                        .viewport
-                        .zoom_at(event.position, layout.fit_bounds, factor);
-                } else {
-                    notatus.tools.viewport.zoom_by(factor);
-                }
-                cx.notify();
-            });
-        })
+fn apply_canvas_zoom(
+    view: &gpui::WeakEntity<NotatusWindow>,
+    event: &ScrollWheelEvent,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let delta = event.delta.pixel_delta(window.line_height());
+    let dy: f32 = delta.y.into();
+    if dy.abs() < f32::EPSILON {
+        return;
+    }
+    let factor = if dy < 0.0 { 1.1 } else { 1.0 / 1.1 };
+    let _ = view.update(cx, |notatus, cx| {
+        if let Some(layout) = *notatus.canvas_image_layout.borrow() {
+            notatus
+                .tools
+                .viewport
+                .zoom_at(event.position, layout.fit_bounds, factor);
+        } else {
+            notatus.tools.viewport.zoom_by(factor);
+        }
+        cx.notify();
+    });
 }

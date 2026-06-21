@@ -117,10 +117,13 @@ impl ToolInteractionState {
         }
         if !matches!(tool, AnnotationTool::Select) {
             self.bbox_edit = None;
-        }
-        if !matches!(tool, AnnotationTool::Pan) {
             self.pan = None;
         }
+    }
+
+    pub(in crate::app) fn cancel_interactions(&mut self) {
+        self.bbox_edit = None;
+        self.pan = None;
     }
 
     pub(in crate::app) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
@@ -202,10 +205,6 @@ impl ToolInteractionState {
             .map(|bbox| (edit.annotation_id, bbox))
     }
 
-    pub(in crate::app) fn finish_bbox_edit(&mut self) {
-        self.bbox_edit = None;
-    }
-
     pub(in crate::app) fn begin_pan(&mut self, screen_pos: Point<Pixels>) {
         self.pan = Some(PanState {
             start_screen_pos: screen_pos,
@@ -222,10 +221,6 @@ impl ToolInteractionState {
         let dy: f32 = (screen_pos.y - pan.start_screen_pos.y).into();
         self.viewport.pan_x = pan.start_pan_x + dx;
         self.viewport.pan_y = pan.start_pan_y + dy;
-    }
-
-    pub(in crate::app) fn finish_pan(&mut self) {
-        self.pan = None;
     }
 }
 
@@ -265,7 +260,7 @@ mod tests {
 
         tools.begin_pan(gpui::point(px(10.0), px(20.0)));
         tools.update_pan(gpui::point(px(25.0), px(5.0)));
-        tools.finish_pan();
+        tools.cancel_interactions();
 
         assert_eq!(tools.viewport.pan_x, 15.0);
         assert_eq!(tools.viewport.pan_y, -15.0);
@@ -350,5 +345,48 @@ mod tests {
         assert_eq!(viewport.zoom, 4.0);
         assert_eq!(viewport.pan_x, 200.0);
         assert_eq!(viewport.pan_y, 150.0);
+    }
+
+    #[test]
+    fn cancel_interactions_drops_active_pan_and_bbox_edit() {
+        let mut tools = ToolInteractionState::default();
+        tools.begin_bbox_edit(
+            AnnotationId::new(),
+            crate::app::tools::BboxEditMode::Move,
+            BoundingBox::from_xywh(0.0, 0.0, 10.0, 10.0).unwrap(),
+            (5.0, 5.0),
+        );
+        tools.begin_pan(gpui::point(px(0.0), px(0.0)));
+
+        tools.cancel_interactions();
+
+        assert!(tools.bbox_edit.is_none());
+        assert!(tools.pan.is_none());
+    }
+
+    #[test]
+    fn clear_for_tool_drops_pan_when_switching_away_from_select() {
+        let mut tools = ToolInteractionState::default();
+        tools.begin_pan(gpui::point(px(0.0), px(0.0)));
+        tools.update_pan(gpui::point(px(20.0), px(30.0)));
+
+        tools.clear_for_tool(AnnotationTool::DrawBox);
+
+        assert!(tools.pan.is_none());
+        assert_eq!(tools.viewport.pan_x, 20.0);
+        assert_eq!(tools.viewport.pan_y, 30.0);
+    }
+
+    #[test]
+    fn clear_for_tool_preserves_pan_when_staying_on_select() {
+        let mut tools = ToolInteractionState::default();
+        tools.begin_pan(gpui::point(px(0.0), px(0.0)));
+        tools.update_pan(gpui::point(px(20.0), px(30.0)));
+
+        tools.clear_for_tool(AnnotationTool::Select);
+
+        assert!(tools.pan.is_some());
+        assert_eq!(tools.viewport.pan_x, 20.0);
+        assert_eq!(tools.viewport.pan_y, 30.0);
     }
 }
