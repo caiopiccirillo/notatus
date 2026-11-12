@@ -22,37 +22,24 @@ pub(super) fn open_project(
     run_or_confirm_discard(view, window, cx, ProjectPickerAction::Open);
 }
 
+/// Saves to the project folder through the autosave pipeline, so it never
+/// writes at the same time as an autosave. Projects without a folder ask
+/// for one first.
 pub(super) fn save_project(
     view: gpui::WeakEntity<NotatusWindow>,
     window: &mut Window,
     cx: &mut App,
 ) {
-    let save_target = view.update(cx, |notatus, _| {
-        notatus
-            .project_location
-            .path()
-            .map(|path| (path.to_path_buf(), notatus.state.dataset.clone()))
+    let has_folder = view.update(cx, |notatus, cx| {
+        if notatus.project_location.path().is_none() {
+            return false;
+        }
+        notatus.save_now(cx);
+        true
     });
 
-    match save_target {
-        Ok(Some((path, dataset))) => {
-            let result = LocalProjectStore::new(&path).save_dataset(&dataset);
-            let _ = view.update(cx, |notatus, cx| {
-                match result {
-                    Ok(()) => {
-                        notatus.state.mark_saved();
-                        notatus.project_location = ProjectLocation::local(path);
-                        notatus.status_message = Some("Saved project".to_string());
-                    }
-                    Err(error) => {
-                        notatus.status_message = Some(format!("Save failed: {error}"));
-                    }
-                }
-                cx.notify();
-            });
-        }
-        Ok(None) => save_project_as(view, window, cx),
-        Err(_) => {}
+    if matches!(has_folder, Ok(false)) {
+        save_project_as(view, window, cx);
     }
 }
 
@@ -71,7 +58,7 @@ pub(super) fn save_project_as(
 
     window
         .spawn(cx, async move |window| match path.await {
-            Ok(Ok(Some(path))) => save_current_project_to_path(view, path, window),
+            Ok(Ok(Some(path))) => save_current_project_to_path(view, path, window).await,
             Ok(Ok(None)) => {
                 let _ = view.update_in(window, |notatus, _, cx| {
                     notatus.status_message = Some("Save cancelled".to_string());
@@ -250,24 +237,30 @@ fn initialize_project_at(path: &Path) -> Result<notatus_core::Dataset, String> {
         .map_err(|error| error.to_string())
 }
 
-fn save_current_project_to_path(
+async fn save_current_project_to_path(
     view: gpui::WeakEntity<NotatusWindow>,
     path: PathBuf,
     window: &mut gpui::AsyncWindowContext,
 ) {
-    let dataset = view.update_in(window, |notatus, _, _| notatus.state.dataset.clone());
-    let result = dataset
-        .map_err(|_| "window closed".to_string())
-        .and_then(|dataset| {
-            LocalProjectStore::new(&path)
-                .save_dataset(&dataset)
-                .map_err(|error| error.to_string())
-        });
+    let Ok((dataset, revision)) = view.update_in(window, |notatus, _, _| {
+        (notatus.state.dataset.clone(), notatus.state.revision())
+    }) else {
+        return;
+    };
+    let save_path = path.clone();
+    let result = window
+        .background_executor()
+        .spawn(async move { LocalProjectStore::new(&save_path).save_dataset(&dataset) })
+        .await
+        .map_err(|error| error.to_string());
 
     let _ = view.update_in(window, |notatus, _, cx| {
         match result {
             Ok(()) => {
-                notatus.state.mark_saved();
+                // A save still running for the old folder must not mark
+                // anything saved in the new one.
+                notatus.autosave.reset();
+                notatus.state.mark_revision_saved(revision);
                 notatus.project_location = ProjectLocation::local(path);
                 notatus.status_message = Some("Saved project".to_string());
             }

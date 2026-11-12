@@ -1,8 +1,12 @@
-//! Debounced autosave for projects that already live on disk.
+//! Saving projects that live on disk.
 //!
-//! Every change to the dataset schedules a save a short moment later. Saves run
-//! on a background thread with at most one in flight, and a save that finishes
-//! after newer edits only marks the revision it wrote as saved.
+//! Every write to the project folder goes through one pipeline with at most
+//! one save in flight, so a manual save can never race an autosave writing
+//! the same files. Edits schedule a save a short moment later, and Ctrl+S
+//! saves right away.
+//!
+//! Saves run on a background thread. A save that finishes after newer edits
+//! only marks the revision it wrote as saved.
 
 use super::*;
 use std::time::Duration;
@@ -19,6 +23,12 @@ pub(super) struct AutosaveState {
     scheduled_revision: Option<u64>,
     /// Bumped when another project is loaded, so late saves are ignored.
     generation: u64,
+    /// Someone asked to save while a save was running; start another one
+    /// as soon as it finishes, since it may predate their latest edit.
+    save_requested: bool,
+    /// Report "Saved project" when the current save finishes, because
+    /// someone asked for it rather than the timer.
+    announce: bool,
 }
 
 impl AutosaveState {
@@ -29,12 +39,15 @@ impl AutosaveState {
         }
     }
 
-    /// Forgets pending work after the project was replaced.
+    /// Forgets pending work after the project was replaced or moved.
     pub(super) fn reset(&mut self) {
-        self.timer = None;
-        self.saving = false;
-        self.scheduled_revision = None;
-        self.generation += 1;
+        let enabled = self.enabled;
+        let generation = self.generation + 1;
+        *self = Self {
+            enabled,
+            generation,
+            ..Self::default()
+        };
     }
 }
 
@@ -62,12 +75,31 @@ impl NotatusWindow {
             // The running save reschedules once it finishes.
             return;
         }
+        if self.state.dirty {
+            self.start_save(cx);
+        }
+    }
+
+    /// Saves to the project folder right away, even when nothing changed,
+    /// and reports the result. Waits for a save already running first.
+    pub(super) fn save_now(&mut self, cx: &mut Context<Self>) {
+        if self.project_location.path().is_none() {
+            return;
+        }
+        self.autosave.timer = None;
+        self.autosave.announce = true;
+        if self.autosave.saving {
+            self.autosave.save_requested = true;
+        } else {
+            self.start_save(cx);
+        }
+        cx.notify();
+    }
+
+    fn start_save(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.project_location.path().map(Path::to_path_buf) else {
             return;
         };
-        if !self.state.dirty {
-            return;
-        }
 
         let revision = self.state.revision();
         let generation = self.autosave.generation;
@@ -81,24 +113,40 @@ impl NotatusWindow {
         cx.spawn(async move |this, cx| {
             let result = save.await;
             let _ = this.update(cx, |this, cx| {
-                if this.autosave.generation != generation {
-                    return;
+                if this.autosave.generation == generation {
+                    this.finish_save(revision, result.map_err(|error| error.to_string()), cx);
                 }
-                this.autosave.saving = false;
-                match result {
-                    Ok(()) => this.state.mark_revision_saved(revision),
-                    Err(error) => {
-                        this.status_message = Some(format!("Autosave failed: {error}"));
-                        // Retry only after the next edit, not in a loop.
-                        return cx.notify();
-                    }
-                }
-                this.autosave.scheduled_revision = None;
-                this.schedule_autosave(cx);
-                cx.notify();
             });
         })
         .detach();
+    }
+
+    fn finish_save(&mut self, revision: u64, result: Result<(), String>, cx: &mut Context<Self>) {
+        self.autosave.saving = false;
+        if let Err(error) = result {
+            let announced = std::mem::take(&mut self.autosave.announce);
+            self.autosave.save_requested = false;
+            self.status_message = Some(if announced {
+                format!("Save failed: {error}")
+            } else {
+                format!("Autosave failed: {error}")
+            });
+            // Retry only after the next edit, not in a loop.
+            cx.notify();
+            return;
+        }
+
+        self.state.mark_revision_saved(revision);
+        self.autosave.scheduled_revision = None;
+        if std::mem::take(&mut self.autosave.save_requested) {
+            self.start_save(cx);
+        } else {
+            if std::mem::take(&mut self.autosave.announce) {
+                self.status_message = Some("Saved project".to_string());
+            }
+            self.schedule_autosave(cx);
+        }
+        cx.notify();
     }
 
     /// Short save-state text for the status bar.
