@@ -143,7 +143,14 @@ fn prompt_for_new_project(
         .spawn(cx, async move |window| match path.await {
             Ok(Ok(Some(path))) => {
                 let result = initialize_project_at(&path);
-                apply_project_load_result(view, result, Some(path), "Created project", window);
+                apply_project_load_result(
+                    view,
+                    result,
+                    Some(path),
+                    "Created project",
+                    None,
+                    window,
+                );
             }
             Ok(Ok(None)) => {
                 let _ = view.update_in(window, |notatus, _, cx| {
@@ -191,10 +198,27 @@ fn prompt_for_open_project(
                 let Some(path) = paths.into_iter().next() else {
                     return;
                 };
-                let result = LocalProjectStore::new(&path)
-                    .load_dataset()
-                    .map_err(|error| error.to_string());
-                apply_project_load_result(view, result, Some(path), "Opened project", window);
+                let load_path = path.clone();
+                let result =
+                    window
+                        .background_executor()
+                        .spawn(async move {
+                            LocalProjectStore::new(&load_path).load_dataset_with_report()
+                        })
+                        .await
+                        .map_err(|error| error.to_string());
+                let notice = result
+                    .as_ref()
+                    .ok()
+                    .and_then(|(_, report)| load_report_notice(report));
+                apply_project_load_result(
+                    view,
+                    result.map(|(dataset, _)| dataset),
+                    Some(path),
+                    "Opened project",
+                    notice,
+                    window,
+                );
             }
             Ok(Ok(None)) => {
                 let _ = view.update_in(window, |notatus, _, cx| {
@@ -277,6 +301,7 @@ fn apply_project_load_result(
     result: Result<notatus_core::Dataset, String>,
     location: Option<PathBuf>,
     success_message: &'static str,
+    notice: Option<String>,
     window: &mut gpui::AsyncWindowContext,
 ) {
     let _ = view.update_in(window, |notatus, window, cx| {
@@ -295,6 +320,15 @@ fn apply_project_load_result(
                 notatus.tools.fit_canvas_to_view();
                 notatus.canvas_image_layout.borrow_mut().take();
                 notatus.status_message = Some(success_message.to_string());
+                if let Some(notice) = notice {
+                    notatus.status_message = Some(format!("{success_message}; {notice}"));
+                    window.push_notification(
+                        Notification::warning(notice)
+                            .title("Some records were set aside")
+                            .autohide(false),
+                        cx,
+                    );
+                }
                 notatus.sync_project_name_input(window, cx);
                 notatus.sync_label_name_input(window, cx);
             }
@@ -304,6 +338,34 @@ fn apply_project_load_result(
         }
         cx.notify();
     });
+}
+
+/// What to tell someone when opening their project skipped records.
+fn load_report_notice(report: &notatus_storage::LoadReport) -> Option<String> {
+    const SHOWN: usize = 3;
+    if report.is_clean() {
+        return None;
+    }
+    let count = report.issues.len();
+    let mut notice = format!(
+        "{count} record{} could not be used and {} left out",
+        super::helpers::plural(count),
+        if count == 1 { "was" } else { "were" }
+    );
+    if let Some(dir) = &report.recovery_dir {
+        notice.push_str(&format!(
+            ". The original files were copied to {}",
+            dir.display()
+        ));
+    }
+    notice.push(':');
+    for issue in report.issues.iter().take(SHOWN) {
+        notice.push_str(&format!("\n• {issue}"));
+    }
+    if count > SHOWN {
+        notice.push_str(&format!("\n• …and {} more", count - SHOWN));
+    }
+    Some(notice)
 }
 
 fn suggested_project_folder(name: &str) -> String {
@@ -328,6 +390,29 @@ fn suggested_project_folder(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn load_notice_summarizes_skipped_records() {
+        let clean = notatus_storage::LoadReport::default();
+        assert_eq!(load_report_notice(&clean), None);
+
+        let issue = |message: &str| notatus_storage::LoadIssue {
+            file: notatus_storage::ANNOTATIONS_FILE,
+            line: None,
+            message: message.to_string(),
+        };
+        let report = notatus_storage::LoadReport {
+            issues: (1..=5).map(|n| issue(&format!("problem {n}"))).collect(),
+            recovery_dir: Some(PathBuf::from("/p/.notatus-recovery/x")),
+        };
+        let notice = load_report_notice(&report).unwrap();
+
+        assert!(notice.starts_with("5 records could not be used and were left out"));
+        assert!(notice.contains("/p/.notatus-recovery/x"));
+        assert!(notice.contains("annotations.jsonl: problem 3"));
+        assert!(!notice.contains("problem 4"));
+        assert!(notice.ends_with("…and 2 more"));
+    }
 
     #[test]
     fn suggested_project_folder_normalizes_name() {
