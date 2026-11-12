@@ -1,5 +1,6 @@
 use super::helpers::*;
 use super::*;
+use notatus_core::ReviewState;
 
 impl NotatusWindow {
     pub(super) fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -305,22 +306,69 @@ impl NotatusWindow {
                     .child(
                         div()
                             .min_w_0()
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_xs()
                             .text_color(colors.muted_foreground)
-                            .child(format!(
-                                "{} · {:?}",
-                                annotation_geometry_label(&annotation.geometry),
-                                annotation.review_state
-                            )),
+                            .child(annotation_geometry_label(&annotation.geometry))
+                            .child(review_tag(annotation.review_state)),
                     ),
             )
+            .child(self.annotation_review_buttons(annotation, view.clone()))
             .child(self.annotation_label_menu(
                 annotation_id,
                 annotation.label_id,
                 labels,
                 view.clone(),
+            ))
+    }
+
+    /// Accept and reject toggles. Pressing the active one returns the
+    /// annotation to draft.
+    fn annotation_review_buttons(
+        &self,
+        annotation: &AnnotationRecord,
+        view: gpui::WeakEntity<NotatusWindow>,
+    ) -> impl IntoElement {
+        let annotation_id = annotation.id;
+        let current = annotation.review_state;
+        let (key_high, key_low) = annotation_element_key(annotation_id);
+        let button =
+            |kind: &'static str, state: ReviewState, icon: IconName, tooltip: &'static str| {
+                let view = view.clone();
+                let active = current == state;
+                Button::new((gpui::ElementId::from((kind, key_high)), key_low.to_string()))
+                    .xsmall()
+                    .ghost()
+                    .icon(Icon::new(icon))
+                    .selected(active)
+                    .tooltip(tooltip)
+                    .on_click(move |_, window, cx| {
+                        cx.stop_propagation();
+                        let target = if active { ReviewState::Draft } else { state };
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.select_annotation(Some(annotation_id), window, cx);
+                            notatus.review_selection(target, window, cx);
+                        });
+                    })
+            };
+        div()
+            .flex()
+            .gap(px(2.0))
+            .child(button(
+                "annotation-accept",
+                ReviewState::Accepted,
+                IconName::Check,
+                "Accept (Y)",
+            ))
+            .child(button(
+                "annotation-reject",
+                ReviewState::Rejected,
+                IconName::Close,
+                "Reject (X)",
             ))
     }
 

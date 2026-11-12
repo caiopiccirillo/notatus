@@ -17,6 +17,8 @@ pub(super) struct AnnotationOverlay {
     pub(super) label: Option<SharedString>,
     /// Drawn faintly, to focus on the selected annotation.
     pub(super) dimmed: bool,
+    /// Rejected in review: drawn dashed and faded.
+    pub(super) rejected: bool,
 }
 
 const DIMMED_ALPHA: f32 = 0.25;
@@ -35,14 +37,30 @@ impl AnnotationOverlay {
         let alpha = (base + emphasis).min(1.0);
         if self.dimmed {
             alpha * DIMMED_ALPHA
+        } else if self.rejected {
+            alpha * 0.5
         } else {
             alpha
         }
     }
 
     fn stroke(&self) -> gpui::Rgba {
-        let alpha = if self.dimmed { DIMMED_ALPHA } else { 1.0 };
+        let alpha = if self.dimmed {
+            DIMMED_ALPHA
+        } else if self.rejected {
+            0.7
+        } else {
+            1.0
+        };
         rgba_with_alpha(&self.color, alpha)
+    }
+
+    fn border_style(&self) -> gpui::BorderStyle {
+        if self.rejected {
+            gpui::BorderStyle::Dashed
+        } else {
+            gpui::BorderStyle::Solid
+        }
     }
 
     fn stroke_width(&self) -> Pixels {
@@ -202,7 +220,7 @@ fn paint_bbox_annotation(
     let bg_color = rgba_with_alpha(&annotation.color, annotation.fill_alpha(fill_opacity));
     window.paint_quad(fill(screen_rect, bg_color));
     window.paint_quad(
-        outline(screen_rect, annotation.stroke(), gpui::BorderStyle::Solid)
+        outline(screen_rect, annotation.stroke(), annotation.border_style())
             .border_widths(annotation.stroke_width()),
     );
 

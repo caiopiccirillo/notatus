@@ -41,11 +41,12 @@ impl NotatusWindow {
                     hovered: self.hovered_annotation == Some(ann.id),
                     label: options
                         .show_labels
-                        .then(|| label.map(|l| SharedString::from(l.name.clone())))
+                        .then(|| label.map(|l| review_label(&l.name, ann.review_state)))
                         .flatten(),
                     dimmed: options.focus_selected
                         && self.state.selected_annotation.is_some()
                         && !selected,
+                    rejected: ann.review_state == notatus_core::ReviewState::Rejected,
                 }
             })
             .collect();
@@ -106,6 +107,16 @@ impl NotatusWindow {
                     })
                     .child(self.canvas_toolbar(cx)),
             )
+    }
+}
+
+/// Label tag text, marked with the review outcome once decided.
+fn review_label(name: &str, state: notatus_core::ReviewState) -> SharedString {
+    use notatus_core::ReviewState;
+    match state {
+        ReviewState::Accepted => format!("{name} ✓").into(),
+        ReviewState::Rejected => format!("{name} ✗").into(),
+        ReviewState::Draft | ReviewState::Reviewed => SharedString::from(name.to_string()),
     }
 }
 

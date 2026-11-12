@@ -143,6 +143,20 @@ pub(super) fn label_color_button(
     })
 }
 
+/// A small colored tag naming an annotation's review state.
+pub(super) fn review_tag(state: notatus_core::ReviewState) -> impl IntoElement {
+    use gpui_component::tag::Tag;
+    use notatus_core::ReviewState;
+
+    let (tag, text) = match state {
+        ReviewState::Draft => (Tag::secondary(), "Draft"),
+        ReviewState::Reviewed => (Tag::info(), "Reviewed"),
+        ReviewState::Accepted => (Tag::success(), "Accepted"),
+        ReviewState::Rejected => (Tag::danger(), "Rejected"),
+    };
+    tag.xsmall().outline().child(text)
+}
+
 pub(super) fn label_swatch(color: &str, fill_parent: bool) -> impl IntoElement {
     div()
         .flex_none()

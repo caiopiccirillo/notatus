@@ -189,6 +189,7 @@ mod tests {
                 hovered: false,
                 label: None,
                 dimmed: false,
+                rejected: false,
             },
             AnnotationOverlay {
                 id: top_id,
@@ -200,6 +201,7 @@ mod tests {
                 hovered: false,
                 label: None,
                 dimmed: false,
+                rejected: false,
             },
         ];
 
@@ -229,6 +231,7 @@ mod tests {
             hovered: false,
             label: None,
             dimmed: false,
+            rejected: false,
         }];
 
         assert_eq!(
@@ -254,6 +257,7 @@ mod tests {
             hovered: false,
             label: None,
             dimmed: false,
+            rejected: false,
         }];
 
         assert_eq!(
@@ -278,6 +282,7 @@ mod tests {
             hovered: false,
             label: None,
             dimmed: false,
+            rejected: false,
         }];
 
         assert_eq!(
@@ -302,6 +307,7 @@ mod tests {
             hovered: false,
             label: None,
             dimmed: false,
+            rejected: false,
         }];
 
         assert_eq!(
