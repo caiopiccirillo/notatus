@@ -2,7 +2,7 @@ use crate::history::{CoalesceKey, History, Selection, Snapshot};
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetLocation, AssetRecord,
     AssetStatus, BoundingBox, ClassificationId, ClassificationRecord, Dataset, GeometryError,
-    LabelId, Point, Polygon, ValidationError,
+    LabelId, Point, Polygon, ReviewState, ValidationError,
 };
 use std::error::Error;
 use std::fmt;
@@ -491,6 +491,28 @@ impl UiState {
         Ok(())
     }
 
+    /// Sets an annotation's review state, selecting it. No-op when unchanged.
+    pub fn set_annotation_review_state(
+        &mut self,
+        annotation_id: AnnotationId,
+        review_state: ReviewState,
+    ) -> Result<(), UiMutationError> {
+        let index = self.annotation_index(annotation_id)?;
+        self.selected_annotation = Some(annotation_id);
+        if self.dataset.annotations[index].review_state == review_state {
+            return Ok(());
+        }
+        let description = match review_state {
+            ReviewState::Draft => "Reset review",
+            ReviewState::Reviewed => "Mark reviewed",
+            ReviewState::Accepted => "Accept annotation",
+            ReviewState::Rejected => "Reject annotation",
+        };
+        self.begin_change(description, None);
+        self.dataset.annotations[index].set_review_state(review_state);
+        Ok(())
+    }
+
     #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id))]
     pub fn set_asset_status(
         &mut self,
@@ -559,6 +581,28 @@ impl UiState {
             (Direction::Previous, None) => ids.len() - 1,
         };
         Some(ids[index])
+    }
+
+    /// The first draft annotation after `from` on the same media, wrapping
+    /// around. `None` once every annotation there has been reviewed.
+    pub fn next_draft_annotation(&self, from: AnnotationId) -> Option<AnnotationId> {
+        let asset_id = self
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == from)?
+            .asset_id;
+        let on_asset: Vec<_> = self
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.asset_id == asset_id)
+            .collect();
+        let start = on_asset.iter().position(|annotation| annotation.id == from)?;
+        (1..on_asset.len())
+            .map(|offset| on_asset[(start + offset) % on_asset.len()])
+            .find(|annotation| annotation.review_state == ReviewState::Draft)
+            .map(|annotation| annotation.id)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id, label_id = %label_id))]
@@ -1368,5 +1412,43 @@ mod tests {
 
         state.remove_asset(c).unwrap();
         assert_eq!(state.selected_asset, Some(a));
+    }
+
+    #[test]
+    fn review_state_changes_undo_and_skip_reviewed_annotations() {
+        let mut state = UiState::new_project("demo");
+        let label = state.add_label("Person");
+        let asset = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+        let ids: Vec<_> = (0..3)
+            .map(|i| {
+                let bbox = BoundingBox::from_xywh(i as f64 * 10.0, 0.0, 5.0, 5.0).unwrap();
+                state.add_human_bbox(asset, label, bbox, None).unwrap()
+            })
+            .collect();
+
+        state
+            .set_annotation_review_state(ids[1], ReviewState::Accepted)
+            .unwrap();
+        assert_eq!(state.undo_description(), Some("Accept annotation"));
+        // From the first, the next draft skips the accepted second one.
+        assert_eq!(state.next_draft_annotation(ids[0]), Some(ids[2]));
+        // Wraps around to the start.
+        assert_eq!(state.next_draft_annotation(ids[2]), Some(ids[0]));
+
+        let revision = state.revision();
+        state
+            .set_annotation_review_state(ids[1], ReviewState::Accepted)
+            .unwrap();
+        assert_eq!(state.revision(), revision, "unchanged state is a no-op");
+
+        state.undo();
+        assert_eq!(state.dataset.annotations[1].review_state, ReviewState::Draft);
+
+        for id in &ids {
+            state
+                .set_annotation_review_state(*id, ReviewState::Rejected)
+                .unwrap();
+        }
+        assert_eq!(state.next_draft_annotation(ids[0]), None);
     }
 }

@@ -168,11 +168,19 @@ impl NotatusWindow {
             .command(undo, IconName::Undo2, Undo)
             .command(redo, IconName::Redo2, Redo);
         if self.state.selected_annotation.is_some() {
-            annotate = annotate.command(
-                "Delete selected annotation",
-                IconName::Delete,
-                DeleteSelection,
-            );
+            annotate = annotate
+                .command(
+                    "Delete selected annotation",
+                    IconName::Delete,
+                    DeleteSelection,
+                )
+                .command("Accept annotation", Lucide::CircleCheck, AcceptAnnotation)
+                .command("Reject annotation", Lucide::CircleX, RejectAnnotation)
+                .command(
+                    "Reset review to draft",
+                    Lucide::RotateCcw,
+                    ResetAnnotationReview,
+                );
         }
 
         let mut media = PaletteGroup::new("Media");

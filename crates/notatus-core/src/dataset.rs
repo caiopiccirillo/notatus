@@ -521,7 +521,11 @@ impl AnnotationRecord {
     #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %self.id))]
     pub fn accept(&mut self) {
         tracing::debug!(annotation_id = %self.id, "accepting annotation");
-        self.review_state = ReviewState::Accepted;
+        self.set_review_state(ReviewState::Accepted);
+    }
+
+    pub fn set_review_state(&mut self, review_state: ReviewState) {
+        self.review_state = review_state;
         self.updated_at = now_utc();
     }
 

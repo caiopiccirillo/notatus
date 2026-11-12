@@ -1,5 +1,6 @@
 use super::*;
 use gpui::{TestAppContext, WindowHandle, WindowOptions};
+use notatus_core::ReviewState;
 
 fn open_test_window(cx: &mut TestAppContext) -> (WindowHandle<Root>, gpui::Entity<NotatusWindow>) {
     let notatus_view = Rc::new(RefCell::new(None));
@@ -533,5 +534,55 @@ fn view_shortcuts_toggle_display_options(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "h");
     view.update(cx, |notatus, _| {
         assert!(!notatus.view_options.hide_annotations);
+    });
+}
+
+#[gpui::test]
+fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let ids = view.update(cx, |notatus, _| {
+        let (label, assets) = seed_three_media(notatus);
+        let ids: Vec<_> = (0..3)
+            .map(|i| {
+                let bbox = BoundingBox::from_xywh(i as f64 * 20.0, 0.0, 10.0, 10.0).unwrap();
+                notatus
+                    .state
+                    .add_human_bbox(assets[0], label, bbox, None)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        notatus.state.selected_annotation = None;
+        ids
+    });
+    cx.run_until_parked();
+
+    // With nothing selected, Y starts at the first annotation.
+    cx.simulate_keystrokes(window, "y x");
+    view.update(cx, |notatus, _| {
+        let states: Vec<_> = notatus
+            .state
+            .dataset
+            .annotations
+            .iter()
+            .map(|annotation| annotation.review_state)
+            .collect();
+        assert_eq!(
+            states,
+            [
+                ReviewState::Accepted,
+                ReviewState::Rejected,
+                ReviewState::Draft
+            ]
+        );
+        assert_eq!(notatus.state.selected_annotation, Some(ids[2]));
+    });
+
+    cx.simulate_keystrokes(window, "ctrl-z");
+    view.update(cx, |notatus, _| {
+        assert_eq!(
+            notatus.state.dataset.annotations[1].review_state,
+            ReviewState::Draft
+        );
     });
 }

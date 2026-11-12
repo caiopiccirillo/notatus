@@ -4,7 +4,7 @@ use super::helpers::plural;
 use super::*;
 use crate::Direction;
 use gpui::{Action, KeyBinding, actions};
-use notatus_core::AssetStatus;
+use notatus_core::{AssetStatus, ReviewState};
 
 /// Key context set on the main window. Bare-key shortcuts additionally require
 /// that no text input is focused.
@@ -47,6 +47,12 @@ actions!(
         ToggleLabelNames,
         ToggleCrosshair,
         ToggleFocusSelected,
+        /// Accept the selected annotation and move to the next one.
+        AcceptAnnotation,
+        /// Reject the selected annotation and move to the next one.
+        RejectAnnotation,
+        /// Return the selected annotation to draft.
+        ResetAnnotationReview,
     ]
 );
 
@@ -108,6 +114,9 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-l", ToggleLabelNames, canvas),
         KeyBinding::new("c", ToggleCrosshair, canvas),
         KeyBinding::new("shift-f", ToggleFocusSelected, canvas),
+        KeyBinding::new("y", AcceptAnnotation, canvas),
+        KeyBinding::new("x", RejectAnnotation, canvas),
+        KeyBinding::new("u", ResetAnnotationReview, canvas),
     ]);
     cx.bind_keys((0..9).map(|slot| {
         const KEYS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -164,6 +173,15 @@ impl NotatusWindow {
             }))
             .on_action(cx.listener(|this, _: &ToggleFocusSelected, _, cx| {
                 this.toggle_view_option(ViewToggle::FocusSelected, cx);
+            }))
+            .on_action(cx.listener(|this, _: &AcceptAnnotation, window, cx| {
+                this.review_selection(ReviewState::Accepted, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RejectAnnotation, window, cx| {
+                this.review_selection(ReviewState::Rejected, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetAnnotationReview, window, cx| {
+                this.review_selection(ReviewState::Draft, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::Select, cx);
@@ -354,6 +372,49 @@ impl NotatusWindow {
         if let Some(annotation_id) = self.state.adjacent_annotation(direction) {
             self.select_annotation(Some(annotation_id), window, cx);
         }
+    }
+
+    /// Reviews the selected annotation, or the first one on this media when
+    /// none is selected. Accepting or rejecting then selects the next
+    /// annotation still in draft, so a review pass is one key per shape.
+    pub(super) fn review_selection(
+        &mut self,
+        review_state: ReviewState,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = self
+            .state
+            .selected_annotation
+            .or_else(|| self.state.adjacent_annotation(Direction::Next));
+        let Some(annotation_id) = target else {
+            self.status_message = Some("No annotation to review".to_string());
+            cx.notify();
+            return;
+        };
+        if let Err(error) = self
+            .state
+            .set_annotation_review_state(annotation_id, review_state)
+        {
+            self.status_message = Some(error.to_string());
+            cx.notify();
+            return;
+        }
+        self.status_message = Some(
+            match review_state {
+                ReviewState::Accepted => "Accepted annotation",
+                ReviewState::Rejected => "Rejected annotation",
+                ReviewState::Reviewed => "Marked reviewed",
+                ReviewState::Draft => "Reset to draft",
+            }
+            .to_string(),
+        );
+        if review_state != ReviewState::Draft
+            && let Some(next) = self.state.next_draft_annotation(annotation_id)
+        {
+            self.select_annotation(Some(next), window, cx);
+        }
+        cx.notify();
     }
 
     pub(super) fn delete_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
