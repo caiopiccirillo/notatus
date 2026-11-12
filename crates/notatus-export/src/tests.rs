@@ -112,6 +112,13 @@ fn exports_image_classifications() {
     assert_eq!(rows[0].label_name, "outdoor");
 }
 
+/// A PNG signature followed by `name`, enough to pass the export's check.
+fn png_bytes(name: &str) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(name.as_bytes());
+    bytes
+}
+
 /// A dataset whose media are real files in `dir`, as a YOLO export needs.
 fn dataset_with_image_files(dir: &std::path::Path, names: &[(&str, DatasetSplit)]) -> Dataset {
     let mut dataset = Dataset::new("demo");
@@ -120,7 +127,7 @@ fn dataset_with_image_files(dir: &std::path::Path, names: &[(&str, DatasetSplit)
     for (name, split) in names {
         let path = dir.join(name);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, format!("image bytes of {name}")).unwrap();
+        std::fs::write(&path, png_bytes(name)).unwrap();
         let mut asset = AssetRecord::new_image(
             AssetLocation::local(path.to_string_lossy().into_owned()),
             200,
@@ -164,7 +171,11 @@ fn writes_a_trainable_yolo_dataset() {
     let read = |path: &str| std::fs::read_to_string(yolo_dir.join(path)).unwrap();
     // Both "frame.jpg" land in train, so the second gets a unique name, and
     // every label file matches its image's stem.
-    assert_eq!(read("images/train/frame.jpg"), "image bytes of a/frame.jpg");
+    let read_bytes = |path: &str| std::fs::read(yolo_dir.join(path)).unwrap();
+    assert_eq!(
+        read_bytes("images/train/frame.jpg"),
+        png_bytes("a/frame.jpg")
+    );
     assert_eq!(
         read("labels/train/frame.txt"),
         "0 0.500000 0.500000 0.250000 0.400000\n"
@@ -186,7 +197,7 @@ fn writes_a_trainable_yolo_dataset() {
             .join(format!("labels/train/{renamed_stem}.txt"))
             .is_file()
     );
-    assert_eq!(read("images/val/val.png"), "image bytes of c/val.png");
+    assert_eq!(read_bytes("images/val/val.png"), png_bytes("c/val.png"));
     assert!(yolo_dir.join("labels/val/val.txt").is_file());
 
     let yaml = read("data.yaml");
@@ -421,4 +432,30 @@ fn training_filter_leaves_out_unreviewed_model_predictions() {
     ));
     let rows = classification::export_classifications(&dataset, &filter).unwrap();
     assert!(rows.is_empty());
+}
+
+#[test]
+fn yolo_export_refuses_media_that_is_not_an_image() {
+    let media = tempfile::tempdir().unwrap();
+    let dataset = dataset_with_image_files(media.path(), &[("a.jpg", DatasetSplit::Train)]);
+    // A project from someone else pointing a media path at a private file.
+    std::fs::write(
+        media.path().join("a.jpg"),
+        "-----BEGIN OPENSSH PRIVATE KEY-----",
+    )
+    .unwrap();
+    let output = tempfile::tempdir().unwrap();
+
+    let error = yolo::write_detection_export(
+        &dataset,
+        &AnnotationFilter::default(),
+        output.path().join("yolo"),
+    )
+    .unwrap_err();
+
+    assert!(
+        error.to_string().contains("not a recognized image file"),
+        "{error}"
+    );
+    assert_eq!(std::fs::read_dir(output.path()).unwrap().count(), 0);
 }

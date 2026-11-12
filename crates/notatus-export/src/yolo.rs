@@ -124,13 +124,13 @@ pub fn write_detection_export(
         // A copy, not a hard link: tools that edit exported images in place
         // would otherwise change the originals too. Copies are cheap clones
         // on file systems that support them.
-        fs::copy(&source, image_dir.join(&image_name)).map_err(|source_error| {
-            ExportError::Image {
+        ensure_image_file(&source)
+            .and_then(|()| fs::copy(&source, image_dir.join(&image_name)))
+            .map_err(|source_error| ExportError::Image {
                 asset_id: asset.id,
                 path: source.clone(),
                 source: source_error,
-            }
-        })?;
+            })?;
         let stem = Path::new(&image_name)
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
@@ -242,6 +242,37 @@ fn unique_image_name(
         Some(extension) => format!("{unique_stem}.{}", extension.to_string_lossy()),
         None => unique_stem,
     }
+}
+
+/// Checks that `path` is a regular file that starts like an image.
+///
+/// A project can come from someone else, and its media paths are only data:
+/// without this check, a path pointing at a private file would copy that
+/// file into an export folder the user may then share.
+fn ensure_image_file(path: &Path) -> std::io::Result<()> {
+    if !fs::metadata(path)?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    let mut header = [0_u8; 12];
+    let read = std::io::Read::read(&mut fs::File::open(path)?, &mut header)?;
+    if has_image_signature(&header[..read]) {
+        Ok(())
+    } else {
+        Err(std::io::Error::other("not a recognized image file"))
+    }
+}
+
+/// Whether `header` starts with the signature of an image format the app
+/// imports: JPEG, PNG, GIF, BMP, WebP, or TIFF.
+fn has_image_signature(header: &[u8]) -> bool {
+    header.starts_with(&[0xFF, 0xD8, 0xFF])
+        || header.starts_with(b"\x89PNG\r\n\x1a\n")
+        || header.starts_with(b"GIF87a")
+        || header.starts_with(b"GIF89a")
+        || header.starts_with(b"BM")
+        || (header.starts_with(b"RIFF") && header.get(8..12) == Some(b"WEBP"))
+        || header.starts_with(b"II*\0")
+        || header.starts_with(b"MM\0*")
 }
 
 fn absolute(path: &Path) -> PathBuf {
