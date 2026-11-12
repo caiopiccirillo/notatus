@@ -437,6 +437,11 @@ pub struct AnnotationRecord {
     pub source: AnnotationSource,
     pub confidence: Option<f32>,
     pub review_state: ReviewState,
+    /// Whether a person changed the shape or label of an annotation a model
+    /// or import created. `source` keeps saying who created it, so model
+    /// output accepted as is can be told apart from model output corrected.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub human_edited: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -532,6 +537,14 @@ impl AnnotationRecord {
         self.updated_at = now_utc();
     }
 
+    /// Records that a person changed this annotation's shape or label.
+    pub fn record_human_edit(&mut self) {
+        if !matches!(self.source, AnnotationSource::Human { .. }) {
+            self.human_edited = true;
+        }
+        self.updated_at = now_utc();
+    }
+
     fn new(
         asset_id: AssetId,
         label_id: LabelId,
@@ -550,6 +563,7 @@ impl AnnotationRecord {
             source,
             confidence,
             review_state,
+            human_edited: false,
             created_at: now,
             updated_at: now,
             metadata: Metadata::new(),
@@ -742,6 +756,46 @@ mod tests {
         dataset.add_annotation(annotation);
 
         assert!(dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn human_edits_mark_model_output_but_not_human_work() {
+        let asset_id = AssetId::new();
+        let label_id = LabelId::new();
+        let bbox = AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 2.0, 2.0).unwrap());
+        let model = ModelProvenance {
+            name: "detector".to_string(),
+            version: None,
+            invocation_id: None,
+            metadata: Metadata::new(),
+        };
+        let mut predicted =
+            AnnotationRecord::new_model(asset_id, label_id, bbox.clone(), model, Some(0.9));
+        let mut drawn = AnnotationRecord::new_human(asset_id, label_id, bbox, None);
+        let before = predicted.updated_at;
+
+        predicted.record_human_edit();
+        drawn.record_human_edit();
+
+        assert!(predicted.human_edited);
+        assert!(predicted.updated_at >= before);
+        assert!(matches!(predicted.source, AnnotationSource::Model(_)));
+        assert!(!drawn.human_edited);
+    }
+
+    #[test]
+    fn human_edited_is_optional_in_saved_records() {
+        let record = AnnotationRecord::new_human(
+            AssetId::new(),
+            LabelId::new(),
+            AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 2.0, 2.0).unwrap()),
+            None,
+        );
+        let value = serde_json::to_value(&record).unwrap();
+        assert!(value.get("human_edited").is_none(), "omitted while false");
+
+        let parsed: AnnotationRecord = serde_json::from_value(value).unwrap();
+        assert!(!parsed.human_edited);
     }
 
     #[test]

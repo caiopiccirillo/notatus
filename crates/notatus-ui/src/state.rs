@@ -431,7 +431,9 @@ impl UiState {
         let index = self.annotation_index(annotation_id)?;
         if self.dataset.annotations[index].label_id != label_id {
             self.begin_change("Change annotation label", None);
-            self.dataset.annotations[index].label_id = label_id;
+            let annotation = &mut self.dataset.annotations[index];
+            annotation.label_id = label_id;
+            annotation.record_human_edit();
         }
         self.selected_annotation = Some(annotation_id);
         self.selected_asset = Some(self.dataset.annotations[index].asset_id);
@@ -466,7 +468,9 @@ impl UiState {
                 "Edit annotation",
                 Some(CoalesceKey::AnnotationGeometry(annotation_id)),
             );
-            self.dataset.annotations[annotation_index].geometry = geometry;
+            let annotation = &mut self.dataset.annotations[annotation_index];
+            annotation.geometry = geometry;
+            annotation.record_human_edit();
         }
         self.selected_annotation = Some(annotation_id);
         self.selected_asset = Some(asset_id);
@@ -1465,5 +1469,39 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(state.next_draft_annotation(ids[0]), None);
+    }
+
+    #[test]
+    fn editing_model_output_marks_it_human_edited_until_undone() {
+        let mut state = UiState::new_project("demo");
+        let car = state.add_label("Car");
+        let truck = state.add_label("Truck");
+        let asset = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+        let model = notatus_core::ModelProvenance {
+            name: "detector".to_string(),
+            version: None,
+            invocation_id: None,
+            metadata: Default::default(),
+        };
+        let predicted = AnnotationRecord::new_model(
+            asset,
+            car,
+            AnnotationGeometry::Bbox(BoundingBox::from_xywh(10.0, 10.0, 20.0, 20.0).unwrap()),
+            model,
+            Some(0.8),
+        );
+        let id = predicted.id;
+        state.dataset.add_annotation(predicted);
+
+        state
+            .update_annotation_bbox(id, BoundingBox::from_xywh(12.0, 10.0, 20.0, 20.0).unwrap())
+            .unwrap();
+        assert!(state.dataset.annotations[0].human_edited);
+
+        state.undo();
+        assert!(!state.dataset.annotations[0].human_edited);
+
+        state.update_annotation_label(id, truck).unwrap();
+        assert!(state.dataset.annotations[0].human_edited);
     }
 }

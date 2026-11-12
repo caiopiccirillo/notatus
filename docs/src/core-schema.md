@@ -121,7 +121,11 @@ bounds.
 - source provenance
 - optional confidence
 - review state
-- timestamps
+- `human_edited`: whether a person changed the shape or label of an
+  annotation a model or import created. `source` keeps naming the creator, so
+  model output accepted as is can be told apart from model output corrected.
+  It is omitted from saved records while false.
+- timestamps; `updated_at` changes on every edit and review decision
 - arbitrary metadata
 
 Supported sources:
