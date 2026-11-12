@@ -52,12 +52,16 @@ fn attach_draw_box_interactions(
 ) -> gpui::Stateful<gpui::Div> {
     let view_down = view.clone();
     let view_move = view.clone();
-    let view_up = view;
     let layout_down = shared_image_layout.clone();
     let layout_move = shared_image_layout.clone();
-    let layout_up = shared_image_layout;
     let annotations_down = annotations.clone();
     let annotations_move = annotations;
+    let up_inside = release_handler(
+        view.clone(),
+        shared_image_layout.clone(),
+        finish_box_gesture,
+    );
+    let up_outside = release_handler(view, shared_image_layout, finish_box_gesture);
 
     canvas
         .on_mouse_down(
@@ -140,44 +144,110 @@ fn attach_draw_box_interactions(
                 });
             }
         })
-        .on_mouse_up(
-            gpui::MouseButton::Left,
-            move |_event: &MouseUpEvent, _window, cx| {
-                let layout = layout_up.borrow();
-                if layout.is_some() {
-                    let _ = view_up.update(cx, |notatus, cx| {
-                        if notatus.tools.bbox_edit.is_some() {
-                            notatus.tools.cancel_interactions();
-                            notatus.state.break_history_coalescing();
-                            notatus.set_canvas_cursor(None, cx);
-                            cx.notify();
-                            return;
-                        }
-                        if let Some(completion) = notatus.tools.finish_draw_box()
-                            && let Some(bbox) = completion.bbox
-                            && let Some(asset_id) = notatus.state.selected_asset
-                        {
-                            let result = notatus.state.batch("Draw box", |state| {
-                                let (label_id, created) =
-                                    super::super::commands::drawing_label(state);
-                                state
-                                    .add_human_bbox(asset_id, label_id, bbox, None)
-                                    .map(|_| created)
-                            });
-                            notatus.status_message = Some(match result {
-                                Ok(true) => format!(
-                                    "Created annotation with new label \"{}\"",
-                                    super::super::commands::FALLBACK_LABEL_NAME
-                                ),
-                                Ok(false) => "Created annotation".into(),
-                                Err(error) => error.to_string(),
-                            });
-                        }
-                        cx.notify();
-                    });
-                }
-            },
-        )
+        .on_mouse_up(gpui::MouseButton::Left, up_inside)
+        .on_mouse_up_out(gpui::MouseButton::Left, up_outside)
+}
+
+/// Ends a gesture given the release point in image coordinates, if the
+/// pointer was over a laid-out image.
+type FinishGesture =
+    fn(&mut NotatusWindow, Option<(f64, f64)>, &mut Window, &mut Context<NotatusWindow>);
+
+/// A release listener that finishes the current gesture at the release
+/// point. Registered for releases both on and off the canvas: once the
+/// pointer leaves the canvas it stops reporting moves, so the release is
+/// the only place a gesture dragged past the edge can end.
+fn release_handler(
+    view: gpui::WeakEntity<NotatusWindow>,
+    shared_image_layout: SharedImageLayout,
+    finish: FinishGesture,
+) -> impl Fn(&MouseUpEvent, &mut Window, &mut App) + 'static {
+    move |event, window, cx| {
+        let layout = *shared_image_layout.borrow();
+        let _ = view.update(cx, |notatus, cx| {
+            let image_pos = layout
+                .zip(notatus.selected_asset())
+                .map(|(layout, asset)| screen_to_image(layout.image_bounds, event.position, asset));
+            finish(notatus, image_pos, window, cx);
+        });
+    }
+}
+
+/// Ends a box-tool gesture: commits the box being drawn, or ends a move or
+/// resize. `image_pos` is where the button was released, clamped to the
+/// image.
+fn finish_box_gesture(
+    notatus: &mut NotatusWindow,
+    image_pos: Option<(f64, f64)>,
+    window: &mut Window,
+    cx: &mut Context<NotatusWindow>,
+) {
+    if notatus.tools.bbox_edit.is_some() {
+        finish_bbox_edit(notatus, image_pos, window, cx);
+        return;
+    }
+    if notatus.tools.draw_box.is_none() {
+        return;
+    }
+    if let Some(image_pos) = image_pos {
+        notatus.tools.update_draw_box(image_pos);
+    }
+    if let Some(completion) = notatus.tools.finish_draw_box()
+        && let Some(bbox) = completion.bbox
+        && let Some(asset_id) = notatus.state.selected_asset
+    {
+        let result = notatus.state.batch("Draw box", |state| {
+            let (label_id, created) = super::super::commands::drawing_label(state);
+            state
+                .add_human_bbox(asset_id, label_id, bbox, None)
+                .map(|_| created)
+        });
+        notatus.status_message = Some(match result {
+            Ok(true) => format!(
+                "Created annotation with new label \"{}\"",
+                super::super::commands::FALLBACK_LABEL_NAME
+            ),
+            Ok(false) => "Created annotation".into(),
+            Err(error) => error.to_string(),
+        });
+    }
+    cx.notify();
+}
+
+/// Ends a select-tool gesture: a move, resize, or pan.
+fn finish_select_gesture(
+    notatus: &mut NotatusWindow,
+    image_pos: Option<(f64, f64)>,
+    window: &mut Window,
+    cx: &mut Context<NotatusWindow>,
+) {
+    if notatus.tools.bbox_edit.is_some() {
+        finish_bbox_edit(notatus, image_pos, window, cx);
+    } else if notatus.tools.pan.is_some() {
+        notatus.tools.cancel_interactions();
+        notatus.set_canvas_cursor(None, cx);
+        cx.notify();
+    }
+}
+
+/// Applies the release point to the box being moved or resized, then ends
+/// the edit so the next one starts a new undo step.
+fn finish_bbox_edit(
+    notatus: &mut NotatusWindow,
+    image_pos: Option<(f64, f64)>,
+    window: &mut Window,
+    cx: &mut Context<NotatusWindow>,
+) {
+    if let Some(image_pos) = image_pos
+        && let Some(asset) = notatus.selected_asset().cloned()
+        && let Some((annotation_id, bbox)) = notatus.tools.update_bbox_edit(image_pos, &asset)
+    {
+        notatus.update_annotation_bbox(annotation_id, bbox, window, cx);
+    }
+    notatus.tools.cancel_interactions();
+    notatus.state.break_history_coalescing();
+    notatus.set_canvas_cursor(None, cx);
+    cx.notify();
 }
 
 fn attach_draw_polygon_interactions(
@@ -278,11 +348,16 @@ fn attach_select_interactions(
 ) -> gpui::Stateful<gpui::Div> {
     let view_down = view.clone();
     let view_move = view.clone();
-    let view_up = view;
     let layout_down = shared_image_layout.clone();
-    let layout_move = shared_image_layout;
+    let layout_move = shared_image_layout.clone();
     let annotations_down = annotations.clone();
     let annotations_move = annotations;
+    let up_inside = release_handler(
+        view.clone(),
+        shared_image_layout.clone(),
+        finish_select_gesture,
+    );
+    let up_outside = release_handler(view, shared_image_layout, finish_select_gesture);
 
     canvas
         .on_mouse_down(
@@ -359,17 +434,8 @@ fn attach_select_interactions(
                 });
             }
         })
-        .on_mouse_up(
-            gpui::MouseButton::Left,
-            move |_event: &MouseUpEvent, _window, cx| {
-                let _ = view_up.update(cx, |notatus, cx| {
-                    notatus.tools.cancel_interactions();
-                    notatus.state.break_history_coalescing();
-                    notatus.set_canvas_cursor(None, cx);
-                    cx.notify();
-                });
-            },
-        )
+        .on_mouse_up(gpui::MouseButton::Left, up_inside)
+        .on_mouse_up_out(gpui::MouseButton::Left, up_outside)
 }
 
 fn bbox_for_annotation(
@@ -493,12 +559,20 @@ fn attach_middle_pan(
                 }
             });
         })
-        .on_mouse_up(gpui::MouseButton::Middle, move |_: &MouseUpEvent, _, cx| {
-            let _ = view_up.update(cx, |notatus, cx| {
-                notatus.tools.pan = None;
+        .on_mouse_up(gpui::MouseButton::Middle, end_pan(view_up.clone()))
+        .on_mouse_up_out(gpui::MouseButton::Middle, end_pan(view_up))
+}
+
+fn end_pan(
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl Fn(&MouseUpEvent, &mut Window, &mut App) + 'static {
+    move |_, _, cx| {
+        let _ = view.update(cx, |notatus, cx| {
+            if notatus.tools.pan.take().is_some() {
                 notatus.set_canvas_cursor(None, cx);
-            });
-        })
+            }
+        });
+    }
 }
 
 fn apply_canvas_zoom(
