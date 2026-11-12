@@ -12,13 +12,13 @@ pub(in crate::app) fn open_export_dialog(
     };
     let snapshot = Rc::new(RefCell::new(snapshot));
 
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_alert_dialog(cx, move |dialog, _, _| {
         let content_snapshot = snapshot.clone();
         let export_view = view.clone();
 
         dialog
             .confirm()
-            .w(px(420.0))
+            .width(px(420.0))
             .title("Export annotations")
             .child(export_dialog_content(
                 view.clone(),

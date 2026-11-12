@@ -194,17 +194,13 @@ impl NotatusWindow {
 }
 
 impl Render for NotatusWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let dialog_layer = Root::render_dialog_layer(window, cx);
-        let notification_layer = Root::render_notification_layer(window, cx);
-
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // gpui-component's Root mounts the dialog and notification layers itself.
         div()
             .id("notatus-window")
             .relative()
             .size_full()
             .bg(rgb(0xf3f4f6))
             .child(self.app_frame(cx))
-            .children(dialog_layer)
-            .children(notification_layer)
     }
 }

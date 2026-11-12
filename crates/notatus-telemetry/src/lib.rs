@@ -9,15 +9,15 @@ use opentelemetry_otlp::ExporterBuildError;
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::trace::SdkTracerProvider;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
-use tracing_subscriber::EnvFilter;
 
 const SERVICE_NAME: &str = "notatus";
 
 pub fn init_telemetry() -> TelemetryGuard {
-    let filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("notatus=info"));
+    let filter_layer =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("notatus=info"));
 
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(true);
 

@@ -350,10 +350,9 @@ fn open_label_rename_dialog(
         return;
     };
 
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_alert_dialog(cx, move |dialog, _, _| {
         dialog
-            .alert()
-            .w(px(360.0))
+            .width(px(360.0))
             .title("Rename label")
             .child(Input::new(&input).small().w_full())
             .button_props(DialogButtonProps::default().ok_text("Done"))
@@ -377,10 +376,9 @@ fn open_label_color_dialog(
         return;
     };
 
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_alert_dialog(cx, move |dialog, _, _| {
         dialog
-            .alert()
-            .w(px(360.0))
+            .width(px(360.0))
             .title("Label color")
             .child(
                 ColorPicker::new(&picker)
@@ -410,7 +408,7 @@ fn remove_label_or_confirm(
         return;
     }
 
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_alert_dialog(cx, move |dialog, _, _| {
         let remove_view = view.clone();
         let message = format!(
             "Removing \"{label_name}\" will also remove {annotation_count} annotation{}.",

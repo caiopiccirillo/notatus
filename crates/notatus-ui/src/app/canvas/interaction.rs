@@ -29,7 +29,7 @@ pub(super) fn attach_canvas_interactions(
                 annotations.clone(),
             )
         })
-        .on_scroll_wheel(move |event: &ScrollWheelEvent, window, cx| {
+        .on_scroll(move |event: &ScrollEvent, window, cx| {
             apply_canvas_zoom(&zoom_view, event, window, cx);
         })
 }
@@ -325,10 +325,8 @@ fn attach_select_interactions(
                                 }
                                 None => {
                                     notatus.select_annotation(None, window, cx);
-                                    notatus.set_canvas_cursor(
-                                        Some(gpui::CursorStyle::ClosedHand),
-                                        cx,
-                                    );
+                                    notatus
+                                        .set_canvas_cursor(Some(gpui::CursorStyle::ClosedHand), cx);
                                     notatus.tools.begin_pan(event.position);
                                 }
                             }
@@ -398,7 +396,7 @@ fn bbox_for_annotation(
 
 fn apply_canvas_zoom(
     view: &gpui::WeakEntity<NotatusWindow>,
-    event: &ScrollWheelEvent,
+    event: &ScrollEvent,
     window: &mut Window,
     cx: &mut App,
 ) {

@@ -68,8 +68,7 @@ impl NotatusWindow {
                 )
                 .into_any_element()
         } else {
-            SidebarMenu::new()
-                .children(self.asset_items(view))
+            SidebarMenuElement(SidebarMenu::new().children(self.asset_items(view)))
                 .into_any_element()
         }
     }
@@ -93,13 +92,16 @@ impl NotatusWindow {
                         .count();
                     let select_view = view.clone();
                     let remove_view = view.clone();
+                    let asset_kind = asset.kind.clone();
                     SidebarMenuItem::new(compact_asset_name(asset))
-                        .suffix(media_asset_actions(
-                            &asset.kind,
-                            annotation_count,
-                            asset_id,
-                            remove_view,
-                        ))
+                        .suffix(move |_, _| {
+                            media_asset_actions(
+                                &asset_kind,
+                                annotation_count,
+                                asset_id,
+                                remove_view.clone(),
+                            )
+                        })
                         .active(self.state.selected_asset == Some(asset_id))
                         .on_click(move |_, _, cx| {
                             let _ = select_view.update(cx, |window, cx| {
@@ -122,7 +124,7 @@ fn media_asset_actions(
     annotation_count: usize,
     asset_id: AssetId,
     view: gpui::WeakEntity<NotatusWindow>,
-) -> impl IntoElement {
+) -> impl IntoElement + use<> {
     div()
         .flex_none()
         .flex()
@@ -143,6 +145,19 @@ fn media_asset_actions(
                     });
                 }),
         )
+}
+
+/// Renders a standalone [`SidebarMenu`] outside of a `Sidebar` container.
+///
+/// Since gpui-component 0.9 a `SidebarMenu` is a `SidebarItem` rather than an
+/// element, so it needs a stable id and the window context to render.
+#[derive(IntoElement)]
+struct SidebarMenuElement(SidebarMenu);
+
+impl RenderOnce for SidebarMenuElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        self.0.render("media-menu", window, cx)
+    }
 }
 
 fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId {

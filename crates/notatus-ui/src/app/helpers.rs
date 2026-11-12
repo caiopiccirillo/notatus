@@ -43,7 +43,10 @@ pub(super) fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
         .child(value.into())
 }
 
-pub(super) fn media_asset_meta(kind: &AssetKind, annotation_count: usize) -> impl IntoElement {
+pub(super) fn media_asset_meta(
+    kind: &AssetKind,
+    annotation_count: usize,
+) -> impl IntoElement + use<> {
     div()
         .flex_none()
         .flex()

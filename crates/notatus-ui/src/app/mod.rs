@@ -1,10 +1,10 @@
 use super::{AnnotationTool, UiState};
 use gpui::prelude::*;
 use gpui::{
-    App, Application, Bounds, Context, FontWeight, IntoElement, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ObjectFit, PathPromptOptions, Pixels, Point, Render, ScrollWheelEvent,
-    SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
-    bounds, div, fill, img, outline, px, rgb, size,
+    App, Bounds, Context, FontWeight, IntoElement, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ObjectFit, PathPromptOptions, Pixels, Point, Render, ScrollEvent, SharedString, Subscription,
+    Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, bounds, div, fill, img,
+    outline, px, rgb, size,
 };
 use gpui_component::{
     Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
@@ -16,7 +16,7 @@ use gpui_component::{
     notification::Notification,
     resizable::{h_resizable, resizable_panel},
     scroll::ScrollableElement as _,
-    sidebar::{SidebarMenu, SidebarMenuItem},
+    sidebar::{SidebarItem as _, SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,
@@ -64,12 +64,12 @@ struct CanvasImageLayout {
 type SharedImageLayout = Rc<RefCell<Option<CanvasImageLayout>>>;
 
 pub fn launch_gpui() {
-    Application::new()
-        .with_assets(gpui_component_assets::Assets)
+    gpui_platform::application()
+        .with_assets(gpui_kit_assets::Assets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
 
-            cx.on_window_closed(|cx| {
+            cx.on_window_closed(|cx, _window_id| {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }

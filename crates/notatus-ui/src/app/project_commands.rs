@@ -109,7 +109,7 @@ fn run_or_confirm_discard(
         return;
     }
 
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_alert_dialog(cx, move |dialog, _, _| {
         let action_view = view.clone();
         dialog
             .confirm()
