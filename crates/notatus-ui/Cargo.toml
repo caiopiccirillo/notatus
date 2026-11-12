@@ -28,4 +28,5 @@ image = { version = "0.25.10", optional = true }
 [dev-dependencies]
 gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["test-support"] }
+gpui_wgpu = { package = "gpui-pre-wgpu", version = "=0.3.12", features = ["test-support"] }
 gpui-component = { version = "0.9.1", features = ["test-support"] }

@@ -45,6 +45,8 @@ mod window;
 
 #[cfg(test)]
 mod gpui_tests;
+#[cfg(test)]
+mod screenshot_tests;
 
 use project_session::ProjectLocation;
 use tools::ToolInteractionState;

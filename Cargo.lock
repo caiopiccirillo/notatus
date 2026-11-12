@@ -4220,6 +4220,7 @@ dependencies = [
  "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
+ "gpui-pre-wgpu",
  "image",
  "notatus-core",
  "notatus-export",
