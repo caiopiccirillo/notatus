@@ -1,25 +1,8 @@
 //! Saving, closing, and reopening projects through the window.
 
+use super::test_support::open_test_window;
 use super::*;
-use gpui::{TestAppContext, VisualTestContext, WindowHandle, WindowOptions};
-
-fn open_test_window(cx: &mut TestAppContext) -> (WindowHandle<Root>, gpui::Entity<NotatusWindow>) {
-    let view_slot = Rc::new(RefCell::new(None));
-    let slot = view_slot.clone();
-    let window = cx.update(|cx| {
-        gpui_component::init(cx);
-        actions::bind_keys(cx);
-        cx.open_window(WindowOptions::default(), |window, cx| {
-            let view = cx.new(|cx| NotatusWindow::new(window, cx));
-            *slot.borrow_mut() = Some(view.clone());
-            cx.new(|cx| Root::new(view, window, cx))
-        })
-        .unwrap()
-    });
-    cx.run_until_parked();
-    let view = view_slot.borrow_mut().take().expect("window view");
-    (window, view)
-}
+use gpui::{TestAppContext, VisualTestContext, WindowHandle};
 
 fn saved_label_count(dir: &Path) -> usize {
     LocalProjectStore::new(dir)

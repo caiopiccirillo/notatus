@@ -1,7 +1,8 @@
 //! Canvas gestures that end with the button released off the canvas.
 
+use super::test_support::open_test_window;
 use super::*;
-use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext, WindowOptions};
+use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext};
 
 struct Canvas {
     cx: VisualTestContext,
@@ -10,19 +11,7 @@ struct Canvas {
 
 impl Canvas {
     fn open(cx: &mut TestAppContext, tool: AnnotationTool) -> Self {
-        let view_slot = Rc::new(RefCell::new(None));
-        let slot = view_slot.clone();
-        let window = cx.update(|cx| {
-            gpui_component::init(cx);
-            actions::bind_keys(cx);
-            cx.open_window(WindowOptions::default(), |window, cx| {
-                let view = cx.new(|cx| NotatusWindow::new(window, cx));
-                *slot.borrow_mut() = Some(view.clone());
-                cx.new(|cx| Root::new(view, window, cx))
-            })
-            .unwrap()
-        });
-        let view: gpui::Entity<NotatusWindow> = view_slot.borrow_mut().take().unwrap();
+        let (window, view) = open_test_window(cx);
         view.update(cx, |notatus, cx| {
             let label = notatus.state.add_label("Person");
             let asset = notatus

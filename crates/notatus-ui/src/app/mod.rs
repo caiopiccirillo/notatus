@@ -57,6 +57,8 @@ mod gesture_tests;
 #[cfg(test)]
 mod save_tests;
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod screenshot_tests;
 
 use project_session::ProjectLocation;
