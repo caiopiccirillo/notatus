@@ -376,6 +376,7 @@ fn attach_select_interactions(
             move |_event: &MouseUpEvent, _window, cx| {
                 let _ = view_up.update(cx, |notatus, cx| {
                     notatus.tools.cancel_interactions();
+                    notatus.state.break_history_coalescing();
                     notatus.set_canvas_cursor(None, cx);
                     cx.notify();
                 });

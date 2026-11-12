@@ -29,6 +29,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+mod actions;
 mod bottom_bar;
 mod canvas;
 mod commands;
@@ -36,6 +37,7 @@ mod export_commands;
 mod helpers;
 mod left_dock;
 mod media_import;
+mod palette;
 mod project_commands;
 mod project_session;
 mod right_dock;
@@ -71,6 +73,7 @@ pub fn launch_gpui() {
         .with_assets(gpui_kit_assets::Assets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
+            actions::bind_keys(cx);
 
             cx.on_window_closed(|cx, _window_id| {
                 if cx.windows().is_empty() {

@@ -98,24 +98,21 @@ impl NotatusWindow {
                     let select_view = view.clone();
                     let remove_view = view.clone();
                     let asset_kind = asset.kind.clone();
+                    let done = asset.status == notatus_core::AssetStatus::Done;
                     SidebarMenuItem::new(compact_asset_name(asset))
                         .suffix(move |_, _| {
                             media_asset_actions(
                                 &asset_kind,
                                 annotation_count,
+                                done,
                                 asset_id,
                                 remove_view.clone(),
                             )
                         })
                         .active(self.state.selected_asset == Some(asset_id))
-                        .on_click(move |_, _, cx| {
-                            let _ = select_view.update(cx, |window, cx| {
-                                if let Err(error) = window.state.select_asset(asset_id) {
-                                    window.status_message = Some(error.to_string());
-                                } else {
-                                    window.tools.fit_canvas_to_view();
-                                }
-                                cx.notify();
+                        .on_click(move |_, window, cx| {
+                            let _ = select_view.update(cx, |notatus, cx| {
+                                notatus.go_to_media(asset_id, window, cx);
                             });
                         })
                 })
@@ -127,6 +124,7 @@ impl NotatusWindow {
 fn media_asset_actions(
     kind: &AssetKind,
     annotation_count: usize,
+    done: bool,
     asset_id: AssetId,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement + use<> {
@@ -135,6 +133,13 @@ fn media_asset_actions(
         .flex()
         .items_center()
         .gap_1()
+        .when(done, |row| {
+            row.child(themed(|theme| {
+                Icon::new(IconName::CircleCheck)
+                    .xsmall()
+                    .text_color(theme.success)
+            }))
+        })
         .child(media_asset_meta(kind, annotation_count))
         .child(
             Button::new(asset_element_id("media-remove", asset_id))

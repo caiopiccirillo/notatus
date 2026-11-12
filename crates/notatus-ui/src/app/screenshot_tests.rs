@@ -84,7 +84,10 @@ fn screenshots() {
     let sample_image = env::var("NOTATUS_SAMPLE_IMAGE").ok();
 
     let mut cx = headless_cx();
-    cx.update(gpui_component::init);
+    cx.update(|cx| {
+        gpui_component::init(cx);
+        actions::bind_keys(cx);
+    });
 
     let mut view_slot = None;
     let window = cx
@@ -104,4 +107,11 @@ fn screenshots() {
         cx.update(|cx| Theme::change(mode, None, cx));
         capture(&mut cx, window, &out_dir.join(format!("main-{name}.png")));
     }
+
+    let view = view_slot.expect("window view");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |notatus, cx| notatus.open_command_palette(window, cx));
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("palette-dark.png"));
 }

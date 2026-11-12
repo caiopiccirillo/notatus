@@ -32,6 +32,8 @@ pub(super) struct NotatusWindow {
     pub(super) export_coco: bool,
     pub(super) export_classifications: bool,
     pub(super) canvas_image_layout: SharedImageLayout,
+    pub(super) focus_handle: gpui::FocusHandle,
+    pub(super) command_state: gpui::Entity<gpui_component::command::CommandState>,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -44,6 +46,9 @@ impl NotatusWindow {
         let label_color_picker = cx.new(|cx| {
             ColorPickerState::new(window, cx).default_value(hex_color(DEFAULT_LABEL_COLOR))
         });
+        let command_state = cx.new(|cx| gpui_component::command::CommandState::new(window, cx));
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
         project_name_input.update(cx, |input, cx| {
             input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
         });
@@ -122,6 +127,8 @@ impl NotatusWindow {
             export_coco: true,
             export_classifications: true,
             canvas_image_layout: Rc::new(RefCell::new(None)),
+            focus_handle,
+            command_state,
             _subscriptions,
         }
     }
@@ -197,11 +204,11 @@ impl NotatusWindow {
 impl Render for NotatusWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // gpui-component's Root mounts the dialog and notification layers itself.
-        div()
+        let root = div()
             .id("notatus-window")
             .relative()
             .size_full()
-            .bg(cx.theme().background)
-            .child(self.app_frame(cx))
+            .bg(cx.theme().background);
+        self.action_handlers(root, cx).child(self.app_frame(cx))
     }
 }

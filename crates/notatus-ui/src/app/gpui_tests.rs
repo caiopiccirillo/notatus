@@ -7,6 +7,7 @@ fn open_test_window(cx: &mut TestAppContext) -> (WindowHandle<Root>, gpui::Entit
 
     let window = cx.update(|cx| {
         gpui_component::init(cx);
+        actions::bind_keys(cx);
         cx.open_window(WindowOptions::default(), |window, cx| {
             let view = cx.new(|cx| NotatusWindow::new(window, cx));
             *view_slot.borrow_mut() = Some(view.clone());
@@ -149,4 +150,142 @@ fn empty_project_export_pushes_notification_without_panicking(cx: &mut TestAppCo
         })
         .unwrap();
     assert_eq!(notification_count, 1);
+}
+
+fn seed_three_media(notatus: &mut NotatusWindow) -> (LabelId, Vec<AssetId>) {
+    let person = notatus.state.add_label("Person");
+    let car = notatus.state.add_label("Car");
+    let assets = ["/tmp/a.png", "/tmp/b.png", "/tmp/c.png"]
+        .into_iter()
+        .map(|path| notatus.state.add_local_image_asset(path, 100, 100).unwrap())
+        .collect::<Vec<_>>();
+    notatus.state.select_asset(assets[0]).unwrap();
+    notatus.state.select_label(person).unwrap();
+    (car, assets)
+}
+
+#[gpui::test]
+fn keyboard_shortcuts_drive_the_annotation_loop(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let (car, assets) = view.update(cx, |notatus, _| seed_three_media(notatus));
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "d");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_asset, Some(assets[1]));
+    });
+
+    cx.simulate_keystrokes(window, "2");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_label, Some(car));
+    });
+
+    cx.simulate_keystrokes(window, "v");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.active_tool, AnnotationTool::Select);
+    });
+
+    cx.simulate_keystrokes(window, "ctrl-enter");
+    view.update(cx, |notatus, _| {
+        let asset = notatus.state.dataset.asset_by_id(assets[1]).unwrap();
+        assert_eq!(asset.status, notatus_core::AssetStatus::Done);
+        assert_eq!(notatus.state.selected_asset, Some(assets[2]));
+        assert_eq!(
+            notatus.progress_summary().as_deref(),
+            Some("3 of 3 · 1 done")
+        );
+    });
+
+    cx.simulate_keystrokes(window, "ctrl-z");
+    view.update(cx, |notatus, _| {
+        let asset = notatus.state.dataset.asset_by_id(assets[1]).unwrap();
+        assert_eq!(asset.status, notatus_core::AssetStatus::Pending);
+    });
+}
+
+#[gpui::test]
+fn delete_key_removes_selected_annotation_and_undo_restores_it(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let annotation_id = view.update(cx, |notatus, _| {
+        let (label, assets) = seed_three_media(notatus);
+        let bbox = BoundingBox::from_xywh(10.0, 10.0, 20.0, 20.0).unwrap();
+        let id = notatus
+            .state
+            .add_human_bbox(assets[0], label, bbox, None)
+            .unwrap();
+        notatus.state.select_annotation(Some(id)).unwrap();
+        id
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "delete");
+    view.update(cx, |notatus, _| {
+        assert!(notatus.state.dataset.annotations.is_empty());
+    });
+
+    cx.simulate_keystrokes(window, "ctrl-z");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_annotation, Some(annotation_id));
+        assert_eq!(notatus.state.dataset.annotations.len(), 1);
+    });
+
+    cx.simulate_keystrokes(window, "ctrl-shift-z");
+    view.update(cx, |notatus, _| {
+        assert!(notatus.state.dataset.annotations.is_empty());
+    });
+}
+
+#[gpui::test]
+fn bare_key_shortcuts_are_ignored_while_typing(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let assets = view.update(cx, |notatus, _| seed_three_media(notatus).1);
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        let input = view.read(cx).project_name_input.clone();
+        input.update(cx, |input, cx| input.focus(window, cx));
+    })
+    .unwrap();
+    cx.simulate_keystrokes(window, "d");
+
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_asset, Some(assets[0]));
+    });
+}
+
+#[gpui::test]
+fn command_palette_runs_the_confirmed_command(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    view.update(cx, |notatus, _| {
+        seed_three_media(notatus);
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "ctrl-k");
+    let open = cx
+        .update_window(window, |_, window, cx| window.has_active_dialog(cx))
+        .unwrap();
+    assert!(open);
+
+    cx.simulate_input(window, "polygon tool");
+    cx.simulate_keystrokes(window, "enter");
+    cx.run_until_parked();
+
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.active_tool, AnnotationTool::DrawPolygon);
+    });
+    let open = cx
+        .update_window(window, |_, window, cx| window.has_active_dialog(cx))
+        .unwrap();
+    assert!(!open);
+
+    // Focus returns to the window, so bare-key shortcuts work again.
+    cx.simulate_keystrokes(window, "v");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.active_tool, AnnotationTool::Select);
+    });
 }

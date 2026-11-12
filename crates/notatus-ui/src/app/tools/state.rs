@@ -126,6 +126,24 @@ impl ToolInteractionState {
         self.pan = None;
     }
 
+    /// Drops any box or polygon being drawn.
+    pub(in crate::app) fn cancel_drawing(&mut self) {
+        self.draw_box = None;
+        self.draw_polygon = None;
+        self.cancel_interactions();
+    }
+
+    /// Removes the most recent polygon vertex, abandoning the polygon when
+    /// none remain.
+    pub(in crate::app) fn remove_last_polygon_point(&mut self) {
+        if let Some(polygon) = &mut self.draw_polygon {
+            polygon.points.pop();
+            if polygon.points.is_empty() {
+                self.draw_polygon = None;
+            }
+        }
+    }
+
     pub(in crate::app) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
         self.draw_box = Some(DrawingState {
             start_image_pos: image_pos,
@@ -345,6 +363,19 @@ mod tests {
         assert_eq!(viewport.zoom, 4.0);
         assert_eq!(viewport.pan_x, 200.0);
         assert_eq!(viewport.pan_y, 150.0);
+    }
+
+    #[test]
+    fn removing_polygon_points_abandons_empty_polygon() {
+        let mut tools = ToolInteractionState::default();
+        tools.add_polygon_point((1.0, 1.0));
+        tools.add_polygon_point((5.0, 1.0));
+
+        tools.remove_last_polygon_point();
+        assert_eq!(tools.polygon_point_count(), 1);
+
+        tools.remove_last_polygon_point();
+        assert!(tools.draw_polygon.is_none());
     }
 
     #[test]
