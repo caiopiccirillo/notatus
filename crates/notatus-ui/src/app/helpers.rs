@@ -168,7 +168,7 @@ pub(super) fn annotation_count_label(count: usize) -> String {
 }
 
 pub(super) fn exportable_annotation_count(dataset: &notatus_core::Dataset) -> usize {
-    let filter = notatus_export::AnnotationFilter::all_non_rejected();
+    let filter = notatus_export::AnnotationFilter::ready_for_training();
     dataset
         .annotations
         .iter()

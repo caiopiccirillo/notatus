@@ -103,7 +103,10 @@ fn export_dialog_content(
                     "Exportable objects",
                     annotation_count_label(snapshot_read.exportable_count),
                 ))
-                .child(metric("Filter", "All non-rejected".to_string()))
+                .child(metric(
+                    "Filter",
+                    "Not rejected; model output once reviewed".to_string(),
+                ))
                 .child(metric("Output", snapshot_read.output_label())),
         )
         .into_any_element()

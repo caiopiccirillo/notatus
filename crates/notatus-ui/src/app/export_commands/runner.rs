@@ -126,7 +126,7 @@ fn push_export_error_notification(
 }
 
 fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, String> {
-    let filter = notatus_export::AnnotationFilter::all_non_rejected();
+    let filter = notatus_export::AnnotationFilter::ready_for_training();
     let mut formats = Vec::new();
     let mut annotation_count = 0;
     let mut classification_count = 0;
@@ -156,6 +156,7 @@ fn run_export(request: ExportRequest, output_dir: &Path) -> Result<String, Strin
     if request.classifications {
         let summary = notatus_export::classification::write_classification_export(
             &request.dataset,
+            &filter,
             output_dir.join("classification"),
         )
         .map_err(|error| error.to_string())?;

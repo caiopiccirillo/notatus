@@ -108,10 +108,11 @@ impl NotatusWindow {
 }
 
 fn exportable_classification_count(dataset: &notatus_core::Dataset) -> usize {
+    let filter = notatus_export::AnnotationFilter::ready_for_training();
     dataset
         .classifications
         .iter()
-        .filter(|classification| classification.review_state != notatus_core::ReviewState::Rejected)
+        .filter(|classification| filter.accepts_classification(classification))
         .count()
 }
 

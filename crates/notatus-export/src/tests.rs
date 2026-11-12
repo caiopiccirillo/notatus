@@ -101,7 +101,11 @@ fn exports_coco_polygon_segmentation_dataset() {
 
 #[test]
 fn exports_image_classifications() {
-    let rows = classification::export_classifications(&classification_dataset()).unwrap();
+    let rows = classification::export_classifications(
+        &classification_dataset(),
+        &AnnotationFilter::ready_for_training(),
+    )
+    .unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].image_path, "images/a.jpg");
@@ -159,9 +163,12 @@ fn writes_coco_detection_export_layout() {
 fn writes_classification_export_layout() {
     let output = tempfile::tempdir().unwrap();
 
-    let summary =
-        classification::write_classification_export(&classification_dataset(), output.path())
-            .unwrap();
+    let summary = classification::write_classification_export(
+        &classification_dataset(),
+        &AnnotationFilter::ready_for_training(),
+        output.path(),
+    )
+    .unwrap();
 
     assert_eq!(summary.classification_count, 1);
     let json = std::fs::read_to_string(output.path().join("classifications.json")).unwrap();
@@ -233,4 +240,39 @@ fn yolo_import_rejects_values_far_outside_the_image() {
     assert!(import("0 1.5 0.5 0.2 0.2").is_err());
     assert!(import("0 0.5 0.5 0 0.2").is_err());
     assert!(import("0 0.5 0.5 NaN 0.2").is_err());
+}
+
+#[test]
+fn training_filter_leaves_out_unreviewed_model_predictions() {
+    let mut dataset = sample_dataset();
+    let asset_id = dataset.assets[0].id;
+    let label_id = dataset.labels[0].id;
+    let model = notatus_core::ModelProvenance {
+        name: "detector".to_string(),
+        version: None,
+        invocation_id: None,
+        metadata: Default::default(),
+    };
+    let bbox = AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 5.0, 5.0).unwrap());
+    let human_draft = AnnotationRecord::new_human(asset_id, label_id, bbox.clone(), None);
+    let model_draft =
+        AnnotationRecord::new_model(asset_id, label_id, bbox.clone(), model.clone(), Some(0.9));
+    let mut model_accepted =
+        AnnotationRecord::new_model(asset_id, label_id, bbox, model.clone(), Some(0.8));
+    model_accepted.accept();
+    let filter = AnnotationFilter::ready_for_training();
+
+    assert!(filter.accepts(&human_draft));
+    assert!(!filter.accepts(&model_draft));
+    assert!(filter.accepts(&model_accepted));
+    assert!(AnnotationFilter::all_non_rejected().accepts(&model_draft));
+
+    dataset.add_classification(ClassificationRecord::new_model(
+        asset_id,
+        label_id,
+        model,
+        Some(0.7),
+    ));
+    let rows = classification::export_classifications(&dataset, &filter).unwrap();
+    assert!(rows.is_empty());
 }
