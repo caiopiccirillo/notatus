@@ -6,7 +6,6 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use time::OffsetDateTime;
-use tracing;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -158,7 +157,11 @@ impl Dataset {
     ))]
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.manifest.schema_version != CURRENT_SCHEMA_VERSION {
-            tracing::warn!(found = self.manifest.schema_version, supported = CURRENT_SCHEMA_VERSION, "unsupported schema version");
+            tracing::warn!(
+                found = self.manifest.schema_version,
+                supported = CURRENT_SCHEMA_VERSION,
+                "unsupported schema version"
+            );
             return Err(ValidationError::UnsupportedSchemaVersion {
                 found: self.manifest.schema_version,
                 supported: CURRENT_SCHEMA_VERSION,

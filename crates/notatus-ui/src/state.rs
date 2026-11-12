@@ -6,7 +6,6 @@ use notatus_core::{
 };
 use std::error::Error;
 use std::fmt;
-use tracing;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AnnotationTool {
@@ -598,7 +597,9 @@ impl UiState {
             .iter()
             .filter(|annotation| annotation.asset_id == asset_id)
             .collect();
-        let start = on_asset.iter().position(|annotation| annotation.id == from)?;
+        let start = on_asset
+            .iter()
+            .position(|annotation| annotation.id == from)?;
         (1..on_asset.len())
             .map(|offset| on_asset[(start + offset) % on_asset.len()])
             .find(|annotation| annotation.review_state == ReviewState::Draft)
@@ -1345,7 +1346,9 @@ mod tests {
         let bbox = BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap();
 
         state.update_annotation_bbox(annotation_id, bbox).unwrap();
-        state.update_annotation_label(annotation_id, label_id).unwrap();
+        state
+            .update_annotation_label(annotation_id, label_id)
+            .unwrap();
 
         assert!(!state.dirty);
         assert_eq!(state.undo_description(), Some("Draw box"));
@@ -1373,9 +1376,18 @@ mod tests {
 
         state.set_asset_status(b, AssetStatus::Done).unwrap();
 
-        assert_eq!(state.adjacent_asset(Some(a), Direction::Next, false), Some(b));
-        assert_eq!(state.adjacent_asset(Some(a), Direction::Next, true), Some(c));
-        assert_eq!(state.adjacent_asset(Some(c), Direction::Previous, true), Some(a));
+        assert_eq!(
+            state.adjacent_asset(Some(a), Direction::Next, false),
+            Some(b)
+        );
+        assert_eq!(
+            state.adjacent_asset(Some(a), Direction::Next, true),
+            Some(c)
+        );
+        assert_eq!(
+            state.adjacent_asset(Some(c), Direction::Previous, true),
+            Some(a)
+        );
         assert_eq!(state.adjacent_asset(Some(c), Direction::Next, false), None);
         assert_eq!(state.adjacent_asset(None, Direction::Next, true), Some(a));
         assert_eq!(state.undo(), Some("Mark media done"));
@@ -1442,7 +1454,10 @@ mod tests {
         assert_eq!(state.revision(), revision, "unchanged state is a no-op");
 
         state.undo();
-        assert_eq!(state.dataset.annotations[1].review_state, ReviewState::Draft);
+        assert_eq!(
+            state.dataset.annotations[1].review_state,
+            ReviewState::Draft
+        );
 
         for id in &ids {
             state
