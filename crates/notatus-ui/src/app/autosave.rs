@@ -2,8 +2,8 @@
 //!
 //! Every write to the project folder goes through one pipeline with at most
 //! one save in flight, so a manual save can never race an autosave writing
-//! the same files. Edits schedule a save a short moment later, and Ctrl+S
-//! saves right away.
+//! the same files. Edits schedule a save a short moment later, Ctrl+S saves
+//! right away, and closing the window waits for the last save to land.
 //!
 //! Saves run on a background thread. A save that finishes after newer edits
 //! only marks the revision it wrote as saved.
@@ -29,6 +29,11 @@ pub(super) struct AutosaveState {
     /// Report "Saved project" when the current save finishes, because
     /// someone asked for it rather than the timer.
     announce: bool,
+    /// The window is waiting for pending changes to reach disk to close.
+    close_requested: bool,
+    /// Closing may go ahead without saving: everything is saved or the
+    /// person chose to discard what is not.
+    close_confirmed: bool,
 }
 
 impl AutosaveState {
@@ -131,6 +136,9 @@ impl NotatusWindow {
             } else {
                 format!("Autosave failed: {error}")
             });
+            if std::mem::take(&mut self.autosave.close_requested) {
+                self.confirm_close_after_failed_save(error, cx);
+            }
             // Retry only after the next edit, not in a loop.
             cx.notify();
             return;
@@ -140,6 +148,12 @@ impl NotatusWindow {
         self.autosave.scheduled_revision = None;
         if std::mem::take(&mut self.autosave.save_requested) {
             self.start_save(cx);
+        } else if self.autosave.close_requested {
+            if self.state.dirty {
+                self.start_save(cx);
+            } else {
+                self.close_window(cx);
+            }
         } else {
             if std::mem::take(&mut self.autosave.announce) {
                 self.status_message = Some("Saved project".to_string());
@@ -147,6 +161,92 @@ impl NotatusWindow {
             self.schedule_autosave(cx);
         }
         cx.notify();
+    }
+
+    /// Decides whether the window may close right now.
+    ///
+    /// Pending changes in a project folder are saved first, and the window
+    /// closes once they are on disk. A project that was never saved to a
+    /// folder asks before its changes are discarded.
+    pub(super) fn should_close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.autosave.close_confirmed || (!self.state.dirty && !self.autosave.saving) {
+            return true;
+        }
+
+        match self.project_location {
+            ProjectLocation::Local(_) => {
+                self.autosave.close_requested = true;
+                self.autosave.timer = None;
+                if !self.autosave.saving {
+                    self.start_save(cx);
+                }
+                self.status_message = Some("Saving before closing…".to_string());
+                cx.notify();
+            }
+            ProjectLocation::Unsaved => self.confirm_discard_on_close(window, cx),
+        }
+        false
+    }
+
+    fn close_window(&mut self, cx: &mut Context<Self>) {
+        self.autosave.close_confirmed = true;
+        let handle = self.window_handle;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+        });
+    }
+
+    fn confirm_discard_on_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.weak_entity();
+        window.open_alert_dialog(cx, move |dialog, _, _| {
+            let view = view.clone();
+            dialog
+                .confirm()
+                .title("Close without saving?")
+                .child(
+                    "This project has never been saved to a folder. \
+                     Closing now discards it. Use Save Project As to keep it.",
+                )
+                .button_props(
+                    DialogButtonProps::default()
+                        .ok_text("Discard and close")
+                        .cancel_text("Cancel"),
+                )
+                .on_ok(move |_, window, cx| {
+                    let _ = view.update(cx, |notatus, _| notatus.autosave.close_confirmed = true);
+                    window.remove_window();
+                    true
+                })
+        });
+    }
+
+    fn confirm_close_after_failed_save(&mut self, error: String, cx: &mut Context<Self>) {
+        let view = cx.weak_entity();
+        let handle = self.window_handle;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                window.open_alert_dialog(cx, move |dialog, _, _| {
+                    let view = view.clone();
+                    dialog
+                        .confirm()
+                        .title("Couldn't save before closing")
+                        .child(format!(
+                            "{error}\n\nClosing now loses the changes made since the last save."
+                        ))
+                        .button_props(
+                            DialogButtonProps::default()
+                                .ok_text("Close without saving")
+                                .cancel_text("Keep open"),
+                        )
+                        .on_ok(move |_, window, cx| {
+                            let _ = view
+                                .update(cx, |notatus, _| notatus.autosave.close_confirmed = true);
+                            window.remove_window();
+                            true
+                        })
+                });
+            });
+        });
     }
 
     /// Short save-state text for the status bar.

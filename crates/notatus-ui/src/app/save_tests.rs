@@ -1,7 +1,7 @@
-//! Saving projects through the window.
+//! Saving, closing, and reopening projects through the window.
 
 use super::*;
-use gpui::{TestAppContext, WindowHandle, WindowOptions};
+use gpui::{TestAppContext, VisualTestContext, WindowHandle, WindowOptions};
 
 fn open_test_window(cx: &mut TestAppContext) -> (WindowHandle<Root>, gpui::Entity<NotatusWindow>) {
     let view_slot = Rc::new(RefCell::new(None));
@@ -29,6 +29,12 @@ fn saved_label_count(dir: &Path) -> usize {
         .len()
 }
 
+fn has_dialog(window: WindowHandle<Root>, cx: &mut TestAppContext) -> bool {
+    // The untyped handle leaves the root view free for the dialog check.
+    cx.update_window(window.into(), |_, window, cx| window.has_active_dialog(cx))
+        .unwrap()
+}
+
 #[gpui::test]
 fn save_requested_during_a_save_writes_the_newest_state(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
@@ -50,6 +56,80 @@ fn save_requested_during_a_save_writes_the_newest_state(cx: &mut TestAppContext)
         assert_eq!(notatus.status_message.as_deref(), Some("Saved project"));
     });
     assert_eq!(saved_label_count(dir.path()), 2);
+}
+
+#[gpui::test]
+fn closing_saves_pending_changes_before_the_window_goes(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.project_location = ProjectLocation::local(dir.path());
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert!(!dir.path().join(MANIFEST_FILE).exists());
+
+    let closed = VisualTestContext::from_window(window.into(), cx).simulate_close();
+
+    assert!(!closed, "the window waits for the save");
+    cx.run_until_parked();
+    assert_eq!(saved_label_count(dir.path()), 1);
+    assert!(cx.windows().is_empty(), "the window closes once saved");
+}
+
+#[gpui::test]
+fn closing_without_changes_is_immediate(cx: &mut TestAppContext) {
+    let (window, _) = open_test_window(cx);
+
+    assert!(VisualTestContext::from_window(window.into(), cx).simulate_close());
+}
+
+#[gpui::test]
+fn closing_a_never_saved_project_asks_first(cx: &mut TestAppContext) {
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+
+    let closed = VisualTestContext::from_window(window.into(), cx).simulate_close();
+    cx.run_until_parked();
+
+    assert!(!closed);
+    assert!(has_dialog(window, cx));
+    assert_eq!(cx.windows().len(), 1);
+}
+
+#[gpui::test]
+fn failed_save_on_close_keeps_the_window_open(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    // A file where the project folder should be makes every save fail.
+    let blocked = dir.path().join("not-a-folder");
+    std::fs::write(&blocked, "").unwrap();
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.project_location = ProjectLocation::local(blocked.join("project"));
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+
+    let closed = VisualTestContext::from_window(window.into(), cx).simulate_close();
+    cx.run_until_parked();
+
+    assert!(!closed);
+    assert_eq!(cx.windows().len(), 1);
+    assert!(has_dialog(window, cx));
+    view.update(cx, |notatus, _| {
+        assert!(notatus.state.dirty);
+        assert!(
+            notatus
+                .status_message
+                .as_deref()
+                .is_some_and(|message| message.starts_with("Autosave failed"))
+        );
+    });
 }
 
 #[gpui::test]
