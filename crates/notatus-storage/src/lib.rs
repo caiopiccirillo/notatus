@@ -3,6 +3,10 @@
 //! The first backend is a transparent local folder layout. It keeps the
 //! canonical dataset in deterministic JSON/JSONL files so projects can be
 //! versioned with Git, DVC, lakeFS, object storage manifests, or similar tools.
+//!
+//! Saves never write over a project file in place. Every file is written to a
+//! temporary sibling, flushed and synced, and only then renamed over the
+//! original, so a crash or a full disk leaves the previous save readable.
 
 use notatus_core::{
     AnnotationRecord, AssetRecord, ClassificationRecord, Dataset, Label, ProjectManifest,
@@ -10,6 +14,7 @@ use notatus_core::{
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
 
 pub const MANIFEST_FILE: &str = "notatus.project.json";
@@ -17,6 +22,15 @@ pub const LABELS_FILE: &str = "labels.json";
 pub const ASSETS_FILE: &str = "assets.jsonl";
 pub const ANNOTATIONS_FILE: &str = "annotations.jsonl";
 pub const CLASSIFICATIONS_FILE: &str = "classifications.jsonl";
+
+/// Every file a project folder owns, in the order saves replace them.
+pub const PROJECT_FILES: [&str; 5] = [
+    CLASSIFICATIONS_FILE,
+    ANNOTATIONS_FILE,
+    ASSETS_FILE,
+    LABELS_FILE,
+    MANIFEST_FILE,
+];
 
 pub trait ProjectStore {
     fn load_dataset(&self) -> Result<Dataset, StorageError>;
@@ -100,6 +114,9 @@ impl ProjectStore for LocalProjectStore {
         Ok(dataset)
     }
 
+    /// Writes every project file to a synced temporary sibling first, and
+    /// renames them over the originals only once all of them are written.
+    /// A failure before the renames leaves the previous save untouched.
     #[tracing::instrument(level = "debug", skip_all, fields(
         root = %self.root.display(),
         labels = dataset.labels.len(),
@@ -116,14 +133,156 @@ impl ProjectStore for LocalProjectStore {
             source,
         })?;
 
-        write_json_pretty(&self.manifest_path(), &dataset.manifest)?;
-        write_json_pretty(&self.labels_path(), &dataset.labels)?;
-        write_jsonl(&self.assets_path(), &dataset.assets)?;
-        write_jsonl(&self.annotations_path(), &dataset.annotations)?;
-        write_jsonl(&self.classifications_path(), &dataset.classifications)?;
+        let mut staged = StagedFiles::default();
+        staged.stage(&self.classifications_path(), |writer| {
+            write_jsonl(writer, &dataset.classifications)
+        })?;
+        staged.stage(&self.annotations_path(), |writer| {
+            write_jsonl(writer, &dataset.annotations)
+        })?;
+        staged.stage(&self.assets_path(), |writer| {
+            write_jsonl(writer, &dataset.assets)
+        })?;
+        staged.stage(&self.labels_path(), |writer| {
+            write_json_pretty(writer, &dataset.labels)
+        })?;
+        staged.stage(&self.manifest_path(), |writer| {
+            write_json_pretty(writer, &dataset.manifest)
+        })?;
+        staged.commit(&self.root)?;
 
         tracing::info!("dataset saved successfully");
         Ok(())
+    }
+}
+
+/// Temporary files written for one save, renamed into place by [`commit`].
+/// Dropping it without committing deletes them.
+///
+/// [`commit`]: StagedFiles::commit
+#[derive(Default)]
+struct StagedFiles {
+    files: Vec<(PathBuf, PathBuf)>,
+}
+
+impl StagedFiles {
+    /// Writes `path`'s new contents to a synced temporary sibling.
+    fn stage(
+        &mut self,
+        path: &Path,
+        write: impl FnOnce(&mut BufWriter<File>) -> Result<(), WriteError>,
+    ) -> Result<(), StorageError> {
+        let temp = temp_path_for(path);
+        let result = write_synced(&temp, write);
+        if let Err(error) = result {
+            let _ = fs::remove_file(&temp);
+            return Err(error.at(path));
+        }
+        self.files.push((temp, path.to_path_buf()));
+        Ok(())
+    }
+
+    /// Renames every staged file over its target, then syncs the folder so
+    /// the renames themselves survive a crash.
+    fn commit(mut self, root: &Path) -> Result<(), StorageError> {
+        let files = std::mem::take(&mut self.files);
+        let mut pending = files.iter();
+        for (temp, target) in pending.by_ref() {
+            if let Err(source) = fs::rename(temp, target) {
+                for (rest, _) in pending {
+                    let _ = fs::remove_file(rest);
+                }
+                let _ = fs::remove_file(temp);
+                return Err(StorageError::Io {
+                    path: target.clone(),
+                    source,
+                });
+            }
+        }
+        sync_dir(root)
+    }
+}
+
+impl Drop for StagedFiles {
+    fn drop(&mut self) {
+        for (temp, _) in &self.files {
+            let _ = fs::remove_file(temp);
+        }
+    }
+}
+
+/// A hidden sibling of `path` that no other save in this process uses.
+fn temp_path_for(path: &Path) -> PathBuf {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(".{name}.{}.{unique}.tmp", std::process::id()))
+}
+
+/// Creates `path`, writes it, and makes sure every byte reached the disk.
+/// Unlike dropping a `BufWriter`, this reports errors from the final flush.
+fn write_synced(
+    path: &Path,
+    write: impl FnOnce(&mut BufWriter<File>) -> Result<(), WriteError>,
+) -> Result<(), WriteError> {
+    let file = File::create(path)?;
+    let mut writer = BufWriter::new(file);
+    write(&mut writer)?;
+    let file = writer.into_inner().map_err(|error| error.into_error())?;
+    file.sync_all()?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> Result<(), StorageError> {
+    File::open(dir)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|source| StorageError::Io {
+            path: dir.to_path_buf(),
+            source,
+        })
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_dir: &Path) -> Result<(), StorageError> {
+    // Folders cannot be opened for syncing on Windows; renames are already
+    // durable there once the file contents are flushed.
+    Ok(())
+}
+
+/// A write failure before the file path is known to the caller.
+#[derive(Debug)]
+enum WriteError {
+    Io(std::io::Error),
+    Json(serde_json::Error),
+}
+
+impl WriteError {
+    fn at(self, path: &Path) -> StorageError {
+        let path = path.to_path_buf();
+        match self {
+            Self::Io(source) => StorageError::Io { path, source },
+            Self::Json(source) => StorageError::Json {
+                path,
+                line: None,
+                source,
+            },
+        }
+    }
+}
+
+impl From<std::io::Error> for WriteError {
+    fn from(source: std::io::Error) -> Self {
+        Self::Io(source)
+    }
+}
+
+impl From<serde_json::Error> for WriteError {
+    fn from(source: serde_json::Error) -> Self {
+        Self::Json(source)
     }
 }
 
@@ -139,7 +298,7 @@ where
         source,
     })?;
 
-    serde_json::from_reader(file).map_err(|source| StorageError::Json {
+    serde_json::from_reader(BufReader::new(file)).map_err(|source| StorageError::Json {
         path: path.to_path_buf(),
         line: None,
         source,
@@ -164,85 +323,65 @@ fn read_jsonl_or_default<T>(path: &Path) -> Result<Vec<T>, StorageError>
 where
     T: serde::de::DeserializeOwned,
 {
-    if !path.exists() {
-        tracing::debug!(path = %path.display(), "file does not exist, returning empty");
-        return Ok(Vec::new());
-    }
-
-    tracing::debug!(path = %path.display(), "reading JSONL file");
-
-    let file = File::open(path).map_err(|source| StorageError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let reader = BufReader::new(file);
     let mut values = Vec::new();
-
-    for (line_index, line) in reader.lines().enumerate() {
-        let line = line.map_err(|source| StorageError::Io {
+    for_each_jsonl_line(path, |line_number, line| {
+        let value = serde_json::from_str(line).map_err(|source| StorageError::Json {
             path: path.to_path_buf(),
-            source,
-        })?;
-
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let value = serde_json::from_str(&line).map_err(|source| StorageError::Json {
-            path: path.to_path_buf(),
-            line: Some(line_index + 1),
+            line: Some(line_number),
             source,
         })?;
         values.push(value);
-    }
-
+        Ok(())
+    })?;
     tracing::debug!(count = values.len(), "read JSONL records");
     Ok(values)
 }
 
-#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
-fn write_json_pretty<T>(path: &Path, value: &T) -> Result<(), StorageError>
-where
-    T: serde::Serialize,
-{
-    tracing::debug!(path = %path.display(), "writing JSON file");
-
-    let file = File::create(path).map_err(|source| StorageError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    serde_json::to_writer_pretty(BufWriter::new(file), value).map_err(|source| StorageError::Json {
-        path: path.to_path_buf(),
-        line: None,
-        source,
-    })
-}
-
-#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display(), count = values.len()))]
-fn write_jsonl<T>(path: &Path, values: &[T]) -> Result<(), StorageError>
-where
-    T: serde::Serialize,
-{
-    tracing::debug!(path = %path.display(), count = values.len(), "writing JSONL file");
-
-    let file = File::create(path).map_err(|source| StorageError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let mut writer = BufWriter::new(file);
-
-    for value in values {
-        serde_json::to_writer(&mut writer, value).map_err(|source| StorageError::Json {
-            path: path.to_path_buf(),
-            line: None,
-            source,
-        })?;
-        writeln!(writer).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
+/// Calls `visit` with the 1-based number and text of every non-blank line.
+/// A missing file has no lines.
+fn for_each_jsonl_line(
+    path: &Path,
+    mut visit: impl FnMut(usize, &str) -> Result<(), StorageError>,
+) -> Result<(), StorageError> {
+    if !path.exists() {
+        tracing::debug!(path = %path.display(), "file does not exist, returning empty");
+        return Ok(());
     }
 
+    tracing::debug!(path = %path.display(), "reading JSONL file");
+    let file = File::open(path).map_err(|source| StorageError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+
+    for (line_index, line) in BufReader::new(file).lines().enumerate() {
+        let line = line.map_err(|source| StorageError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        if !line.trim().is_empty() {
+            visit(line_index + 1, &line)?;
+        }
+    }
+    Ok(())
+}
+
+fn write_json_pretty<T>(writer: &mut BufWriter<File>, value: &T) -> Result<(), WriteError>
+where
+    T: serde::Serialize,
+{
+    serde_json::to_writer_pretty(&mut *writer, value)?;
+    Ok(())
+}
+
+fn write_jsonl<T>(writer: &mut BufWriter<File>, values: &[T]) -> Result<(), WriteError>
+where
+    T: serde::Serialize,
+{
+    for value in values {
+        serde_json::to_writer(&mut *writer, value)?;
+        writeln!(writer)?;
+    }
     Ok(())
 }
 
@@ -272,12 +411,8 @@ mod tests {
         AnnotationGeometry, AnnotationRecord, AssetLocation, AssetRecord, BoundingBox,
     };
 
-    #[test]
-    fn roundtrips_local_project_folder() {
-        let temp = tempfile::tempdir().unwrap();
-        let store = LocalProjectStore::new(temp.path());
+    fn sample_dataset(store: &LocalProjectStore) -> Dataset {
         let mut dataset = store.initialize("demo").unwrap();
-
         let label_id = dataset.add_label("vehicle");
         let asset =
             AssetRecord::new_image(AssetLocation::local("images/frame.jpg"), 320, 240).unwrap();
@@ -290,14 +425,98 @@ mod tests {
         );
         annotation.accept();
         dataset.add_annotation(annotation);
+        dataset
+    }
+
+    fn file_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn roundtrips_local_project_folder() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalProjectStore::new(temp.path());
+        let dataset = sample_dataset(&store);
 
         store.save_dataset(&dataset).unwrap();
         let loaded = store.load_dataset().unwrap();
 
-        assert_eq!(loaded.labels.len(), 1);
-        assert_eq!(loaded.assets.len(), 1);
-        assert_eq!(loaded.annotations.len(), 1);
+        assert_eq!(loaded, dataset);
         assert!(temp.path().join(MANIFEST_FILE).exists());
         assert!(temp.path().join(ASSETS_FILE).exists());
+    }
+
+    #[test]
+    fn save_leaves_no_temporary_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalProjectStore::new(temp.path());
+        let dataset = sample_dataset(&store);
+
+        store.save_dataset(&dataset).unwrap();
+        store.save_dataset(&dataset).unwrap();
+
+        let mut expected: Vec<_> = PROJECT_FILES.iter().map(|name| name.to_string()).collect();
+        expected.sort();
+        assert_eq!(file_names(temp.path()), expected);
+    }
+
+    #[test]
+    fn failed_save_keeps_previous_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalProjectStore::new(temp.path());
+        let dataset = sample_dataset(&store);
+        store.save_dataset(&dataset).unwrap();
+        let before: Vec<_> = PROJECT_FILES
+            .iter()
+            .map(|name| fs::read(temp.path().join(name)).unwrap())
+            .collect();
+
+        // Writing the second file fails halfway through, after the first
+        // file was already staged.
+        let mut staged = StagedFiles::default();
+        staged
+            .stage(&temp.path().join(CLASSIFICATIONS_FILE), |writer| {
+                writer.write_all(b"[]")?;
+                Ok(())
+            })
+            .unwrap();
+        let error = staged
+            .stage(&temp.path().join(ANNOTATIONS_FILE), |writer| {
+                writer.write_all(b"{\"partial\":")?;
+                Err(std::io::Error::other("disk full").into())
+            })
+            .unwrap_err();
+        drop(staged);
+
+        assert!(error.to_string().contains("disk full"));
+        let after: Vec<_> = PROJECT_FILES
+            .iter()
+            .map(|name| fs::read(temp.path().join(name)).unwrap())
+            .collect();
+        assert_eq!(after, before);
+        assert_eq!(file_names(temp.path()).len(), PROJECT_FILES.len());
+        assert_eq!(store.load_dataset().unwrap(), dataset);
+    }
+
+    #[test]
+    fn strict_load_rejects_unreadable_lines() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalProjectStore::new(temp.path());
+        let dataset = sample_dataset(&store);
+        store.save_dataset(&dataset).unwrap();
+        let path = temp.path().join(ANNOTATIONS_FILE);
+        let mut contents = fs::read_to_string(&path).unwrap();
+        contents.push_str("{\"truncated\n");
+        fs::write(&path, contents).unwrap();
+
+        assert!(matches!(
+            store.load_dataset(),
+            Err(StorageError::Json { line: Some(2), .. })
+        ));
     }
 }
