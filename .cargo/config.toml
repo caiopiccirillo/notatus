@@ -1,0 +1,5 @@
+[env]
+# gpui 0.2 loaded fontconfig at runtime (dlopen). The gpui-pre snapshot used by
+# gpui-component 0.9 links it at build time instead, which would require the
+# fontconfig development package. Keep the previous runtime-loading behavior.
+RUST_FONTCONFIG_DLOPEN = "1"
