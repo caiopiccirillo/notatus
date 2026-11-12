@@ -333,7 +333,9 @@ mod tests {
         let store = LocalProjectStore::new(temp.path());
         let mut dataset = store.initialize("demo").unwrap();
         let label_id = dataset.add_label("car");
-        let asset = AssetRecord::new_image(AssetLocation::local("a.jpg"), 100, 100).unwrap();
+        let path = temp.path().join("a.jpg");
+        let asset =
+            AssetRecord::new_image(AssetLocation::local(path.to_string_lossy()), 100, 100).unwrap();
         let asset_id = dataset.add_asset(asset);
         dataset.add_annotation(AnnotationRecord::new_human(
             asset_id,

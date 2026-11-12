@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
 
+mod media_paths;
 mod recovery;
 
 pub use recovery::{LoadIssue, LoadReport, RECOVERY_DIR};
@@ -85,7 +86,9 @@ impl LocalProjectStore {
         let manifest: ProjectManifest = read_json(&self.manifest_path())?;
         let labels: Vec<Label> = read_json_or_default(&self.labels_path())?;
         let mut issues = Vec::new();
-        let assets = read_jsonl_lenient(&self.assets_path(), ASSETS_FILE, &mut issues)?;
+        let mut assets: Vec<AssetRecord> =
+            read_jsonl_lenient(&self.assets_path(), ASSETS_FILE, &mut issues)?;
+        media_paths::from_disk(&mut assets, &self.root);
         let annotations =
             read_jsonl_lenient(&self.annotations_path(), ANNOTATIONS_FILE, &mut issues)?;
         let classifications = read_jsonl_lenient(
@@ -156,7 +159,8 @@ impl ProjectStore for LocalProjectStore {
 
         let manifest: ProjectManifest = read_json(&self.manifest_path())?;
         let labels: Vec<Label> = read_json_or_default(&self.labels_path())?;
-        let assets: Vec<AssetRecord> = read_jsonl_or_default(&self.assets_path())?;
+        let mut assets: Vec<AssetRecord> = read_jsonl_or_default(&self.assets_path())?;
+        media_paths::from_disk(&mut assets, &self.root);
         let annotations: Vec<AnnotationRecord> = read_jsonl_or_default(&self.annotations_path())?;
         let classifications: Vec<ClassificationRecord> =
             read_jsonl_or_default(&self.classifications_path())?;
@@ -206,9 +210,8 @@ impl ProjectStore for LocalProjectStore {
         staged.stage(&self.annotations_path(), |writer| {
             write_jsonl(writer, &dataset.annotations)
         })?;
-        staged.stage(&self.assets_path(), |writer| {
-            write_jsonl(writer, &dataset.assets)
-        })?;
+        let assets = media_paths::for_disk(&dataset.assets, &self.root);
+        staged.stage(&self.assets_path(), |writer| write_jsonl(writer, &assets))?;
         staged.stage(&self.labels_path(), |writer| {
             write_json_pretty(writer, &dataset.labels)
         })?;
@@ -506,8 +509,10 @@ mod tests {
     fn sample_dataset(store: &LocalProjectStore) -> Dataset {
         let mut dataset = store.initialize("demo").unwrap();
         let label_id = dataset.add_label("vehicle");
+        // In memory, media paths are absolute, as the app keeps them.
+        let path = store.root().join("images/frame.jpg");
         let asset =
-            AssetRecord::new_image(AssetLocation::local("images/frame.jpg"), 320, 240).unwrap();
+            AssetRecord::new_image(AssetLocation::local(path.to_string_lossy()), 320, 240).unwrap();
         let asset_id = dataset.add_asset(asset);
         let mut annotation = AnnotationRecord::new_human(
             asset_id,
@@ -613,6 +618,42 @@ mod tests {
         assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
         assert!(fs::symlink_metadata(&link).unwrap().is_file());
         assert_eq!(store.load_dataset().unwrap(), dataset);
+    }
+
+    #[test]
+    fn moving_a_project_folder_keeps_its_media() {
+        let parent = tempfile::tempdir().unwrap();
+        let original = parent.path().join("project");
+        let store = LocalProjectStore::new(&original);
+        let mut dataset = store.initialize("demo").unwrap();
+        let inside = original.join("images/a.jpg");
+        let outside = parent.path().join("elsewhere.jpg");
+        for path in [&inside, &outside] {
+            dataset.add_asset(
+                AssetRecord::new_image(AssetLocation::local(path.to_string_lossy()), 10, 10)
+                    .unwrap(),
+            );
+        }
+        store.save_dataset(&dataset).unwrap();
+        let on_disk = fs::read_to_string(original.join(ASSETS_FILE)).unwrap();
+        assert!(on_disk.contains("\"path\":\"images/a.jpg\""), "{on_disk}");
+
+        let moved = parent.path().join("moved");
+        fs::rename(&original, &moved).unwrap();
+        let loaded = LocalProjectStore::new(&moved).load_dataset().unwrap();
+
+        let paths: Vec<_> = loaded
+            .assets
+            .iter()
+            .map(|asset| asset.location.display_path().into_owned())
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                moved.join("images/a.jpg").to_string_lossy().into_owned(),
+                outside.to_string_lossy().into_owned()
+            ]
+        );
     }
 
     #[test]

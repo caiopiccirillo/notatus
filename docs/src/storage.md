@@ -49,6 +49,13 @@ Stores all labels as a pretty-printed JSON array.
 
 Stores one asset record per line.
 
+Media inside the project folder is stored with a path relative to it, using
+`/` between folders, so the folder can be moved or shared together with its
+images. Media elsewhere keeps an absolute path. Loading resolves relative
+paths against wherever the project folder is now, so in memory every local
+path is absolute; projects saved before this keep loading, and media inside
+the folder becomes relative on their next save.
+
 JSONL is used because asset lists can grow large and line-oriented files are
 friendly to incremental tooling.
 
