@@ -117,7 +117,7 @@ fn inspect_media_paths(paths: Vec<PathBuf>) -> MediaImport {
     let mut failures = Vec::new();
 
     for path in paths {
-        match image::image_dimensions(&path) {
+        match displayed_dimensions(&path) {
             Ok((width, height)) => candidates.push(MediaCandidate {
                 path,
                 width,
@@ -131,6 +131,29 @@ fn inspect_media_paths(paths: Vec<PathBuf>) -> MediaImport {
         candidates,
         failures,
     }
+}
+
+/// The image's size as it is shown: after the rotation its EXIF orientation
+/// asks for, which the canvas applies when drawing it and which OpenCV and
+/// Ultralytics apply when training. Only the header is read.
+fn displayed_dimensions(path: &Path) -> image::ImageResult<(u32, u32)> {
+    use image::ImageDecoder as _;
+    use image::metadata::Orientation;
+
+    let mut decoder = image::ImageReader::open(path)?.into_decoder()?;
+    let (width, height) = decoder.dimensions();
+    let quarter_turn = matches!(
+        decoder.orientation()?,
+        Orientation::Rotate90
+            | Orientation::Rotate270
+            | Orientation::Rotate90FlipH
+            | Orientation::Rotate270FlipH
+    );
+    Ok(if quarter_turn {
+        (height, width)
+    } else {
+        (width, height)
+    })
 }
 
 fn media_import_summary(added: usize, failed: usize) -> String {
@@ -152,6 +175,39 @@ mod tests {
     use super::super::test_support::open_test_window;
     use super::*;
     use gpui::TestAppContext;
+
+    /// A JPEG of `width`x`height` stored pixels whose EXIF orientation says
+    /// to rotate it a quarter turn clockwise, as phone cameras write them.
+    fn sideways_jpeg(path: &Path, width: u32, height: u32) {
+        let mut encoded = Vec::new();
+        image::RgbImage::new(width, height)
+            .write_to(
+                &mut std::io::Cursor::new(&mut encoded),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        // APP1 Exif segment: little-endian TIFF header and one IFD entry,
+        // Orientation (0x0112) = 6, "rotate 90 clockwise".
+        let exif: &[u8] = &[
+            0xFF, 0xE1, 0x00, 0x22, b'E', b'x', b'i', b'f', 0, 0, b'I', b'I', 0x2A, 0x00, 0x08,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let mut bytes = encoded[..2].to_vec();
+        bytes.extend_from_slice(exif);
+        bytes.extend_from_slice(&encoded[2..]);
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn sideways_photos_use_their_displayed_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("phone.jpg");
+        sideways_jpeg(&photo, 8, 4);
+
+        assert_eq!(displayed_dimensions(&photo).unwrap(), (4, 8));
+        assert_eq!(image::image_dimensions(&photo).unwrap(), (8, 4), "raw size");
+    }
 
     #[gpui::test]
     fn import_reads_sizes_and_skips_files_already_in_the_project(cx: &mut TestAppContext) {
