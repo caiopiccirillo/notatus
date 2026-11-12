@@ -54,6 +54,15 @@ fn export_workflow_issue_tracks_required_steps(cx: &mut TestAppContext) {
             .state
             .add_human_bbox(asset_id, label_id, bbox, None)
             .unwrap();
+        assert_eq!(
+            notatus.export_workflow_issue(),
+            Some(export_commands::ExportWorkflowIssue::FinishedMedia)
+        );
+
+        notatus
+            .state
+            .set_asset_status(asset_id, notatus_core::AssetStatus::Done)
+            .unwrap();
         assert_eq!(notatus.export_workflow_issue(), None);
 
         notatus.export_yolo = false;
@@ -79,6 +88,10 @@ fn classification_only_project_can_export(cx: &mut TestAppContext) {
         notatus
             .state
             .toggle_image_classification(asset_id, label_id)
+            .unwrap();
+        notatus
+            .state
+            .set_asset_status(asset_id, notatus_core::AssetStatus::Done)
             .unwrap();
 
         notatus.export_yolo = false;

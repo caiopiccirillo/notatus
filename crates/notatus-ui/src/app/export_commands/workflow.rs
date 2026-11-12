@@ -6,6 +6,7 @@ pub(in crate::app) enum ExportWorkflowIssue {
     Labels,
     Media,
     Annotations,
+    FinishedMedia,
     Format,
 }
 
@@ -13,7 +14,7 @@ impl ExportWorkflowIssue {
     fn target_dock(self) -> LeftDock {
         match self {
             Self::Labels => LeftDock::Dataset,
-            Self::Media => LeftDock::Media,
+            Self::Media | Self::FinishedMedia => LeftDock::Media,
             Self::Annotations | Self::Format => LeftDock::Dataset,
         }
     }
@@ -22,6 +23,7 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Labels required",
             Self::Media => "Media required",
+            Self::FinishedMedia => "No finished media",
             Self::Annotations => "Annotations required",
             Self::Format => "Format required",
         }
@@ -31,6 +33,10 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Create a label before exporting annotations.",
             Self::Media => "Import media before exporting annotations.",
+            Self::FinishedMedia => {
+                "No media is marked done. Mark finished media with M or Ctrl+Enter, \
+                 or turn off \"Finished media only\" in the export dialog."
+            }
             Self::Annotations => "Create exportable annotations before exporting.",
             Self::Format => "Select at least one export format.",
         }
@@ -40,6 +46,7 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Create a label before exporting",
             Self::Media => "Import media before exporting",
+            Self::FinishedMedia => "Mark media done before exporting",
             Self::Annotations => "No exportable annotations",
             Self::Format => "Select an export format",
         }
@@ -56,6 +63,15 @@ impl NotatusWindow {
             && exportable_classification_count(&self.state.dataset) == 0
         {
             Some(ExportWorkflowIssue::Annotations)
+        } else if self.export_finished_only
+            && !self
+                .state
+                .dataset
+                .assets
+                .iter()
+                .any(|asset| asset.status == notatus_core::AssetStatus::Done)
+        {
+            Some(ExportWorkflowIssue::FinishedMedia)
         } else if !self.export_yolo && !self.export_coco && !self.export_classifications {
             Some(ExportWorkflowIssue::Format)
         } else {
@@ -92,6 +108,12 @@ impl NotatusWindow {
         } else {
             self.status_message = None;
         }
+        cx.notify();
+    }
+
+    pub(in crate::app) fn toggle_export_finished_only(&mut self, cx: &mut Context<Self>) {
+        self.export_finished_only = !self.export_finished_only;
+        self.status_message = None;
         cx.notify();
     }
 

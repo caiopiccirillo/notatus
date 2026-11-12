@@ -43,6 +43,14 @@ fn export_dialog_snapshot(
 ) -> Option<ExportDialogSnapshot> {
     view.update(cx, |notatus, _| ExportDialogSnapshot {
         media_count: notatus.state.dataset.assets.len(),
+        done_count: notatus
+            .state
+            .dataset
+            .assets
+            .iter()
+            .filter(|asset| asset.status == notatus_core::AssetStatus::Done)
+            .count(),
+        finished_only: notatus.export_finished_only,
         label_count: notatus.state.dataset.labels.len(),
         annotation_count: notatus.state.dataset.annotations.len(),
         classification_count: notatus.state.dataset.classifications.len(),
@@ -82,11 +90,27 @@ fn export_dialog_content(
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(section_title("Summary"))
-                .child(metric(
-                    "Media",
-                    media_count_label(snapshot_read.media_count),
+                .child(section_title("Media"))
+                .child(export_dialog_media_toggle(
+                    view.clone(),
+                    snapshot.clone(),
+                    snapshot_read.finished_only,
                 ))
+                .child(metric(
+                    "Marked done",
+                    format!(
+                        "{} of {}",
+                        snapshot_read.done_count,
+                        media_count_label(snapshot_read.media_count)
+                    ),
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_title("Summary"))
                 .child(metric(
                     "Labels",
                     label_count_label(snapshot_read.label_count),
@@ -110,6 +134,24 @@ fn export_dialog_content(
                 .child(metric("Output", snapshot_read.output_label())),
         )
         .into_any_element()
+}
+
+fn export_dialog_media_toggle(
+    view: gpui::WeakEntity<NotatusWindow>,
+    snapshot: Rc<RefCell<ExportDialogSnapshot>>,
+    finished_only: bool,
+) -> impl IntoElement {
+    Button::new("export-dialog-finished-only")
+        .small()
+        .label("Finished media only")
+        .selected(finished_only)
+        .on_click(move |_, _, cx| {
+            {
+                let mut snapshot = snapshot.borrow_mut();
+                snapshot.finished_only = !snapshot.finished_only;
+            }
+            let _ = view.update(cx, |notatus, cx| notatus.toggle_export_finished_only(cx));
+        })
 }
 
 fn export_dialog_format_buttons(
@@ -187,6 +229,8 @@ fn export_dialog_format_buttons(
 
 struct ExportDialogSnapshot {
     media_count: usize,
+    done_count: usize,
+    finished_only: bool,
     label_count: usize,
     annotation_count: usize,
     classification_count: usize,

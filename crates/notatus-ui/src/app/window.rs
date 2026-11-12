@@ -31,6 +31,9 @@ pub(super) struct NotatusWindow {
     pub(super) export_yolo: bool,
     pub(super) export_coco: bool,
     pub(super) export_classifications: bool,
+    /// Export only media marked done, so unfinished images are not
+    /// exported as images with nothing in them.
+    pub(super) export_finished_only: bool,
     pub(super) canvas_image_layout: SharedImageLayout,
     pub(super) focus_handle: gpui::FocusHandle,
     pub(super) command_state: gpui::Entity<gpui_component::command::CommandState>,
@@ -144,6 +147,7 @@ impl NotatusWindow {
             export_yolo: true,
             export_coco: true,
             export_classifications: true,
+            export_finished_only: true,
             canvas_image_layout: Rc::new(RefCell::new(None)),
             focus_handle,
             command_state,
