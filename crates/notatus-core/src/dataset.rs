@@ -345,6 +345,14 @@ pub enum DatasetSplit {
     Unassigned,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetStatus {
+    #[default]
+    Pending,
+    Done,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetRecord {
     pub id: AssetId,
@@ -353,6 +361,8 @@ pub struct AssetRecord {
     pub dimensions: ImageDimensions,
     pub content_hash: Option<String>,
     pub split: DatasetSplit,
+    #[serde(default)]
+    pub status: AssetStatus,
     #[serde(default)]
     pub metadata: Metadata,
 }
@@ -371,6 +381,7 @@ impl AssetRecord {
             dimensions: ImageDimensions::new(width, height)?,
             content_hash: None,
             split: DatasetSplit::Unassigned,
+            status: AssetStatus::Pending,
             metadata: Metadata::new(),
         };
         tracing::debug!(asset_id = %record.id, "created image asset");
@@ -722,6 +733,17 @@ mod tests {
         dataset.add_annotation(annotation);
 
         assert!(dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn asset_status_defaults_to_pending_for_older_records() {
+        let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
+        let mut value = serde_json::to_value(&asset).unwrap();
+        value.as_object_mut().unwrap().remove("status");
+
+        let parsed: AssetRecord = serde_json::from_value(value).unwrap();
+
+        assert_eq!(parsed.status, AssetStatus::Pending);
     }
 
     #[test]

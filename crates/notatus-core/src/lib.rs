@@ -9,7 +9,7 @@ mod geometry;
 mod ids;
 
 pub use dataset::{
-    AnnotationRecord, AnnotationSource, AssetKind, AssetLocation, AssetRecord,
+    AnnotationRecord, AnnotationSource, AssetKind, AssetLocation, AssetRecord, AssetStatus,
     CURRENT_SCHEMA_VERSION, ClassificationRecord, Dataset, DatasetSplit, ImportProvenance, Label,
     Metadata, ModelProvenance, ProjectManifest, ProjectMetadata, ReviewState, ValidationError,
 };
