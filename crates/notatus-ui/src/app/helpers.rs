@@ -245,15 +245,6 @@ pub(super) fn hex_color(value: &str) -> gpui::Hsla {
         .into()
 }
 
-pub(super) fn dataset_has_local_path(state: &UiState, path: &str) -> bool {
-    state.dataset.assets.iter().any(|asset| {
-        matches!(
-            &asset.location,
-            AssetLocation::LocalPath { path: existing } if existing == path
-        )
-    })
-}
-
 pub(super) fn section_title(title: &'static str) -> impl IntoElement {
     themed(move |theme| {
         div()
