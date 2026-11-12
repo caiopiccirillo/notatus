@@ -1,7 +1,8 @@
+use crate::history::{CoalesceKey, History, Selection, Snapshot};
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetLocation, AssetRecord,
-    BoundingBox, ClassificationId, ClassificationRecord, Dataset, GeometryError, LabelId, Point,
-    Polygon, ValidationError,
+    AssetStatus, BoundingBox, ClassificationId, ClassificationRecord, Dataset, GeometryError,
+    LabelId, Point, Polygon, ValidationError,
 };
 use std::error::Error;
 use std::fmt;
@@ -37,22 +38,125 @@ pub struct UiState {
     pub selected_asset: Option<AssetId>,
     pub selected_annotation: Option<AnnotationId>,
     pub selected_label: Option<LabelId>,
+    /// True when the dataset differs from the last saved revision.
     pub dirty: bool,
+    revision: u64,
+    saved_revision: u64,
+    next_revision: u64,
+    history: History,
+    batch_depth: usize,
+}
+
+/// Which way to step through media or annotations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Direction {
+    Previous,
+    Next,
 }
 
 impl UiState {
-    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
-    pub fn new_project(name: impl Into<String>) -> Self {
-        let name = name.into();
-        tracing::debug!(name, "creating new project");
+    fn with_dataset(dataset: Dataset) -> Self {
         Self {
-            dataset: Dataset::new(name),
+            dataset,
             active_tool: AnnotationTool::Select,
             selected_asset: None,
             selected_annotation: None,
             selected_label: None,
             dirty: false,
+            revision: 0,
+            saved_revision: 0,
+            next_revision: 1,
+            history: History::default(),
+            batch_depth: 0,
         }
+    }
+
+    /// Monotonic identifier of the current dataset contents. Undo restores
+    /// earlier revisions, so equal revisions mean equal datasets.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Records the current state for undo and moves to a fresh revision.
+    /// Call after validation succeeds and right before mutating the dataset.
+    fn begin_change(&mut self, description: &'static str, key: Option<CoalesceKey>) {
+        if self.batch_depth == 0 && !self.history.coalesces(key) {
+            let snapshot = self.snapshot();
+            self.history.record(snapshot, description, key);
+        }
+        self.revision = self.next_revision;
+        self.next_revision += 1;
+        self.dirty = true;
+    }
+
+    /// Runs several mutations as one undo step.
+    pub fn batch<R>(&mut self, description: &'static str, f: impl FnOnce(&mut Self) -> R) -> R {
+        let before = self.revision;
+        let snapshot = self.snapshot();
+        self.batch_depth += 1;
+        let result = f(self);
+        self.batch_depth -= 1;
+        if self.batch_depth == 0 && self.revision != before {
+            self.history.record(snapshot, description, None);
+        }
+        result
+    }
+
+    /// Ends the current run of coalesced edits, such as one drag gesture.
+    pub fn break_history_coalescing(&mut self) {
+        self.history.break_coalescing();
+    }
+
+    pub fn undo_description(&self) -> Option<&'static str> {
+        self.history.undo_description()
+    }
+
+    pub fn redo_description(&self) -> Option<&'static str> {
+        self.history.redo_description()
+    }
+
+    /// Restores the state before the last change. Returns its description.
+    pub fn undo(&mut self) -> Option<&'static str> {
+        let current = self.snapshot();
+        let (snapshot, description) = self.history.undo(current)?;
+        self.restore(snapshot);
+        Some(description)
+    }
+
+    /// Reapplies the last undone change. Returns its description.
+    pub fn redo(&mut self) -> Option<&'static str> {
+        let current = self.snapshot();
+        let (snapshot, description) = self.history.redo(current)?;
+        self.restore(snapshot);
+        Some(description)
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            dataset: self.dataset.clone(),
+            selection: Selection {
+                asset: self.selected_asset,
+                annotation: self.selected_annotation,
+                label: self.selected_label,
+            },
+            revision: self.revision,
+        }
+    }
+
+    fn restore(&mut self, snapshot: Snapshot) {
+        self.dataset = snapshot.dataset;
+        self.selected_asset = snapshot.selection.asset;
+        self.selected_annotation = snapshot.selection.annotation;
+        self.selected_label = snapshot.selection.label;
+        self.revision = snapshot.revision;
+        self.dirty = self.revision != self.saved_revision;
+    }
+
+    #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
+    pub fn new_project(name: impl Into<String>) -> Self {
+        let name = name.into();
+        tracing::debug!(name, "creating new project");
+        Self::with_dataset(Dataset::new(name))
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(
@@ -64,14 +168,10 @@ impl UiState {
     pub fn from_dataset(dataset: Dataset) -> Result<Self, UiMutationError> {
         dataset.validate()?;
         tracing::debug!("loading dataset into UI state");
-        Ok(Self {
-            dataset,
-            active_tool: AnnotationTool::Select,
-            selected_asset: None,
-            selected_annotation: None,
-            selected_label: None,
-            dirty: false,
-        })
+        let mut state = Self::with_dataset(dataset);
+        state.selected_asset = state.dataset.assets.first().map(|asset| asset.id);
+        state.selected_label = state.dataset.labels.first().map(|label| label.id);
+        Ok(state)
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(tool = ?tool))]
@@ -82,7 +182,15 @@ impl UiState {
 
     pub fn mark_saved(&mut self) {
         tracing::trace!("marking dataset as saved");
+        self.saved_revision = self.revision;
         self.dirty = false;
+    }
+
+    /// Marks a specific revision as saved, for saves that finish after more
+    /// edits were made.
+    pub fn mark_revision_saved(&mut self, revision: u64) {
+        self.saved_revision = revision;
+        self.dirty = self.revision != self.saved_revision;
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
@@ -94,17 +202,17 @@ impl UiState {
         }
 
         tracing::debug!(name, "renaming project");
+        self.begin_change("Rename project", Some(CoalesceKey::ProjectName));
         self.dataset.rename_project(name);
-        self.dirty = true;
         Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
     pub fn add_label(&mut self, name: impl Into<String>) -> LabelId {
         let name = name.into();
+        self.begin_change("Create label", None);
         let label_id = self.dataset.add_label(name);
         self.selected_label = Some(label_id);
-        self.dirty = true;
         tracing::debug!(label_id = %label_id, "label added via UI");
         label_id
     }
@@ -133,14 +241,9 @@ impl UiState {
             return Err(UiMutationError::EmptyLabelName { label_id });
         }
 
-        let label = self
-            .dataset
-            .labels
-            .iter_mut()
-            .find(|label| label.id == label_id)
-            .ok_or(UiMutationError::MissingLabel { label_id })?;
-        label.name = name;
-        self.dirty = true;
+        let index = self.label_index(label_id)?;
+        self.begin_change("Rename label", Some(CoalesceKey::LabelName(label_id)));
+        self.dataset.labels[index].name = name;
         Ok(())
     }
 
@@ -150,15 +253,32 @@ impl UiState {
         label_id: LabelId,
         color: Option<String>,
     ) -> Result<(), UiMutationError> {
-        let label = self
-            .dataset
-            .labels
-            .iter_mut()
-            .find(|label| label.id == label_id)
-            .ok_or(UiMutationError::MissingLabel { label_id })?;
-        label.color = color;
-        self.dirty = true;
+        let index = self.label_index(label_id)?;
+        if self.dataset.labels[index].color == color {
+            return Ok(());
+        }
+        self.begin_change(
+            "Change label color",
+            Some(CoalesceKey::LabelColor(label_id)),
+        );
+        self.dataset.labels[index].color = color;
         Ok(())
+    }
+
+    fn label_index(&self, label_id: LabelId) -> Result<usize, UiMutationError> {
+        self.dataset
+            .labels
+            .iter()
+            .position(|label| label.id == label_id)
+            .ok_or(UiMutationError::MissingLabel { label_id })
+    }
+
+    fn annotation_index(&self, annotation_id: AnnotationId) -> Result<usize, UiMutationError> {
+        self.dataset
+            .annotations
+            .iter()
+            .position(|annotation| annotation.id == annotation_id)
+            .ok_or(UiMutationError::MissingAnnotation { annotation_id })
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(label_id = %label_id))]
@@ -179,6 +299,7 @@ impl UiState {
         let original_annotation_count = self.dataset.annotations.len();
         let original_classification_count = self.dataset.classifications.len();
 
+        self.begin_change("Delete label", None);
         self.dataset.labels.remove(label_index);
         self.dataset
             .annotations
@@ -194,7 +315,6 @@ impl UiState {
             self.selected_annotation = None;
         }
 
-        self.dirty = true;
         let summary = RemovalSummary {
             annotations: original_annotation_count - self.dataset.annotations.len(),
             classifications: original_classification_count - self.dataset.classifications.len(),
@@ -212,9 +332,9 @@ impl UiState {
     ) -> Result<AssetId, UiMutationError> {
         let path = path.into();
         let asset = AssetRecord::new_image(AssetLocation::local(path), width, height)?;
+        self.begin_change("Import media", None);
         let asset_id = self.dataset.add_asset(asset);
         self.selected_asset = Some(asset_id);
-        self.dirty = true;
         tracing::debug!(asset_id = %asset_id, "image asset added via UI");
         Ok(asset_id)
     }
@@ -249,6 +369,7 @@ impl UiState {
         let original_annotation_count = self.dataset.annotations.len();
         let original_classification_count = self.dataset.classifications.len();
 
+        self.begin_change("Remove media", None);
         self.dataset.assets.remove(asset_index);
         self.dataset
             .annotations
@@ -258,13 +379,14 @@ impl UiState {
             .retain(|classification| classification.asset_id != asset_id);
 
         if self.selected_asset == Some(asset_id) {
-            self.selected_asset = self.dataset.assets.first().map(|asset| asset.id);
+            // Keep the user's place in the list: the next item, else the previous.
+            let neighbor = asset_index.min(self.dataset.assets.len().saturating_sub(1));
+            self.selected_asset = self.dataset.assets.get(neighbor).map(|asset| asset.id);
         }
         if selected_annotation_removed {
             self.selected_annotation = None;
         }
 
-        self.dirty = true;
         let summary = RemovalSummary {
             annotations: original_annotation_count - self.dataset.annotations.len(),
             classifications: original_classification_count - self.dataset.classifications.len(),
@@ -307,18 +429,14 @@ impl UiState {
             return Err(UiMutationError::MissingLabel { label_id });
         }
 
-        let annotation = self
-            .dataset
-            .annotations
-            .iter_mut()
-            .find(|annotation| annotation.id == annotation_id)
-            .ok_or(UiMutationError::MissingAnnotation { annotation_id })?;
-
-        annotation.label_id = label_id;
+        let index = self.annotation_index(annotation_id)?;
+        if self.dataset.annotations[index].label_id != label_id {
+            self.begin_change("Change annotation label", None);
+            self.dataset.annotations[index].label_id = label_id;
+        }
         self.selected_annotation = Some(annotation_id);
-        self.selected_asset = Some(annotation.asset_id);
+        self.selected_asset = Some(self.dataset.annotations[index].asset_id);
         self.selected_label = Some(label_id);
-        self.dirty = true;
         Ok(())
     }
 
@@ -343,12 +461,104 @@ impl UiState {
 
         bbox.validate_within_image(asset.dimensions)?;
 
-        self.dataset.annotations[annotation_index].geometry = AnnotationGeometry::Bbox(bbox);
+        let geometry = AnnotationGeometry::Bbox(bbox);
+        if self.dataset.annotations[annotation_index].geometry != geometry {
+            self.begin_change(
+                "Edit annotation",
+                Some(CoalesceKey::AnnotationGeometry(annotation_id)),
+            );
+            self.dataset.annotations[annotation_index].geometry = geometry;
+        }
         self.selected_annotation = Some(annotation_id);
         self.selected_asset = Some(asset_id);
         self.selected_label = Some(label_id);
-        self.dirty = true;
         Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %annotation_id))]
+    pub fn remove_annotation(
+        &mut self,
+        annotation_id: AnnotationId,
+    ) -> Result<(), UiMutationError> {
+        let index = self.annotation_index(annotation_id)?;
+        self.begin_change("Delete annotation", None);
+        let annotation = self.dataset.annotations.remove(index);
+        if self.selected_annotation == Some(annotation_id) {
+            self.selected_annotation = None;
+        }
+        self.selected_asset = Some(annotation.asset_id);
+        tracing::info!(%annotation_id, "annotation removed");
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id))]
+    pub fn set_asset_status(
+        &mut self,
+        asset_id: AssetId,
+        status: AssetStatus,
+    ) -> Result<(), UiMutationError> {
+        let index = self
+            .dataset
+            .assets
+            .iter()
+            .position(|asset| asset.id == asset_id)
+            .ok_or(UiMutationError::MissingAsset { asset_id })?;
+        if self.dataset.assets[index].status == status {
+            return Ok(());
+        }
+        let description = match status {
+            AssetStatus::Done => "Mark media done",
+            AssetStatus::Pending => "Mark media pending",
+        };
+        self.begin_change(description, None);
+        self.dataset.assets[index].status = status;
+        Ok(())
+    }
+
+    /// The asset before or after `from` in dataset order. With `pending_only`,
+    /// skips media already marked done.
+    pub fn adjacent_asset(
+        &self,
+        from: Option<AssetId>,
+        direction: Direction,
+        pending_only: bool,
+    ) -> Option<AssetId> {
+        let assets = &self.dataset.assets;
+        let start = from.and_then(|id| assets.iter().position(|asset| asset.id == id));
+        let eligible = |asset: &&AssetRecord| !pending_only || asset.status == AssetStatus::Pending;
+        match (direction, start) {
+            (Direction::Next, Some(index)) => assets[index + 1..].iter().find(eligible),
+            (Direction::Previous, Some(index)) => assets[..index].iter().rev().find(eligible),
+            (Direction::Next, None) => assets.iter().find(eligible),
+            (Direction::Previous, None) => assets.iter().rev().find(eligible),
+        }
+        .map(|asset| asset.id)
+    }
+
+    /// The annotation before or after the selected one on the current asset,
+    /// wrapping around.
+    pub fn adjacent_annotation(&self, direction: Direction) -> Option<AnnotationId> {
+        let asset_id = self.selected_asset?;
+        let ids: Vec<_> = self
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.asset_id == asset_id)
+            .map(|annotation| annotation.id)
+            .collect();
+        if ids.is_empty() {
+            return None;
+        }
+        let current = self
+            .selected_annotation
+            .and_then(|id| ids.iter().position(|candidate| *candidate == id));
+        let index = match (direction, current) {
+            (Direction::Next, Some(index)) => (index + 1) % ids.len(),
+            (Direction::Previous, Some(index)) => (index + ids.len() - 1) % ids.len(),
+            (Direction::Next, None) => 0,
+            (Direction::Previous, None) => ids.len() - 1,
+        };
+        Some(ids[index])
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(asset_id = %asset_id, label_id = %label_id))]
@@ -375,10 +585,10 @@ impl UiState {
             user_id,
         );
         let annotation_id = annotation.id;
+        self.begin_change("Draw box", None);
         self.dataset.add_annotation(annotation);
         self.selected_annotation = None;
         self.selected_label = Some(label_id);
-        self.dirty = true;
         tracing::info!(%annotation_id, asset_id = %asset_id, label_id = %label_id, "human bbox annotation created");
         Ok(annotation_id)
     }
@@ -407,10 +617,10 @@ impl UiState {
             user_id,
         );
         let annotation_id = annotation.id;
+        self.begin_change("Draw polygon", None);
         self.dataset.add_annotation(annotation);
         self.selected_annotation = None;
         self.selected_label = Some(label_id);
-        self.dirty = true;
         tracing::info!(%annotation_id, asset_id = %asset_id, label_id = %label_id, "human polygon annotation created");
         Ok(annotation_id)
     }
@@ -436,19 +646,19 @@ impl UiState {
                 classification.asset_id == asset_id && classification.label_id == label_id
             })
         {
+            self.begin_change("Remove classification", None);
             self.dataset.classifications.remove(index);
             self.selected_label = Some(label_id);
-            self.dirty = true;
             tracing::debug!(asset_id = %asset_id, label_id = %label_id, "classification toggled off");
             return Ok(None);
         }
 
         let classification = ClassificationRecord::new_human(asset_id, label_id, None);
         let classification_id = classification.id;
+        self.begin_change("Add classification", None);
         self.dataset.add_classification(classification);
         self.selected_asset = Some(asset_id);
         self.selected_label = Some(label_id);
-        self.dirty = true;
         tracing::debug!(%classification_id, asset_id = %asset_id, label_id = %label_id, "classification toggled on");
         Ok(Some(classification_id))
     }
@@ -465,10 +675,10 @@ impl UiState {
             .position(|classification| classification.id == classification_id)
             .ok_or(UiMutationError::MissingClassification { classification_id })?;
 
+        self.begin_change("Remove classification", None);
         let classification = self.dataset.classifications.remove(classification_index);
         self.selected_asset = Some(classification.asset_id);
         self.selected_label = Some(classification.label_id);
-        self.dirty = true;
         tracing::debug!(%classification_id, "classification removed");
         Ok(())
     }
@@ -1015,5 +1225,148 @@ mod tests {
         );
         assert!(state.dirty);
         assert!(state.dataset.validate().is_ok());
+    }
+
+    fn demo_with_box() -> (UiState, LabelId, AssetId, AnnotationId) {
+        let mut state = UiState::new_project("demo");
+        let label_id = state.add_label("car");
+        let asset_id = state
+            .add_local_image_asset("images/a.jpg", 640, 480)
+            .unwrap();
+        let annotation_id = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+        (state, label_id, asset_id, annotation_id)
+    }
+
+    #[test]
+    fn undo_and_redo_restore_dataset_and_selection() {
+        let (mut state, _, asset_id, annotation_id) = demo_with_box();
+        state.select_annotation(Some(annotation_id)).unwrap();
+
+        state.remove_annotation(annotation_id).unwrap();
+        assert!(state.dataset.annotations.is_empty());
+        assert_eq!(state.undo_description(), Some("Delete annotation"));
+
+        assert_eq!(state.undo(), Some("Delete annotation"));
+        assert_eq!(state.dataset.annotations.len(), 1);
+        assert_eq!(state.selected_annotation, Some(annotation_id));
+        assert_eq!(state.selected_asset, Some(asset_id));
+
+        assert_eq!(state.redo(), Some("Delete annotation"));
+        assert!(state.dataset.annotations.is_empty());
+        assert_eq!(state.selected_annotation, None);
+    }
+
+    #[test]
+    fn undo_back_to_saved_revision_clears_dirty() {
+        let (mut state, _, _, annotation_id) = demo_with_box();
+        state.mark_saved();
+
+        state.remove_annotation(annotation_id).unwrap();
+        assert!(state.dirty);
+
+        state.undo();
+        assert!(!state.dirty);
+
+        state.redo();
+        assert!(state.dirty);
+    }
+
+    #[test]
+    fn drag_edits_coalesce_into_one_undo_step() {
+        let (mut state, _, _, annotation_id) = demo_with_box();
+        let original = state.dataset.annotations[0].geometry.clone();
+
+        for offset in 1..=5 {
+            let bbox = BoundingBox::from_xywh(10.0 + offset as f64, 20.0, 30.0, 40.0).unwrap();
+            state.update_annotation_bbox(annotation_id, bbox).unwrap();
+        }
+        state.break_history_coalescing();
+
+        assert_eq!(state.undo(), Some("Edit annotation"));
+        assert_eq!(state.dataset.annotations[0].geometry, original);
+        assert_eq!(state.undo(), Some("Draw box"));
+    }
+
+    #[test]
+    fn unchanged_edits_do_not_dirty_or_record_history() {
+        let (mut state, label_id, _, annotation_id) = demo_with_box();
+        state.mark_saved();
+        let bbox = BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap();
+
+        state.update_annotation_bbox(annotation_id, bbox).unwrap();
+        state.update_annotation_label(annotation_id, label_id).unwrap();
+
+        assert!(!state.dirty);
+        assert_eq!(state.undo_description(), Some("Draw box"));
+    }
+
+    #[test]
+    fn batch_groups_changes_into_one_step() {
+        let mut state = UiState::new_project("demo");
+        state.batch("Import media", |state| {
+            state.add_local_image_asset("a.jpg", 10, 10).unwrap();
+            state.add_local_image_asset("b.jpg", 10, 10).unwrap();
+        });
+
+        assert_eq!(state.undo(), Some("Import media"));
+        assert!(state.dataset.assets.is_empty());
+        assert_eq!(state.undo(), None);
+    }
+
+    #[test]
+    fn marks_asset_done_and_navigates_pending() {
+        let mut state = UiState::new_project("demo");
+        let a = state.add_local_image_asset("a.jpg", 10, 10).unwrap();
+        let b = state.add_local_image_asset("b.jpg", 10, 10).unwrap();
+        let c = state.add_local_image_asset("c.jpg", 10, 10).unwrap();
+
+        state.set_asset_status(b, AssetStatus::Done).unwrap();
+
+        assert_eq!(state.adjacent_asset(Some(a), Direction::Next, false), Some(b));
+        assert_eq!(state.adjacent_asset(Some(a), Direction::Next, true), Some(c));
+        assert_eq!(state.adjacent_asset(Some(c), Direction::Previous, true), Some(a));
+        assert_eq!(state.adjacent_asset(Some(c), Direction::Next, false), None);
+        assert_eq!(state.adjacent_asset(None, Direction::Next, true), Some(a));
+        assert_eq!(state.undo(), Some("Mark media done"));
+    }
+
+    #[test]
+    fn cycles_annotations_on_current_asset() {
+        let (mut state, label_id, asset_id, first) = demo_with_box();
+        let second = state
+            .add_human_bbox(
+                asset_id,
+                label_id,
+                BoundingBox::from_xywh(100.0, 100.0, 30.0, 40.0).unwrap(),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(state.adjacent_annotation(Direction::Next), Some(first));
+        state.select_annotation(Some(first)).unwrap();
+        assert_eq!(state.adjacent_annotation(Direction::Next), Some(second));
+        assert_eq!(state.adjacent_annotation(Direction::Previous), Some(second));
+    }
+
+    #[test]
+    fn removing_selected_asset_selects_its_neighbor() {
+        let mut state = UiState::new_project("demo");
+        let a = state.add_local_image_asset("a.jpg", 10, 10).unwrap();
+        let b = state.add_local_image_asset("b.jpg", 10, 10).unwrap();
+        let c = state.add_local_image_asset("c.jpg", 10, 10).unwrap();
+
+        state.select_asset(b).unwrap();
+        state.remove_asset(b).unwrap();
+        assert_eq!(state.selected_asset, Some(c));
+
+        state.remove_asset(c).unwrap();
+        assert_eq!(state.selected_asset, Some(a));
     }
 }

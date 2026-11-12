@@ -3,9 +3,11 @@
 //! The GPUI windowing code is intentionally thin. The mutable annotation state
 //! lives here so the same behavior can be tested without a renderer.
 
+mod history;
 mod state;
 
-pub use state::{AnnotationTool, UiMutationError, UiState};
+pub use history::CoalesceKey;
+pub use state::{AnnotationTool, Direction, UiMutationError, UiState};
 
 #[cfg(feature = "gpui-ui")]
 mod app;
