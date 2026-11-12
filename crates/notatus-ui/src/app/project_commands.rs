@@ -266,11 +266,22 @@ async fn save_current_project_to_path(
     path: PathBuf,
     window: &mut gpui::AsyncWindowContext,
 ) {
-    let Ok((dataset, revision)) = view.update_in(window, |notatus, _, _| {
-        (notatus.state.dataset.clone(), notatus.state.revision())
+    let Ok((dataset, revision, conflict)) = view.update_in(window, |notatus, _, _| {
+        (
+            notatus.state.dataset.clone(),
+            notatus.state.revision(),
+            save_as_conflict(&path, notatus.project_location.path()),
+        )
     }) else {
         return;
     };
+    if let Some(conflict) = conflict {
+        let _ = view.update_in(window, |notatus, _, cx| {
+            notatus.status_message = Some(format!("Save failed: {conflict}"));
+            cx.notify();
+        });
+        return;
+    }
     let save_path = path.clone();
     let result = window
         .background_executor()
@@ -340,6 +351,28 @@ fn apply_project_load_result(
     });
 }
 
+/// Why saving the project to `target` would destroy another project, if it
+/// would: the folder already holds a different Notatus project.
+fn save_as_conflict(target: &Path, current: Option<&Path>) -> Option<String> {
+    if !target.join(MANIFEST_FILE).exists() {
+        return None;
+    }
+    let same_folder = current.is_some_and(|current| {
+        current == target
+            || current
+                .canonicalize()
+                .ok()
+                .zip(target.canonicalize().ok())
+                .is_some_and(|(current, target)| current == target)
+    });
+    (!same_folder).then(|| {
+        format!(
+            "{} already contains another Notatus project; open it or choose an empty folder",
+            target.display()
+        )
+    })
+}
+
 /// What to tell someone when opening their project skipped records.
 fn load_report_notice(report: &notatus_storage::LoadReport) -> Option<String> {
     const SHOWN: usize = 3;
@@ -390,6 +423,20 @@ fn suggested_project_folder(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn save_as_refuses_to_overwrite_another_project() {
+        let other = tempfile::tempdir().unwrap();
+        LocalProjectStore::new(other.path())
+            .initialize("other")
+            .unwrap();
+        let empty = tempfile::tempdir().unwrap();
+
+        assert!(save_as_conflict(other.path(), None).is_some());
+        assert!(save_as_conflict(other.path(), Some(empty.path())).is_some());
+        assert_eq!(save_as_conflict(other.path(), Some(other.path())), None);
+        assert_eq!(save_as_conflict(empty.path(), None), None);
+    }
 
     #[test]
     fn load_notice_summarizes_skipped_records() {
