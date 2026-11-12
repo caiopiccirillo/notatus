@@ -86,53 +86,32 @@ fn attach_draw_box_interactions(
         })
         .on_mouse_up(
             gpui::MouseButton::Left,
-            move |_event: &MouseUpEvent, window, cx| {
+            move |_event: &MouseUpEvent, _window, cx| {
                 let layout = layout_up.borrow();
-                let skipped_required_step = if let Some(layout) = *layout {
-                    view_up
-                        .update(cx, |notatus, cx| {
-                            let mut skipped_required_step = false;
-
-                            if let Some(completion) = notatus.tools.finish_draw_box()
-                                && let Some(asset) = notatus.selected_asset()
-                            {
-                                if let Some(label_id) = notatus.state.selected_label {
-                                    if let Some(bbox) = completion.bbox {
-                                        let _ = layout;
-                                        match notatus
-                                            .state
-                                            .add_human_bbox(asset.id, label_id, bbox, None)
-                                        {
-                                            Ok(_) => {
-                                                notatus.status_message =
-                                                    Some("Created annotation".into());
-                                            }
-                                            Err(e) => {
-                                                notatus.status_message = Some(e.to_string());
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    notatus.left_dock = LeftDock::Dataset;
-                                    notatus.status_message = Some("Select a label first".into());
-                                    skipped_required_step = true;
-                                }
-                            }
-
-                            cx.notify();
-                            skipped_required_step
-                        })
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-
-                if skipped_required_step {
-                    window.push_notification(
-                        Notification::warning("Select a label before drawing annotations.")
-                            .title("Label required"),
-                        cx,
-                    );
+                if layout.is_some() {
+                    let _ = view_up.update(cx, |notatus, cx| {
+                        if let Some(completion) = notatus.tools.finish_draw_box()
+                            && let Some(bbox) = completion.bbox
+                            && let Some(asset_id) = notatus.state.selected_asset
+                        {
+                            let result = notatus.state.batch("Draw box", |state| {
+                                let (label_id, created) =
+                                    super::super::commands::drawing_label(state);
+                                state
+                                    .add_human_bbox(asset_id, label_id, bbox, None)
+                                    .map(|_| created)
+                            });
+                            notatus.status_message = Some(match result {
+                                Ok(true) => format!(
+                                    "Created annotation with new label \"{}\"",
+                                    super::super::commands::FALLBACK_LABEL_NAME
+                                ),
+                                Ok(false) => "Created annotation".into(),
+                                Err(error) => error.to_string(),
+                            });
+                        }
+                        cx.notify();
+                    });
                 }
             },
         )
@@ -157,7 +136,6 @@ fn attach_draw_polygon_interactions(
                     return;
                 };
 
-                let mut skipped_required_step = false;
                 let mut invalid_polygon = None;
                 let _ = view_down.update(cx, |notatus, cx| {
                     let Some(asset) = notatus.selected_asset().cloned() else {
@@ -168,11 +146,14 @@ fn attach_draw_polygon_interactions(
                     if event.click_count >= 2 {
                         if notatus.tools.polygon_point_count() >= 3 {
                             match notatus.tools.finish_polygon() {
-                                Some(polygon) => match notatus.state.selected_label {
-                                    Some(label_id) => match notatus
-                                        .state
-                                        .add_human_polygon(asset.id, label_id, polygon, None)
-                                    {
+                                Some(polygon) => {
+                                    // A label made on the fly undoes with its shape.
+                                    let result = notatus.state.batch("Draw polygon", |state| {
+                                        let (label_id, _) =
+                                            super::super::commands::drawing_label(state);
+                                        state.add_human_polygon(asset.id, label_id, polygon, None)
+                                    });
+                                    match result {
                                         Ok(_) => {
                                             notatus.status_message =
                                                 Some("Created segmentation polygon".into());
@@ -181,14 +162,8 @@ fn attach_draw_polygon_interactions(
                                             notatus.status_message = Some(error.to_string());
                                             invalid_polygon = Some(error.to_string());
                                         }
-                                    },
-                                    None => {
-                                        notatus.left_dock = LeftDock::Dataset;
-                                        notatus.status_message =
-                                            Some("Select a label first".into());
-                                        skipped_required_step = true;
                                     }
-                                },
+                                }
                                 None => {
                                     invalid_polygon = Some(
                                         "Polygon needs at least three valid points".to_string(),
@@ -199,23 +174,13 @@ fn attach_draw_polygon_interactions(
                         } else {
                             notatus.fit_canvas_to_view(cx);
                         }
-                    } else if notatus.state.selected_label.is_some() {
-                        notatus.tools.add_polygon_point(image_pos);
                     } else {
-                        notatus.left_dock = LeftDock::Dataset;
-                        notatus.status_message = Some("Select a label first".into());
-                        skipped_required_step = true;
+                        notatus.tools.add_polygon_point(image_pos);
                     }
                     cx.notify();
                 });
 
-                if skipped_required_step {
-                    window.push_notification(
-                        Notification::warning("Select a label before drawing annotations.")
-                            .title("Label required"),
-                        cx,
-                    );
-                } else if let Some(message) = invalid_polygon {
+                if let Some(message) = invalid_polygon {
                     window.push_notification(
                         Notification::warning(message).title("Invalid polygon"),
                         cx,

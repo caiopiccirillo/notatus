@@ -332,3 +332,37 @@ fn autosave_skips_projects_without_a_location(cx: &mut TestAppContext) {
         assert_eq!(notatus.save_status(), "Not saved to disk");
     });
 }
+
+#[test]
+fn drawing_without_labels_creates_one_and_undoes_together() {
+    let mut state = UiState::new_project("demo");
+    let asset_id = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+    let bbox = BoundingBox::from_xywh(10.0, 10.0, 20.0, 20.0).unwrap();
+
+    let created = state.batch("Draw box", |state| {
+        let (label_id, created) = commands::drawing_label(state);
+        state
+            .add_human_bbox(asset_id, label_id, bbox, None)
+            .unwrap();
+        created
+    });
+
+    assert!(created);
+    assert_eq!(state.dataset.labels.len(), 1);
+    assert_eq!(state.dataset.labels[0].name, commands::FALLBACK_LABEL_NAME);
+    assert!(state.dataset.labels[0].color.is_some());
+    assert_eq!(state.undo(), Some("Draw box"));
+    assert!(state.dataset.labels.is_empty());
+    assert!(state.dataset.annotations.is_empty());
+}
+
+#[test]
+fn drawing_reuses_the_first_label_when_none_is_selected() {
+    let mut state = UiState::new_project("demo");
+    let first = state.add_label("Person");
+    state.add_label("Car");
+    state.selected_label = None;
+
+    assert_eq!(commands::drawing_label(&mut state), (first, false));
+    assert_eq!(state.selected_label, Some(first));
+}

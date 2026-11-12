@@ -39,13 +39,7 @@ impl NotatusWindow {
         let active_tool = self.state.active_tool;
         let viewport = self.tools.viewport;
         let canvas_cursor = self.canvas_cursor;
-        let (empty_title, empty_message) = if self.state.dataset.labels.is_empty() {
-            ("Create labels to continue", "No labels in this project")
-        } else if self.state.dataset.assets.is_empty() {
-            ("Import media to continue", "No media in this project")
-        } else {
-            ("Select media to annotate", "No media selected")
-        };
+        let has_media = !self.state.dataset.assets.is_empty();
         let preview_color = self
             .selected_label()
             .and_then(|l| l.color.as_deref())
@@ -87,33 +81,74 @@ impl NotatusWindow {
                         }))
                     })
                     .when(selected_asset.is_none(), |canvas| {
-                        canvas.child(canvas_empty_state(empty_title, empty_message))
+                        canvas.child(canvas_empty_state(has_media))
                     })
                     .child(self.canvas_toolbar(cx)),
             )
     }
 }
 
-fn canvas_empty_state(title: &'static str, message: &'static str) -> impl IntoElement {
-    div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap_1()
-        .text_center()
-        .child(
-            div()
-                .text_lg()
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(title),
+/// Guides a new project to its first image, with the keys that do the same.
+fn canvas_empty_state(has_media: bool) -> impl IntoElement {
+    use super::actions::{CommandPalette, ImportMedia, OpenProject};
+    use gpui::Action as _;
+    use gpui_component::empty::{
+        Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant,
+        EmptyTitle,
+    };
+
+    let (title, description) = if has_media {
+        (
+            "Select media to annotate",
+            "Pick an image from the Media list, or press D to start with the first one.",
         )
-        .child(themed(move |theme| {
-            div()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .child(message)
-        }))
+    } else {
+        (
+            "Import images to start annotating",
+            "Labels can be created while you draw. Press Ctrl+K at any time for every command.",
+        )
+    };
+    let action_button = |id: &'static str, label: &'static str, action: Box<dyn gpui::Action>| {
+        Button::new(id)
+            .small()
+            .label(label)
+            .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+    };
+
+    Empty::new()
+        .header(
+            EmptyHeader::new()
+                .media(
+                    EmptyMedia::new()
+                        .with_variant(EmptyMediaVariant::Icon)
+                        .child(Icon::new(IconName::GalleryVerticalEnd)),
+                )
+                .title(EmptyTitle::new().child(title))
+                .description(EmptyDescription::new().child(description)),
+        )
+        .content(
+            EmptyContent::new().child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        action_button("empty-import", "Import images", ImportMedia.boxed_clone())
+                            .primary(),
+                    )
+                    .when(!has_media, |row| {
+                        row.child(action_button(
+                            "empty-open",
+                            "Open project",
+                            OpenProject.boxed_clone(),
+                        ))
+                    })
+                    .child(action_button(
+                        "empty-palette",
+                        "Commands",
+                        CommandPalette.boxed_clone(),
+                    )),
+            ),
+        )
 }
 
 struct InteractiveImageCanvas<'a> {

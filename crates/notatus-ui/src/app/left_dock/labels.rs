@@ -55,7 +55,7 @@ pub(super) fn labels_section(
                 .py_6()
                 .text_sm()
                 .text_color(colors.muted_foreground)
-                .child("Create labels before importing media")
+                .child("Add labels now, or draw a box to create one")
                 .child(
                     Button::new("labels-empty-add")
                         .small()

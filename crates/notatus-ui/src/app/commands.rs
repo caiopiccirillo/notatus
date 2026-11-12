@@ -1,17 +1,42 @@
 use super::helpers::{hex_color, plural};
 use super::*;
 
+/// Name given to the label created when someone draws before making any.
+pub(super) const FALLBACK_LABEL_NAME: &str = "Object";
+
+/// Adds a label with the next palette color, as one undo step.
+pub(super) fn add_colored_label(state: &mut UiState, name: Option<String>) -> LabelId {
+    let label_number = state.dataset.labels.len() + 1;
+    let name = name.unwrap_or_else(|| format!("Label {label_number}"));
+    let color = LABEL_COLORS[(label_number - 1) % LABEL_COLORS.len()].to_string();
+    state.batch("Create label", |state| {
+        let label_id = state.add_label(name);
+        let _ = state.update_label_color(label_id, Some(color));
+        label_id
+    })
+}
+
+/// The label new shapes get, creating one when the project has none so
+/// drawing never stops to ask for setup first. Returns whether it was created.
+pub(super) fn drawing_label(state: &mut UiState) -> (LabelId, bool) {
+    if let Some(label_id) = state.selected_label {
+        return (label_id, false);
+    }
+    if let Some(label_id) = state.dataset.labels.first().map(|label| label.id) {
+        state.selected_label = Some(label_id);
+        return (label_id, false);
+    }
+    (
+        add_colored_label(state, Some(FALLBACK_LABEL_NAME.to_string())),
+        true,
+    )
+}
+
 impl NotatusWindow {
     pub(super) fn create_label(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let label_number = self.state.dataset.labels.len() + 1;
-        let label_id = self.state.add_label(format!("Label {label_number}"));
-        let color = LABEL_COLORS[(label_number - 1) % LABEL_COLORS.len()].to_string();
+        add_colored_label(&mut self.state, None);
         self.left_dock = LeftDock::Dataset;
-        if let Err(error) = self.state.update_label_color(label_id, Some(color)) {
-            self.status_message = Some(error.to_string());
-        } else {
-            self.status_message = Some("Created label".to_string());
-        }
+        self.status_message = Some("Created label".to_string());
         self.sync_label_name_input(window, cx);
         cx.notify();
     }

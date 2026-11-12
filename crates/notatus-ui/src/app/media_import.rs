@@ -3,26 +3,31 @@ use super::*;
 
 impl NotatusWindow {
     fn apply_media_import(&mut self, imported: MediaImport) {
-        let mut added = 0;
         let mut failed = imported.failures;
+        let first_new = self.state.dataset.assets.len();
 
-        for candidate in imported.candidates {
-            let path = candidate.path.to_string_lossy().into_owned();
-            if dataset_has_local_path(&self.state, &path) {
-                failed.push(format!("{path}: already imported"));
-                continue;
-            }
+        let added = self.state.batch("Import media", |state| {
+            let mut added = 0;
+            for candidate in imported.candidates {
+                let path = candidate.path.to_string_lossy().into_owned();
+                if dataset_has_local_path(state, &path) {
+                    failed.push(format!("{path}: already imported"));
+                    continue;
+                }
 
-            match self
-                .state
-                .add_local_image_asset(path, candidate.width, candidate.height)
-            {
-                Ok(_) => added += 1,
-                Err(error) => failed.push(error.to_string()),
+                match state.add_local_image_asset(path, candidate.width, candidate.height) {
+                    Ok(_) => added += 1,
+                    Err(error) => failed.push(error.to_string()),
+                }
             }
-        }
+            added
+        });
 
         if added > 0 {
+            // Start on the first imported item rather than the last.
+            self.state.selected_asset = self.state.dataset.assets.get(first_new).map(|a| a.id);
+            self.tools.fit_canvas_to_view();
+            self.canvas_image_layout.borrow_mut().take();
             self.left_dock = LeftDock::Media;
         }
         self.status_message = Some(media_import_summary(added, failed.len()));
@@ -41,30 +46,14 @@ struct MediaCandidate {
 
 pub(super) fn open_media_picker(
     view: gpui::WeakEntity<NotatusWindow>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut App,
 ) {
-    let skipped_required_step = view
-        .update(cx, |notatus, cx| {
-            if notatus.state.dataset.labels.is_empty() {
-                notatus.left_dock = LeftDock::Dataset;
-                notatus.status_message = Some("Create a label before importing media".to_string());
-                cx.notify();
-                return true;
-            }
-
-            notatus.status_message = Some("Waiting for media selection".to_string());
-            cx.notify();
-            false
-        })
-        .unwrap_or(false);
-
-    if skipped_required_step {
-        window.push_notification(
-            Notification::warning("Create a label before importing media.")
-                .title("Labels required"),
-            cx,
-        );
+    let picking = view.update(cx, |notatus, cx| {
+        notatus.status_message = Some("Waiting for media selection".to_string());
+        cx.notify();
+    });
+    if picking.is_err() {
         return;
     }
 

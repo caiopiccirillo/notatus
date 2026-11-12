@@ -114,4 +114,15 @@ fn screenshots() {
     })
     .unwrap();
     capture(&mut cx, window, &out_dir.join("palette-dark.png"));
+
+    cx.update_window(window, |_, window, cx| {
+        window.close_all_dialogs(cx);
+        view.update(cx, |notatus, cx| {
+            notatus.state = UiState::new_project("Untitled project");
+            cx.notify();
+        });
+    })
+    .unwrap();
+    cx.update(|cx| Theme::change(ThemeMode::Light, None, cx));
+    capture(&mut cx, window, &out_dir.join("empty-light.png"));
 }

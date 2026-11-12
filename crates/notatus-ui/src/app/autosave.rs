@@ -107,8 +107,8 @@ impl NotatusWindow {
             return "Saving…";
         }
         match (&self.project_location, self.state.dirty) {
+            (ProjectLocation::Unsaved, _) => "Not saved to disk",
             (_, false) => "Saved",
-            (ProjectLocation::Unsaved, true) => "Not saved to disk",
             (ProjectLocation::Local(_), true) if self.autosave.enabled => "Edited",
             (ProjectLocation::Local(_), true) => "Unsaved",
         }
