@@ -69,6 +69,10 @@ fn capture(cx: &mut HeadlessAppContext, window: AnyWindowHandle, path: &Path) {
         let _ = cx.update_window(window, |_, window, _| window.refresh());
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    // The headless clock is simulated, so advance it past entrance
+    // animations (dialogs, dropdowns) and draw once to start them.
+    let _ = cx.capture_screenshot(window);
+    cx.advance_clock(std::time::Duration::from_secs(1));
     let image = cx.capture_screenshot(window).expect("capture screenshot");
     image.save(path).expect("write screenshot");
     eprintln!("wrote {}", path.display());
@@ -114,6 +118,19 @@ fn screenshots() {
     })
     .unwrap();
     capture(&mut cx, window, &out_dir.join("palette-dark.png"));
+
+    cx.update_window(window, |_, window, cx| {
+        window.close_all_dialogs(cx);
+        view.update(cx, |notatus, cx| notatus.open_label_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        let picker = view.read(cx).label_picker.clone();
+        picker.update(cx, |picker, cx| picker.set_query("Bi", window, cx));
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("label-picker-dark.png"));
 
     cx.update_window(window, |_, window, cx| {
         window.close_all_dialogs(cx);

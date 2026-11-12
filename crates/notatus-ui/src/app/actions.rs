@@ -25,6 +25,8 @@ actions!(
         ImportMedia,
         ExportAnnotations,
         NewLabel,
+        /// Focus the label picker to choose or create the active label.
+        PickLabel,
         SelectTool,
         BoxTool,
         PolygonTool,
@@ -75,6 +77,7 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-i", ImportMedia, global),
         KeyBinding::new("ctrl-e", ExportAnnotations, global),
         KeyBinding::new("ctrl-shift-l", NewLabel, global),
+        KeyBinding::new("l", PickLabel, canvas),
         KeyBinding::new("v", SelectTool, canvas),
         KeyBinding::new("b", BoxTool, canvas),
         KeyBinding::new("p", PolygonTool, canvas),
@@ -138,6 +141,9 @@ impl NotatusWindow {
             }))
             .on_action(cx.listener(|this, _: &NewLabel, window, cx| {
                 this.create_label(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PickLabel, window, cx| {
+                this.open_label_picker(window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::Select, cx);

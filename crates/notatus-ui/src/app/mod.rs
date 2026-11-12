@@ -36,6 +36,7 @@ mod canvas;
 mod commands;
 mod export_commands;
 mod helpers;
+mod label_picker;
 mod left_dock;
 mod media_import;
 mod palette;

@@ -203,7 +203,9 @@ impl NotatusWindow {
             );
         }
 
-        let mut labels = PaletteGroup::new("Labels").command("New label", IconName::Plus, NewLabel);
+        let mut labels = PaletteGroup::new("Labels")
+            .command("Find or create label", IconName::Search, PickLabel)
+            .command("New label", IconName::Plus, NewLabel);
         let verb = if self.state.selected_annotation.is_some() {
             "Relabel as"
         } else {

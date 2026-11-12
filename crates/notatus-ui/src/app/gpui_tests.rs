@@ -366,3 +366,43 @@ fn drawing_reuses_the_first_label_when_none_is_selected() {
     assert_eq!(commands::drawing_label(&mut state), (first, false));
     assert_eq!(state.selected_label, Some(first));
 }
+
+#[gpui::test]
+fn label_picker_creates_a_typed_label_and_relabels_the_selection(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let annotation_id = view.update(cx, |notatus, _| {
+        let (_, assets) = seed_three_media(notatus);
+        let label_id = notatus.state.dataset.labels[0].id;
+        let bbox = BoundingBox::from_xywh(1.0, 1.0, 5.0, 5.0).unwrap();
+        let id = notatus
+            .state
+            .add_human_bbox(assets[0], label_id, bbox, None)
+            .unwrap();
+        notatus.state.selected_annotation = Some(id);
+        id
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "l");
+    cx.run_until_parked();
+    cx.simulate_input(window, "Bicycle");
+    cx.run_until_parked();
+    cx.simulate_keystrokes(window, "enter");
+    cx.run_until_parked();
+
+    view.update(cx, |notatus, _| {
+        let label = notatus.state.dataset.labels.last().unwrap();
+        assert_eq!(label.name, "Bicycle");
+        assert!(label.color.is_some());
+        assert_eq!(notatus.state.selected_label, Some(label.id));
+        let annotation = notatus
+            .state
+            .dataset
+            .annotations
+            .iter()
+            .find(|annotation| annotation.id == annotation_id)
+            .unwrap();
+        assert_eq!(annotation.label_id, label.id);
+    });
+}

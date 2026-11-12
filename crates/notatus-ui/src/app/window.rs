@@ -35,6 +35,8 @@ pub(super) struct NotatusWindow {
     pub(super) focus_handle: gpui::FocusHandle,
     pub(super) command_state: gpui::Entity<gpui_component::command::CommandState>,
     pub(super) autosave: super::autosave::AutosaveState,
+    pub(super) label_picker: gpui::Entity<super::label_picker::LabelPickerState>,
+    pub(super) label_picker_synced: Option<(u64, Option<LabelId>)>,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -50,10 +52,12 @@ impl NotatusWindow {
         let command_state = cx.new(|cx| gpui_component::command::CommandState::new(window, cx));
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
+        let (label_picker, label_picker_subscription) = Self::new_label_picker(window, cx);
         project_name_input.update(cx, |input, cx| {
             input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
         });
         let _subscriptions = vec![
+            label_picker_subscription,
             // Every state change notifies, so this sees each edit.
             cx.observe_self(|this, cx| this.schedule_autosave(cx)),
             cx.subscribe_in(
@@ -133,6 +137,8 @@ impl NotatusWindow {
             focus_handle,
             command_state,
             autosave: super::autosave::AutosaveState::new(),
+            label_picker,
+            label_picker_synced: None,
             _subscriptions,
         }
     }
@@ -206,7 +212,8 @@ impl NotatusWindow {
 }
 
 impl Render for NotatusWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_label_picker(window, cx);
         // gpui-component's Root mounts the dialog and notification layers itself.
         let root = div()
             .id("notatus-window")
