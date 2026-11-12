@@ -184,9 +184,14 @@ impl Dataset {
             }
         }
 
-        let mut asset_ids = BTreeSet::new();
+        // Sizes by id, so checking each annotation's geometry is a lookup
+        // rather than a scan of every asset.
+        let mut asset_dimensions = BTreeMap::new();
         for asset in &self.assets {
-            if !asset_ids.insert(asset.id) {
+            if asset_dimensions
+                .insert(asset.id, asset.dimensions)
+                .is_some()
+            {
                 tracing::warn!(asset_id = %asset.id, "duplicate asset id");
                 return Err(ValidationError::DuplicateAsset { asset_id: asset.id });
             }
@@ -208,13 +213,13 @@ impl Dataset {
                     annotation_id: annotation.id,
                 });
             }
-            if !asset_ids.contains(&annotation.asset_id) {
+            let Some(dimensions) = asset_dimensions.get(&annotation.asset_id) else {
                 tracing::warn!(annotation_id = %annotation.id, asset_id = %annotation.asset_id, "unknown asset reference");
                 return Err(ValidationError::UnknownAsset {
                     annotation_id: annotation.id,
                     asset_id: annotation.asset_id,
                 });
-            }
+            };
             if !label_ids.contains(&annotation.label_id) {
                 tracing::warn!(annotation_id = %annotation.id, label_id = %annotation.label_id, "unknown label reference");
                 return Err(ValidationError::UnknownLabel {
@@ -232,12 +237,9 @@ impl Dataset {
                 });
             }
 
-            let asset = self
-                .asset_by_id(annotation.asset_id)
-                .expect("asset id already validated");
             annotation
                 .geometry
-                .validate_within_image(asset.dimensions)
+                .validate_within_image(*dimensions)
                 .map_err(|source| ValidationError::InvalidGeometry {
                     annotation_id: annotation.id,
                     source,
@@ -252,7 +254,7 @@ impl Dataset {
                     classification_id: classification.id,
                 });
             }
-            if !asset_ids.contains(&classification.asset_id) {
+            if !asset_dimensions.contains_key(&classification.asset_id) {
                 tracing::warn!(classification_id = %classification.id, asset_id = %classification.asset_id, "unknown classification asset");
                 return Err(ValidationError::UnknownClassificationAsset {
                     classification_id: classification.id,
