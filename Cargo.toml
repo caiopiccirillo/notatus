@@ -32,7 +32,7 @@ tempfile = "3.27.0"
 # OpenTelemetry / observability
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tracing-opentelemetry = "0.28"
-opentelemetry = "0.27"
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio-current-thread"] }
-opentelemetry-otlp = { version = "0.27", features = ["http-proto"] }
+tracing-opentelemetry = "0.34.0"
+opentelemetry = "0.33.1"
+opentelemetry_sdk = "0.33.1"
+opentelemetry-otlp = { version = "0.33.1", features = ["http-proto"] }
