@@ -14,8 +14,8 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
         CanvasToolDefinition {
             tool: AnnotationTool::DrawBox,
             id: "tool-draw-box",
-            label: "Draw Box",
-            tooltip: "Draw bounding boxes",
+            label: "Box",
+            tooltip: "Draw boxes on empty space, drag boxes to edit (alt: always draw)",
             icon: IconName::Frame,
         },
         CanvasToolDefinition {
@@ -29,7 +29,7 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
             tool: AnnotationTool::Select,
             id: "tool-select",
             label: "Select",
-            tooltip: "Select, move, resize, pan, and zoom the canvas",
+            tooltip: "Select, move, and resize without drawing; drag empty space to pan",
             icon: IconName::Inspector,
         },
     ]

@@ -406,3 +406,96 @@ fn label_picker_creates_a_typed_label_and_relabels_the_selection(cx: &mut TestAp
         assert_eq!(annotation.label_id, label.id);
     });
 }
+
+/// Drives the canvas with real mouse events in image coordinates.
+struct CanvasDriver {
+    cx: gpui::VisualTestContext,
+    view: gpui::Entity<NotatusWindow>,
+}
+
+impl CanvasDriver {
+    fn new(
+        window: gpui::AnyWindowHandle,
+        view: gpui::Entity<NotatusWindow>,
+        cx: &TestAppContext,
+    ) -> Self {
+        let cx = gpui::VisualTestContext::from_window(window, cx);
+        cx.run_until_parked();
+        Self { cx, view }
+    }
+
+    fn screen(&mut self, (x, y): (f64, f64)) -> gpui::Point<gpui::Pixels> {
+        self.view.update(&mut self.cx, |notatus, _| {
+            let layout = notatus
+                .canvas_image_layout
+                .borrow()
+                .expect("canvas laid out");
+            let asset = notatus.selected_asset().expect("selected media");
+            let bounds = layout.image_bounds;
+            let sx = f32::from(bounds.size.width) / asset.dimensions.width as f32;
+            let sy = f32::from(bounds.size.height) / asset.dimensions.height as f32;
+            gpui::point(
+                bounds.origin.x + px(x as f32 * sx),
+                bounds.origin.y + px(y as f32 * sy),
+            )
+        })
+    }
+
+    fn drag(&mut self, from: (f64, f64), to: (f64, f64), modifiers: gpui::Modifiers) {
+        let start = self.screen(from);
+        let end = self.screen(to);
+        let left = gpui::MouseButton::Left;
+        self.cx.simulate_mouse_move(start, None, modifiers);
+        self.cx.simulate_mouse_down(start, left, modifiers);
+        self.cx.simulate_mouse_move(end, left, modifiers);
+        self.cx.simulate_mouse_up(end, left, modifiers);
+        self.cx.run_until_parked();
+    }
+}
+
+#[gpui::test]
+fn box_tool_draws_on_empty_space_and_moves_existing_boxes(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        seed_three_media(notatus);
+        notatus.set_canvas_tool(AnnotationTool::DrawBox, cx);
+    });
+    let mut canvas = CanvasDriver::new(window_handle.into(), view.clone(), cx);
+    let none = gpui::Modifiers::none();
+
+    canvas.drag((10.0, 10.0), (40.0, 40.0), none);
+    let drawn = view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.dataset.annotations.len(), 1);
+        notatus.state.dataset.annotations[0].id
+    });
+
+    // Dragging the box body moves it instead of drawing a second box.
+    canvas.drag((25.0, 25.0), (55.0, 35.0), none);
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.dataset.annotations.len(), 1);
+        assert_eq!(notatus.state.selected_annotation, Some(drawn));
+        let bbox = notatus.state.dataset.annotations[0]
+            .geometry
+            .as_bbox()
+            .unwrap();
+        assert!((bbox.x - 40.0).abs() < 1.5, "moved x: {}", bbox.x);
+        assert!((bbox.y - 20.0).abs() < 1.5, "moved y: {}", bbox.y);
+    });
+
+    // Alt forces drawing, even when starting inside a box.
+    canvas.drag((50.0, 25.0), (60.0, 45.0), gpui::Modifiers::alt());
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.dataset.annotations.len(), 2);
+    });
+
+    // A move is one undo step.
+    view.update(cx, |notatus, _| {
+        notatus.state.undo();
+        notatus.state.undo();
+        let bbox = notatus.state.dataset.annotations[0]
+            .geometry
+            .as_bbox()
+            .unwrap();
+        assert!((bbox.x - 10.0).abs() < 1.5);
+    });
+}

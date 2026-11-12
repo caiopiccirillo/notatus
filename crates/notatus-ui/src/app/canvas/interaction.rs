@@ -11,9 +11,15 @@ pub(super) fn attach_canvas_interactions(
     annotations: Vec<AnnotationOverlay>,
 ) -> gpui::Stateful<gpui::Div> {
     let zoom_view = view.clone();
+    let canvas = attach_middle_pan(canvas, view.clone());
     canvas
         .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
-            attach_draw_box_interactions(canvas, view.clone(), shared_image_layout.clone())
+            attach_draw_box_interactions(
+                canvas,
+                view.clone(),
+                shared_image_layout.clone(),
+                annotations.clone(),
+            )
         })
         .when(
             matches!(active_tool, AnnotationTool::DrawPolygon),
@@ -34,10 +40,14 @@ pub(super) fn attach_canvas_interactions(
         })
 }
 
+/// The box tool doubles as the select tool: pressing on a shape selects it
+/// and drags or resizes it, pressing on empty image draws a new box, and
+/// holding alt always draws so boxes can start inside other boxes.
 fn attach_draw_box_interactions(
     canvas: gpui::Stateful<gpui::Div>,
     view: gpui::WeakEntity<NotatusWindow>,
     shared_image_layout: SharedImageLayout,
+    annotations: Vec<AnnotationOverlay>,
 ) -> gpui::Stateful<gpui::Div> {
     let view_down = view.clone();
     let view_move = view.clone();
@@ -45,11 +55,13 @@ fn attach_draw_box_interactions(
     let layout_down = shared_image_layout.clone();
     let layout_move = shared_image_layout.clone();
     let layout_up = shared_image_layout;
+    let annotations_down = annotations.clone();
+    let annotations_move = annotations;
 
     canvas
         .on_mouse_down(
             gpui::MouseButton::Left,
-            move |event: &MouseDownEvent, _window, cx| {
+            move |event: &MouseDownEvent, window, cx| {
                 if event.click_count >= 2 {
                     let _ = view_down.update(cx, |notatus, cx| {
                         notatus.fit_canvas_to_view(cx);
@@ -60,26 +72,69 @@ fn attach_draw_box_interactions(
                 let layout = layout_down.borrow();
                 if let Some(layout) = *layout {
                     let _ = view_down.update(cx, |notatus, cx| {
-                        if let Some(asset) = notatus.selected_asset() {
-                            let (ix, iy) =
-                                screen_to_image(layout.image_bounds, event.position, asset);
-                            notatus.tools.begin_draw_box((ix, iy));
-                            cx.notify();
+                        let Some(asset) = notatus.selected_asset() else {
+                            return;
+                        };
+                        let image_pos = screen_to_image(layout.image_bounds, event.position, asset);
+                        let target = (!event.modifiers.alt)
+                            .then(|| {
+                                hit_test_bbox_edit_target(
+                                    &annotations_down,
+                                    image_pos,
+                                    layout.image_bounds,
+                                    asset,
+                                )
+                            })
+                            .flatten();
+                        match target {
+                            Some(target) => begin_annotation_edit(
+                                notatus,
+                                target,
+                                &annotations_down,
+                                image_pos,
+                                window,
+                                cx,
+                            ),
+                            None => {
+                                if notatus.state.selected_annotation.is_some() {
+                                    notatus.select_annotation(None, window, cx);
+                                }
+                                notatus.tools.begin_draw_box(image_pos);
+                            }
                         }
+                        cx.notify();
                     });
                 }
             },
         )
-        .on_mouse_move(move |event: &MouseMoveEvent, _window, cx| {
+        .on_mouse_move(move |event: &MouseMoveEvent, window, cx| {
             let layout = layout_move.borrow();
             if let Some(layout) = *layout {
                 let _ = view_move.update(cx, |notatus, cx| {
-                    if notatus.tools.draw_box.is_some()
-                        && let Some(asset) = notatus.selected_asset()
-                    {
-                        let (ix, iy) = screen_to_image(layout.image_bounds, event.position, asset);
-                        notatus.tools.update_draw_box((ix, iy));
+                    let Some(asset) = notatus.selected_asset().cloned() else {
+                        return;
+                    };
+                    let image_pos = screen_to_image(layout.image_bounds, event.position, &asset);
+                    if notatus.tools.draw_box.is_some() {
+                        notatus.tools.update_draw_box(image_pos);
                         cx.notify();
+                    } else if let Some((annotation_id, bbox)) =
+                        notatus.tools.update_bbox_edit(image_pos, &asset)
+                    {
+                        notatus.update_annotation_bbox(annotation_id, bbox, window, cx);
+                    } else if notatus.tools.bbox_edit.is_none() && notatus.tools.pan.is_none() {
+                        let cursor = if event.modifiers.alt {
+                            gpui::CursorStyle::Crosshair
+                        } else {
+                            hover_cursor(
+                                &annotations_move,
+                                image_pos,
+                                layout.image_bounds,
+                                &asset,
+                                gpui::CursorStyle::Crosshair,
+                            )
+                        };
+                        notatus.set_canvas_cursor(Some(cursor), cx);
                     }
                 });
             }
@@ -90,6 +145,13 @@ fn attach_draw_box_interactions(
                 let layout = layout_up.borrow();
                 if layout.is_some() {
                     let _ = view_up.update(cx, |notatus, cx| {
+                        if notatus.tools.bbox_edit.is_some() {
+                            notatus.tools.cancel_interactions();
+                            notatus.state.break_history_coalescing();
+                            notatus.set_canvas_cursor(None, cx);
+                            cx.notify();
+                            return;
+                        }
                         if let Some(completion) = notatus.tools.finish_draw_box()
                             && let Some(bbox) = completion.bbox
                             && let Some(asset_id) = notatus.state.selected_asset
@@ -245,49 +307,14 @@ fn attach_select_interactions(
                                 asset,
                             );
                             match hit_target {
-                                Some(BboxHitTarget::Handle(annotation_id, handle)) => {
-                                    if let Some(bbox) =
-                                        bbox_for_annotation(&annotations_down, annotation_id)
-                                    {
-                                        let mode =
-                                            super::super::tools::BboxEditMode::Resize(handle);
-                                        notatus.select_annotation(Some(annotation_id), window, cx);
-                                        notatus.tools.begin_bbox_edit(
-                                            annotation_id,
-                                            mode,
-                                            bbox,
-                                            image_pos,
-                                        );
-                                        notatus.set_canvas_cursor(
-                                            Some(super::super::tools::cursor_for_edit_mode(mode)),
-                                            cx,
-                                        );
-                                    }
-                                }
-                                Some(BboxHitTarget::Body(annotation_id)) => {
-                                    if let Some(bbox) =
-                                        bbox_for_annotation(&annotations_down, annotation_id)
-                                    {
-                                        let mode = super::super::tools::BboxEditMode::Move;
-                                        notatus.select_annotation(Some(annotation_id), window, cx);
-                                        notatus.tools.begin_bbox_edit(
-                                            annotation_id,
-                                            mode,
-                                            bbox,
-                                            image_pos,
-                                        );
-                                        notatus.set_canvas_cursor(
-                                            Some(super::super::tools::cursor_for_edit_mode(mode)),
-                                            cx,
-                                        );
-                                    } else {
-                                        notatus.select_annotation(Some(annotation_id), window, cx);
-                                        notatus.set_canvas_cursor(
-                                            Some(gpui::CursorStyle::PointingHand),
-                                            cx,
-                                        );
-                                    }
-                                }
+                                Some(target) => begin_annotation_edit(
+                                    notatus,
+                                    target,
+                                    &annotations_down,
+                                    image_pos,
+                                    window,
+                                    cx,
+                                ),
                                 None => {
                                     notatus.select_annotation(None, window, cx);
                                     notatus
@@ -319,19 +346,14 @@ fn attach_select_interactions(
                         notatus.tools.update_pan(event.position);
                         cx.notify();
                     } else {
-                        let cursor = match hit_test_bbox_edit_target(
+                        let cursor = hover_cursor(
                             &annotations_move,
                             image_pos,
                             layout.image_bounds,
                             &asset,
-                        ) {
-                            Some(BboxHitTarget::Handle(_, handle)) => {
-                                Some(super::super::tools::cursor_for_resize_handle(handle))
-                            }
-                            Some(BboxHitTarget::Body(_)) => Some(gpui::CursorStyle::OpenHand),
-                            None => Some(gpui::CursorStyle::OpenHand),
-                        };
-                        notatus.set_canvas_cursor(cursor, cx);
+                            gpui::CursorStyle::OpenHand,
+                        );
+                        notatus.set_canvas_cursor(Some(cursor), cx);
                     }
                 });
             }
@@ -358,6 +380,90 @@ fn bbox_for_annotation(
             .then(|| annotation.geometry.as_bbox())
             .flatten()
     })
+}
+
+/// Selects the annotation under the pointer and, for boxes, starts moving or
+/// resizing it.
+fn begin_annotation_edit(
+    notatus: &mut NotatusWindow,
+    target: BboxHitTarget,
+    annotations: &[AnnotationOverlay],
+    image_pos: (f64, f64),
+    window: &mut Window,
+    cx: &mut Context<NotatusWindow>,
+) {
+    use super::super::tools::{BboxEditMode, cursor_for_edit_mode};
+
+    let (annotation_id, mode) = match target {
+        BboxHitTarget::Handle(id, handle) => (id, BboxEditMode::Resize(handle)),
+        BboxHitTarget::Body(id) => (id, BboxEditMode::Move),
+    };
+    notatus.select_annotation(Some(annotation_id), window, cx);
+    match bbox_for_annotation(annotations, annotation_id) {
+        Some(bbox) => {
+            notatus
+                .tools
+                .begin_bbox_edit(annotation_id, mode, bbox, image_pos);
+            notatus.set_canvas_cursor(Some(cursor_for_edit_mode(mode)), cx);
+        }
+        // Polygons can be selected but not dragged yet.
+        None => notatus.set_canvas_cursor(Some(gpui::CursorStyle::PointingHand), cx),
+    }
+}
+
+/// Cursor for hovering: resize arrows on handles, a move hand over shapes,
+/// and `idle` elsewhere.
+fn hover_cursor(
+    annotations: &[AnnotationOverlay],
+    image_pos: (f64, f64),
+    image_bounds: Bounds<Pixels>,
+    asset: &AssetRecord,
+    idle: gpui::CursorStyle,
+) -> gpui::CursorStyle {
+    match hit_test_bbox_edit_target(annotations, image_pos, image_bounds, asset) {
+        Some(BboxHitTarget::Handle(_, handle)) => {
+            super::super::tools::cursor_for_resize_handle(handle)
+        }
+        Some(BboxHitTarget::Body(_)) => gpui::CursorStyle::OpenHand,
+        None => idle,
+    }
+}
+
+/// Middle-drag pans the view in every tool.
+fn attach_middle_pan(
+    canvas: gpui::Stateful<gpui::Div>,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> gpui::Stateful<gpui::Div> {
+    let view_down = view.clone();
+    let view_move = view.clone();
+    let view_up = view;
+    canvas
+        .on_mouse_down(
+            gpui::MouseButton::Middle,
+            move |event: &MouseDownEvent, _, cx| {
+                let _ = view_down.update(cx, |notatus, cx| {
+                    notatus.tools.begin_pan(event.position);
+                    notatus.set_canvas_cursor(Some(gpui::CursorStyle::ClosedHand), cx);
+                });
+            },
+        )
+        .on_mouse_move(move |event: &MouseMoveEvent, _, cx| {
+            if event.pressed_button != Some(gpui::MouseButton::Middle) {
+                return;
+            }
+            let _ = view_move.update(cx, |notatus, cx| {
+                if notatus.tools.pan.is_some() {
+                    notatus.tools.update_pan(event.position);
+                    cx.notify();
+                }
+            });
+        })
+        .on_mouse_up(gpui::MouseButton::Middle, move |_: &MouseUpEvent, _, cx| {
+            let _ = view_up.update(cx, |notatus, cx| {
+                notatus.tools.pan = None;
+                notatus.set_canvas_cursor(None, cx);
+            });
+        })
 }
 
 fn apply_canvas_zoom(
