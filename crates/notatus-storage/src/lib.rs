@@ -17,6 +17,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
 
+mod recovery;
+
+pub use recovery::{LoadIssue, LoadReport, RECOVERY_DIR};
+
 pub const MANIFEST_FILE: &str = "notatus.project.json";
 pub const LABELS_FILE: &str = "labels.json";
 pub const ASSETS_FILE: &str = "assets.jsonl";
@@ -60,6 +64,68 @@ impl LocalProjectStore {
         let dataset = Dataset::new(name);
         self.save_dataset(&dataset)?;
         Ok(dataset)
+    }
+
+    /// Loads a project, setting aside records that cannot be used instead of
+    /// refusing to open it.
+    ///
+    /// Lines that are not valid JSON, duplicate ids, references to missing
+    /// labels or media, and geometry outside the image are left out of the
+    /// returned dataset and listed in the report. When anything was left out,
+    /// the project files are first copied, unchanged, into a folder under
+    /// [`RECOVERY_DIR`], so the next save cannot lose them.
+    ///
+    /// The manifest and the label file must still parse, and the schema
+    /// version must be supported, because nothing else can be read without
+    /// them.
+    #[tracing::instrument(level = "debug", skip_all, fields(root = %self.root.display()))]
+    pub fn load_dataset_with_report(&self) -> Result<(Dataset, LoadReport), StorageError> {
+        tracing::info!(root = %self.root.display(), "loading dataset with repair");
+
+        let manifest: ProjectManifest = read_json(&self.manifest_path())?;
+        let labels: Vec<Label> = read_json_or_default(&self.labels_path())?;
+        let mut issues = Vec::new();
+        let assets = read_jsonl_lenient(&self.assets_path(), ASSETS_FILE, &mut issues)?;
+        let annotations =
+            read_jsonl_lenient(&self.annotations_path(), ANNOTATIONS_FILE, &mut issues)?;
+        let classifications = read_jsonl_lenient(
+            &self.classifications_path(),
+            CLASSIFICATIONS_FILE,
+            &mut issues,
+        )?;
+
+        let mut dataset = Dataset {
+            manifest,
+            labels,
+            assets,
+            annotations,
+            classifications,
+        };
+        recovery::repair(&mut dataset, &mut issues)?;
+        dataset.validate()?;
+
+        let recovery_dir = if issues.is_empty() {
+            None
+        } else {
+            tracing::warn!(issues = issues.len(), "project loaded with skipped records");
+            Some(recovery::back_up_project_files(&self.root)?)
+        };
+
+        tracing::info!(
+            labels = dataset.labels.len(),
+            assets = dataset.assets.len(),
+            annotations = dataset.annotations.len(),
+            classifications = dataset.classifications.len(),
+            issues = issues.len(),
+            "dataset loaded"
+        );
+        Ok((
+            dataset,
+            LoadReport {
+                issues,
+                recovery_dir,
+            },
+        ))
     }
 
     fn manifest_path(&self) -> PathBuf {
@@ -334,6 +400,32 @@ where
         Ok(())
     })?;
     tracing::debug!(count = values.len(), "read JSONL records");
+    Ok(values)
+}
+
+/// Reads a JSONL file, skipping lines that do not parse and listing them in
+/// `issues` instead of failing.
+#[tracing::instrument(level = "debug", skip_all, fields(path = %path.display()))]
+fn read_jsonl_lenient<T>(
+    path: &Path,
+    file: &'static str,
+    issues: &mut Vec<LoadIssue>,
+) -> Result<Vec<T>, StorageError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let mut values = Vec::new();
+    for_each_jsonl_line(path, |line_number, line| {
+        match serde_json::from_str(line) {
+            Ok(value) => values.push(value),
+            Err(error) => issues.push(LoadIssue {
+                file,
+                line: Some(line_number),
+                message: format!("unreadable record: {error}"),
+            }),
+        }
+        Ok(())
+    })?;
     Ok(values)
 }
 
