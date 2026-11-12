@@ -170,3 +170,67 @@ fn writes_classification_export_layout() {
     assert!(csv.contains("classification_id,asset_id,image_path,label_id,label_name"));
     assert!(csv.contains("images/a.jpg"));
 }
+
+#[test]
+fn yolo_roundtrip_keeps_boxes_touching_every_edge() {
+    let mut dataset = Dataset::new("edges");
+    let label_id = dataset.add_label("car");
+    let asset = AssetRecord::new_image(AssetLocation::local("a.jpg"), 1920, 1080).unwrap();
+    let asset_id = dataset.add_asset(asset);
+    // Boxes flush with each edge, sized so 6-decimal rounding pushes them
+    // past the edge before clipping.
+    let boxes = [
+        BoundingBox::from_xywh(0.0, 0.0, 333.3, 77.7).unwrap(),
+        BoundingBox::from_xywh(1920.0 - 457.1, 1080.0 - 91.3, 457.1, 91.3).unwrap(),
+        BoundingBox::from_xywh(0.0, 1080.0 - 0.7, 1920.0, 0.7).unwrap(),
+    ];
+    for bbox in boxes {
+        let mut annotation =
+            AnnotationRecord::new_human(asset_id, label_id, AnnotationGeometry::Bbox(bbox), None);
+        annotation.accept();
+        dataset.add_annotation(annotation);
+    }
+
+    let files = yolo::export_detection(&dataset, &AnnotationFilter::default()).unwrap();
+    let imported = yolo::import_detection(
+        &dataset,
+        &[yolo::YoloImportFile {
+            asset_id,
+            contents: files[0].contents.clone(),
+        }],
+    )
+    .unwrap();
+
+    assert_eq!(imported.len(), boxes.len());
+    for (bbox, annotation) in boxes.iter().zip(&imported) {
+        let got = annotation.geometry.as_bbox().unwrap();
+        for (expected, actual) in [
+            (bbox.x, got.x),
+            (bbox.y, got.y),
+            (bbox.width, got.width),
+            (bbox.height, got.height),
+        ] {
+            assert!((expected - actual).abs() < 0.01, "{bbox:?} became {got:?}");
+        }
+        assert!(got.max_x() <= 1920.0 && got.max_y() <= 1080.0);
+    }
+}
+
+#[test]
+fn yolo_import_rejects_values_far_outside_the_image() {
+    let dataset = sample_dataset();
+    let import = |contents: &str| {
+        yolo::import_detection(
+            &dataset,
+            &[yolo::YoloImportFile {
+                asset_id: dataset.assets[0].id,
+                contents: contents.to_string(),
+            }],
+        )
+    };
+
+    assert!(import("0 1.0000004 0.5 0.2 0.2").is_ok());
+    assert!(import("0 1.5 0.5 0.2 0.2").is_err());
+    assert!(import("0 0.5 0.5 0 0.2").is_err());
+    assert!(import("0 0.5 0.5 NaN 0.2").is_err());
+}

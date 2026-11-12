@@ -1,5 +1,7 @@
 use crate::{AnnotationFilter, ExportError};
-use notatus_core::{AnnotationGeometry, AnnotationRecord, AssetId, BoundingBox, Dataset, LabelId};
+use notatus_core::{
+    AnnotationGeometry, AnnotationRecord, AssetId, BoundingBox, Dataset, ImageDimensions, LabelId,
+};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -149,17 +151,19 @@ pub fn import_detection(
                         message: format!("unknown class index {class_index}"),
                     })?;
 
-            let center_x = parse_f64(parts[1], file.asset_id, line_index + 1)?;
-            let center_y = parse_f64(parts[2], file.asset_id, line_index + 1)?;
-            let width = parse_f64(parts[3], file.asset_id, line_index + 1)?;
-            let height = parse_f64(parts[4], file.asset_id, line_index + 1)?;
-            let bbox = BoundingBox::from_yolo_normalized(
-                center_x,
-                center_y,
-                width,
-                height,
-                asset.dimensions,
-            )?;
+            let values = [
+                parse_f64(parts[1], file.asset_id, line_index + 1)?,
+                parse_f64(parts[2], file.asset_id, line_index + 1)?,
+                parse_f64(parts[3], file.asset_id, line_index + 1)?,
+                parse_f64(parts[4], file.asset_id, line_index + 1)?,
+            ];
+            let bbox = bbox_from_yolo(values, asset.dimensions).map_err(|message| {
+                ExportError::InvalidYoloLine {
+                    asset_id: file.asset_id,
+                    line: line_index + 1,
+                    message,
+                }
+            })?;
 
             annotations.push(AnnotationRecord::new_imported(
                 file.asset_id,
@@ -177,6 +181,40 @@ pub fn import_detection(
 
     tracing::info!(count = annotations.len(), "YOLO detection import complete");
     Ok(annotations)
+}
+
+/// How far normalized values may stray outside `0..=1`. Tools round YOLO
+/// coordinates, often to 6 decimals, so a box touching the image edge can
+/// come back a hair outside it; such boxes are clipped instead of rejected.
+const YOLO_EDGE_TOLERANCE: f64 = 1e-3;
+
+/// Converts normalized YOLO `[center_x, center_y, width, height]` to a pixel
+/// box, clipped to the image.
+fn bbox_from_yolo(values: [f64; 4], dimensions: ImageDimensions) -> Result<BoundingBox, String> {
+    for value in values {
+        if !value.is_finite() {
+            return Err(format!("invalid number {value}"));
+        }
+        if !(-YOLO_EDGE_TOLERANCE..=1.0 + YOLO_EDGE_TOLERANCE).contains(&value) {
+            return Err(format!("{value} is outside the normalized range 0..=1"));
+        }
+    }
+    let [center_x, center_y, width, height] = values;
+    if width <= 0.0 || height <= 0.0 {
+        return Err(format!("box size must be positive, got {width}x{height}"));
+    }
+
+    let image_width = f64::from(dimensions.width);
+    let image_height = f64::from(dimensions.height);
+    let min_x = ((center_x - width / 2.0) * image_width).max(0.0);
+    let min_y = ((center_y - height / 2.0) * image_height).max(0.0);
+    let max_x = ((center_x + width / 2.0) * image_width).min(image_width);
+    let max_y = ((center_y + height / 2.0) * image_height).min(image_height);
+    if max_x <= min_x || max_y <= min_y {
+        return Err("box has no area inside the image".to_string());
+    }
+    BoundingBox::from_xywh(min_x, min_y, max_x - min_x, max_y - min_y)
+        .map_err(|error| error.to_string())
 }
 
 fn yolo_class_map(dataset: &Dataset) -> BTreeMap<LabelId, usize> {
