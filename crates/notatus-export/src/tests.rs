@@ -1,7 +1,7 @@
 use super::*;
 use notatus_core::{
     AnnotationGeometry, AnnotationRecord, AssetLocation, AssetRecord, BoundingBox,
-    ClassificationRecord, Dataset, Point, Polygon,
+    ClassificationRecord, Dataset, DatasetSplit, Point, Polygon,
 };
 
 fn sample_dataset() -> Dataset {
@@ -112,32 +112,178 @@ fn exports_image_classifications() {
     assert_eq!(rows[0].label_name, "outdoor");
 }
 
+/// A dataset whose media are real files in `dir`, as a YOLO export needs.
+fn dataset_with_image_files(dir: &std::path::Path, names: &[(&str, DatasetSplit)]) -> Dataset {
+    let mut dataset = Dataset::new("demo");
+    let label_id = dataset.add_label("car");
+    dataset.add_label("traffic \"light\"");
+    for (name, split) in names {
+        let path = dir.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, format!("image bytes of {name}")).unwrap();
+        let mut asset = AssetRecord::new_image(
+            AssetLocation::local(path.to_string_lossy().into_owned()),
+            200,
+            100,
+        )
+        .unwrap();
+        asset.split = split.clone();
+        let asset_id = dataset.add_asset(asset);
+        let mut annotation = AnnotationRecord::new_human(
+            asset_id,
+            label_id,
+            AnnotationGeometry::Bbox(BoundingBox::from_xywh(75.0, 30.0, 50.0, 40.0).unwrap()),
+            None,
+        );
+        annotation.accept();
+        dataset.add_annotation(annotation);
+    }
+    dataset
+}
+
 #[test]
-fn writes_yolo_detection_export_layout() {
-    let dataset = sample_dataset();
+fn writes_a_trainable_yolo_dataset() {
+    let media = tempfile::tempdir().unwrap();
+    let dataset = dataset_with_image_files(
+        media.path(),
+        &[
+            ("a/frame.jpg", DatasetSplit::Unassigned),
+            ("b/frame.jpg", DatasetSplit::Train),
+            ("c/val.png", DatasetSplit::Validation),
+        ],
+    );
     let output = tempfile::tempdir().unwrap();
+    let yolo_dir = output.path().join("yolo");
 
     let summary =
-        yolo::write_detection_export(&dataset, &AnnotationFilter::default(), output.path())
-            .unwrap();
+        yolo::write_detection_export(&dataset, &AnnotationFilter::default(), &yolo_dir).unwrap();
 
-    assert_eq!(summary.class_count, 1);
-    assert_eq!(summary.annotation_file_count, 1);
-    assert_eq!(summary.annotation_count, 1);
+    assert_eq!(summary.class_count, 2);
+    assert_eq!(summary.annotation_file_count, 3);
+    assert_eq!(summary.annotation_count, 3);
+    let read = |path: &str| std::fs::read_to_string(yolo_dir.join(path)).unwrap();
+    // Both "frame.jpg" land in train, so the second gets a unique name, and
+    // every label file matches its image's stem.
+    assert_eq!(read("images/train/frame.jpg"), "image bytes of a/frame.jpg");
     assert_eq!(
-        std::fs::read_to_string(output.path().join("classes.txt")).unwrap(),
-        "car\n"
+        read("labels/train/frame.txt"),
+        "0 0.500000 0.500000 0.250000 0.400000\n"
     );
+    let mut train_images: Vec<_> = std::fs::read_dir(yolo_dir.join("images/train"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    train_images.sort();
+    assert_eq!(train_images.len(), 2);
+    let renamed = train_images
+        .iter()
+        .find(|name| *name != "frame.jpg")
+        .unwrap();
+    assert!(renamed.starts_with("frame-") && renamed.ends_with(".jpg"));
+    let renamed_stem = renamed.trim_end_matches(".jpg");
+    assert!(
+        yolo_dir
+            .join(format!("labels/train/{renamed_stem}.txt"))
+            .is_file()
+    );
+    assert_eq!(read("images/val/val.png"), "image bytes of c/val.png");
+    assert!(yolo_dir.join("labels/val/val.txt").is_file());
+
+    let yaml = read("data.yaml");
+    assert!(yaml.contains(&format!("path: \"{}\"", yolo_dir.display())));
+    assert!(yaml.contains("train: images/train\n"));
+    assert!(yaml.contains("val: images/val\n"));
+    assert!(!yaml.contains("test:"));
+    assert!(yaml.contains("  0: \"car\"\n"));
+    assert!(yaml.contains("  1: \"traffic \\\"light\\\"\"\n"));
+    assert_eq!(read("classes.txt"), "car\ntraffic \"light\"\n");
+}
+
+#[test]
+fn yolo_export_without_validation_media_validates_on_train() {
+    let media = tempfile::tempdir().unwrap();
+    let dataset = dataset_with_image_files(media.path(), &[("a.jpg", DatasetSplit::Unassigned)]);
+    let output = tempfile::tempdir().unwrap();
+
+    yolo::write_detection_export(
+        &dataset,
+        &AnnotationFilter::default(),
+        output.path().join("y"),
+    )
+    .unwrap();
+
+    let yaml = std::fs::read_to_string(output.path().join("y/data.yaml")).unwrap();
+    assert!(yaml.contains("val: images/train\n"));
+}
+
+#[test]
+fn yolo_export_replaces_its_own_earlier_export() {
+    let media = tempfile::tempdir().unwrap();
+    let mut dataset = dataset_with_image_files(
+        media.path(),
+        &[
+            ("a.jpg", DatasetSplit::Train),
+            ("b.jpg", DatasetSplit::Train),
+        ],
+    );
+    let output = tempfile::tempdir().unwrap();
+    let yolo_dir = output.path().join("yolo");
+    yolo::write_detection_export(&dataset, &AnnotationFilter::default(), &yolo_dir).unwrap();
+
+    let removed = dataset.assets.pop().unwrap();
+    dataset
+        .annotations
+        .retain(|annotation| annotation.asset_id != removed.id);
+    yolo::write_detection_export(&dataset, &AnnotationFilter::default(), &yolo_dir).unwrap();
+
+    assert!(yolo_dir.join("labels/train/a.txt").is_file());
+    assert!(
+        !yolo_dir.join("labels/train/b.txt").exists(),
+        "no stale labels"
+    );
+    let leftovers: Vec<_> = std::fs::read_dir(output.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(leftovers, vec![std::ffi::OsString::from("yolo")]);
+}
+
+#[test]
+fn yolo_export_never_replaces_someone_elses_folder() {
+    let media = tempfile::tempdir().unwrap();
+    let dataset = dataset_with_image_files(media.path(), &[("a.jpg", DatasetSplit::Train)]);
+    let output = tempfile::tempdir().unwrap();
+    let yolo_dir = output.path().join("yolo");
+    std::fs::create_dir_all(&yolo_dir).unwrap();
+    std::fs::write(yolo_dir.join("notes.txt"), "mine").unwrap();
+
+    let error = yolo::write_detection_export(&dataset, &AnnotationFilter::default(), &yolo_dir)
+        .unwrap_err();
+
+    assert!(matches!(error, ExportError::OutputExists { .. }));
     assert_eq!(
-        std::fs::read_to_string(
-            output
-                .path()
-                .join("labels")
-                .join(format!("{}.txt", dataset.assets[0].id))
-        )
-        .unwrap(),
-        "0 0.500000 0.500000 0.250000 0.400000"
+        std::fs::read_to_string(yolo_dir.join("notes.txt")).unwrap(),
+        "mine"
     );
+    assert_eq!(std::fs::read_dir(output.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn yolo_export_fails_cleanly_when_an_image_is_missing() {
+    let media = tempfile::tempdir().unwrap();
+    let dataset = dataset_with_image_files(media.path(), &[("a.jpg", DatasetSplit::Train)]);
+    std::fs::remove_file(media.path().join("a.jpg")).unwrap();
+    let output = tempfile::tempdir().unwrap();
+
+    let error = yolo::write_detection_export(
+        &dataset,
+        &AnnotationFilter::default(),
+        output.path().join("yolo"),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, ExportError::Image { .. }));
+    assert_eq!(std::fs::read_dir(output.path()).unwrap().count(), 0);
 }
 
 #[test]

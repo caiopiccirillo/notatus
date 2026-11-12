@@ -139,6 +139,7 @@ fn run_export(mut request: ExportRequest, output_dir: &Path) -> Result<String, S
     let mut annotation_count = 0;
     let mut classification_count = 0;
 
+    let mut skipped_polygons = 0;
     if request.yolo {
         let summary = notatus_export::yolo::write_detection_export(
             &request.dataset,
@@ -147,6 +148,7 @@ fn run_export(mut request: ExportRequest, output_dir: &Path) -> Result<String, S
         )
         .map_err(|error| error.to_string())?;
         formats.push("YOLO");
+        skipped_polygons = summary.skipped_polygons;
         annotation_count = annotation_count.max(summary.annotation_count);
     }
 
@@ -180,6 +182,12 @@ fn run_export(mut request: ExportRequest, output_dir: &Path) -> Result<String, S
         plural(classification_count),
         formats.join(" and ")
     );
+    if skipped_polygons > 0 {
+        summary.push_str(&format!(
+            "; YOLO detection left out {skipped_polygons} polygon{}",
+            plural(skipped_polygons)
+        ));
+    }
     if left_out > 0 {
         summary.push_str(&format!(
             "; left out {left_out} unfinished media item{}",
