@@ -159,7 +159,9 @@ impl ToolInteractionState {
         }
     }
 
-    pub(in crate::app) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
+    /// Ends the drawing. Boxes narrower or shorter than `min_extent` image
+    /// pixels are dropped, as they come from clicks rather than drags.
+    pub(in crate::app) fn finish_draw_box(&mut self, min_extent: f64) -> Option<DrawBoxCompletion> {
         let drawing = self.draw_box.take()?;
         let (x1, y1) = drawing.start_image_pos;
         let (x2, y2) = drawing.current_image_pos;
@@ -167,7 +169,7 @@ impl ToolInteractionState {
         let min_y = y1.min(y2);
         let w = (x2 - x1).abs();
         let h = (y2 - y1).abs();
-        let bbox = if w > 1.0 && h > 1.0 {
+        let bbox = if w >= min_extent && h >= min_extent {
             BoundingBox::from_xywh(min_x, min_y, w, h).ok()
         } else {
             None
@@ -254,7 +256,7 @@ mod tests {
 
         tools.begin_draw_box((30.0, 40.0));
         tools.update_draw_box((10.0, 20.0));
-        let completion = tools.finish_draw_box().unwrap();
+        let completion = tools.finish_draw_box(1.0).unwrap();
 
         assert_eq!(
             completion.bbox,
@@ -269,9 +271,22 @@ mod tests {
 
         tools.begin_draw_box((10.0, 10.0));
         tools.update_draw_box((10.5, 12.0));
-        let completion = tools.finish_draw_box().unwrap();
+        let completion = tools.finish_draw_box(1.0).unwrap();
 
         assert_eq!(completion.bbox, None);
+    }
+
+    #[test]
+    fn finishing_draw_box_uses_the_given_minimum() {
+        let mut tools = ToolInteractionState::default();
+
+        tools.begin_draw_box((10.0, 10.0));
+        tools.update_draw_box((22.0, 30.0));
+        assert_eq!(tools.finish_draw_box(15.0).unwrap().bbox, None);
+
+        tools.begin_draw_box((10.0, 10.0));
+        tools.update_draw_box((25.0, 30.0));
+        assert!(tools.finish_draw_box(15.0).unwrap().bbox.is_some());
     }
 
     #[test]

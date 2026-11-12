@@ -192,7 +192,7 @@ fn finish_box_gesture(
     if let Some(image_pos) = image_pos {
         notatus.tools.update_draw_box(image_pos);
     }
-    if let Some(completion) = notatus.tools.finish_draw_box()
+    if let Some(completion) = notatus.tools.finish_draw_box(min_box_extent(notatus))
         && let Some(bbox) = completion.bbox
         && let Some(asset_id) = notatus.state.selected_asset
     {
@@ -212,6 +212,25 @@ fn finish_box_gesture(
         });
     }
     cx.notify();
+}
+
+/// Smallest box side, in screen pixels, that counts as a drag. Anything
+/// smaller is a click with a little hand movement, not a box.
+const MIN_BOX_SCREEN_PX: f64 = 4.0;
+
+/// [`MIN_BOX_SCREEN_PX`] in image pixels at the current zoom, and never
+/// below one image pixel.
+fn min_box_extent(notatus: &NotatusWindow) -> f64 {
+    let layout = *notatus.canvas_image_layout.borrow();
+    layout
+        .zip(notatus.selected_asset())
+        .map(|(layout, asset)| {
+            let shown_width = f64::from(f32::from(layout.image_bounds.size.width));
+            f64::from(asset.dimensions.width) / shown_width.max(1.0)
+        })
+        .map_or(1.0, |image_px_per_screen_px| {
+            (MIN_BOX_SCREEN_PX * image_px_per_screen_px).max(1.0)
+        })
 }
 
 /// Ends a select-tool gesture: a move, resize, or pan.

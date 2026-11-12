@@ -166,3 +166,34 @@ fn clicks_elsewhere_do_not_touch_the_canvas(cx: &mut TestAppContext) {
         assert_eq!(notatus.state.revision(), revision);
     });
 }
+
+#[gpui::test]
+fn click_with_jitter_on_a_large_image_draws_nothing(cx: &mut TestAppContext) {
+    let mut canvas = Canvas::open(cx, AnnotationTool::DrawBox);
+    // A 4000 pixel image shrunk to fit: a two-screen-pixel wobble covers many
+    // image pixels.
+    canvas.view.update(&mut canvas.cx, |notatus, cx| {
+        let asset = notatus
+            .state
+            .add_local_image_asset("/tmp/notatus-large.png", 4000, 4000)
+            .unwrap();
+        notatus.state.select_asset(asset).unwrap();
+        cx.notify();
+    });
+    canvas.cx.run_until_parked();
+    let start = canvas.screen((50.0, 50.0));
+    let wobble = start + gpui::point(px(2.0), px(2.0));
+    let none = Modifiers::none();
+
+    canvas.cx.simulate_mouse_move(start, None, none);
+    canvas
+        .cx
+        .simulate_mouse_down(start, MouseButton::Left, none);
+    canvas
+        .cx
+        .simulate_mouse_move(wobble, MouseButton::Left, none);
+    canvas.cx.simulate_mouse_up(wobble, MouseButton::Left, none);
+    canvas.cx.run_until_parked();
+
+    assert!(canvas.boxes().is_empty());
+}
