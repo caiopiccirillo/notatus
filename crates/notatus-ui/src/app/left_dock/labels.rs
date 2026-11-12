@@ -13,17 +13,18 @@ struct LabelMenuContext {
 pub(super) fn labels_section(
     window: &NotatusWindow,
     view: gpui::WeakEntity<NotatusWindow>,
+    colors: ThemeColor,
 ) -> impl IntoElement {
     let add_label_view = view.clone();
     let empty_label_view = view.clone();
-    let label_rows = label_rows(window, view.clone());
+    let label_rows = label_rows(window, view.clone(), colors);
 
     div()
         .flex()
         .flex_col()
         .gap_2()
         .border_t_1()
-        .border_color(rgb(0xe5e7eb))
+        .border_color(colors.border)
         .pt_4()
         .child(
             div()
@@ -53,7 +54,7 @@ pub(super) fn labels_section(
                 .gap_3()
                 .py_6()
                 .text_sm()
-                .text_color(rgb(0x6b7280))
+                .text_color(colors.muted_foreground)
                 .child("Create labels before importing media")
                 .child(
                     Button::new("labels-empty-add")
@@ -80,6 +81,7 @@ pub(super) fn labels_section(
 fn label_rows(
     window: &NotatusWindow,
     view: gpui::WeakEntity<NotatusWindow>,
+    colors: ThemeColor,
 ) -> Vec<gpui::AnyElement> {
     if window.state.dataset.labels.is_empty() {
         vec![
@@ -87,7 +89,7 @@ fn label_rows(
                 .px_2()
                 .py_3()
                 .text_sm()
-                .text_color(rgb(0x6b7280))
+                .text_color(colors.muted_foreground)
                 .child("No labels yet")
                 .into_any_element(),
         ]
@@ -108,8 +110,6 @@ fn label_rows(
                     .count();
                 let label_name = label.name.clone();
                 let label_color = label.color.clone();
-                let menu_view = view.clone();
-                let select_view = view.clone();
                 let selected = window.state.selected_label == Some(label_id);
                 label_row(
                     label_id,
@@ -117,8 +117,8 @@ fn label_rows(
                     label_color,
                     annotation_count,
                     selected,
-                    menu_view,
-                    select_view,
+                    view.clone(),
+                    colors,
                 )
                 .into_any_element()
             })
@@ -132,12 +132,14 @@ fn label_row(
     label_color: Option<String>,
     annotation_count: usize,
     selected: bool,
-    menu_view: gpui::WeakEntity<NotatusWindow>,
-    select_view: gpui::WeakEntity<NotatusWindow>,
+    view: gpui::WeakEntity<NotatusWindow>,
+    colors: ThemeColor,
 ) -> impl IntoElement {
     let row_label_name = label_name.clone();
     let row_label_color = label_color.clone();
-    let action_view = menu_view.clone();
+    let menu_view = view.clone();
+    let select_view = view.clone();
+    let action_view = view;
 
     div()
         .id(label_element_id("label-row", label_id))
@@ -150,10 +152,10 @@ fn label_row(
         .rounded_md()
         .px_2()
         .text_sm()
-        .text_color(rgb(0x111827))
-        .hover(|row| row.bg(rgb(0xf3f4f6)))
+        .text_color(colors.foreground)
+        .hover(move |row| row.bg(colors.list_hover))
         .when(selected, |row| {
-            row.bg(rgb(0xe5e7eb)).font_weight(FontWeight::MEDIUM)
+            row.bg(colors.list_active).font_weight(FontWeight::MEDIUM)
         })
         .on_click(move |_, window, cx| {
             let _ = select_view.update(cx, |notatus, cx| {

@@ -3,14 +3,15 @@ use super::*;
 
 impl NotatusWindow {
     pub(super) fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
         div()
             .size_full()
             .h_full()
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(0xd6d9de))
-            .bg(rgb(0xffffff))
+            .border_color(colors.border)
+            .bg(colors.sidebar)
             .child(
                 div()
                     .flex_1()
@@ -18,14 +19,18 @@ impl NotatusWindow {
                     .overflow_hidden()
                     .child(match self.right_dock {
                         RightDock::Annotations => self
-                            .annotations_panel_content(cx.weak_entity())
+                            .annotations_panel_content(cx.weak_entity(), colors)
                             .into_any_element(),
                         RightDock::Info => self.info_panel_content().into_any_element(),
                     }),
             )
     }
 
-    fn annotations_panel_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> gpui::Div {
+    fn annotations_panel_content(
+        &self,
+        view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
+    ) -> gpui::AnyElement {
         if let Some(asset) = self.selected_asset() {
             let annotations = self.annotations_for_asset(asset);
             let classifications = self.classifications_for_asset(asset);
@@ -38,12 +43,14 @@ impl NotatusWindow {
                 .collect();
             let classification_rows: Vec<_> = classifications
                 .into_iter()
-                .map(|classification| self.classification_row(classification, view.clone()))
+                .map(|classification| self.classification_row(classification, view.clone(), colors))
                 .map(IntoElement::into_any_element)
                 .collect();
             let rows: Vec<_> = annotations
                 .into_iter()
-                .map(|annotation| self.annotation_row(annotation, labels.clone(), view.clone()))
+                .map(|annotation| {
+                    self.annotation_row(annotation, labels.clone(), view.clone(), colors)
+                })
                 .map(IntoElement::into_any_element)
                 .collect();
 
@@ -83,7 +90,7 @@ impl NotatusWindow {
                         .flex()
                         .items_center()
                         .text_sm()
-                        .text_color(rgb(0x6b7280))
+                        .text_color(colors.muted_foreground)
                         .child("No image labels")
                         .into_any_element()
                 } else {
@@ -104,7 +111,7 @@ impl NotatusWindow {
                         .items_center()
                         .justify_center()
                         .text_sm()
-                        .text_color(rgb(0x6b7280))
+                        .text_color(colors.muted_foreground)
                         .child("No annotations")
                         .into_any_element()
                 } else {
@@ -118,8 +125,9 @@ impl NotatusWindow {
                         .children(rows)
                         .into_any_element()
                 })
+                .into_any_element()
         } else {
-            empty_panel("No media selected")
+            empty_panel("No media selected").into_any_element()
         }
     }
 
@@ -127,6 +135,7 @@ impl NotatusWindow {
         &self,
         classification: &ClassificationRecord,
         view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
     ) -> impl IntoElement {
         let classification_id = classification.id;
         let label = self.state.dataset.label_by_id(classification.label_id);
@@ -153,8 +162,8 @@ impl NotatusWindow {
             .px_2()
             .rounded_sm()
             .border_1()
-            .border_color(rgb(0xe5e7eb))
-            .bg(rgb(0xffffff))
+            .border_color(colors.border)
+            .bg(colors.background)
             .child(label_swatch(&label_color, false))
             .child(
                 div()
@@ -222,6 +231,7 @@ impl NotatusWindow {
         annotation: &AnnotationRecord,
         labels: Vec<Label>,
         view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
     ) -> impl IntoElement {
         let annotation_id = annotation.id;
         let label = self.state.dataset.label_by_id(annotation.label_id);
@@ -251,20 +261,20 @@ impl NotatusWindow {
             .rounded_sm()
             .border_1()
             .border_color(if selected {
-                rgb(0x93c5fd)
+                colors.list_active_border
             } else if hovered {
-                rgb(0xd1d5db)
+                colors.input
             } else {
-                rgb(0xe5e7eb)
+                colors.border
             })
             .bg(if selected {
-                rgb(0xeff6ff)
+                colors.list_active
             } else if hovered {
-                rgb(0xf9fafb)
+                colors.list_hover
             } else {
-                rgb(0xffffff)
+                colors.background
             })
-            .hover(|row| row.bg(rgb(0xf9fafb)))
+            .hover(move |row| row.bg(colors.list_hover))
             .on_click(move |_, window, cx| {
                 let _ = row_view.update(cx, |notatus, cx| {
                     notatus.select_annotation(Some(annotation_id), window, cx);
@@ -298,7 +308,7 @@ impl NotatusWindow {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_xs()
-                            .text_color(rgb(0x6b7280))
+                            .text_color(colors.muted_foreground)
                             .child(format!(
                                 "{} · {:?}",
                                 annotation_geometry_label(&annotation.geometry),

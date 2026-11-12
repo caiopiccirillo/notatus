@@ -160,12 +160,13 @@ impl NotatusWindow {
     }
 
     fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
         div()
             .size_full()
             .flex()
             .flex_col()
-            .text_color(rgb(0x111827))
-            .bg(rgb(0xf3f4f6))
+            .text_color(colors.foreground)
+            .bg(colors.background)
             .child(self.app_titlebar(cx))
             .child(
                 div().flex_1().overflow_hidden().child(
@@ -200,7 +201,7 @@ impl Render for NotatusWindow {
             .id("notatus-window")
             .relative()
             .size_full()
-            .bg(rgb(0xf3f4f6))
+            .bg(cx.theme().background)
             .child(self.app_frame(cx))
     }
 }

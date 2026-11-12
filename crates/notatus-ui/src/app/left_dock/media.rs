@@ -6,6 +6,7 @@ impl NotatusWindow {
     pub(super) fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
         let view = cx.weak_entity();
         let import_view = cx.weak_entity();
+        let colors = cx.theme().colors;
 
         div()
             .size_full()
@@ -22,7 +23,7 @@ impl NotatusWindow {
                     .px_4()
                     .py_3()
                     .border_b_1()
-                    .border_color(rgb(0xe5e7eb))
+                    .border_color(colors.border)
                     .child(section_title("Media"))
                     .child(
                         Button::new("media-import")
@@ -39,11 +40,15 @@ impl NotatusWindow {
                     .flex_1()
                     .overflow_hidden()
                     .p_2()
-                    .child(self.media_content(view)),
+                    .child(self.media_content(view, colors)),
             )
     }
 
-    fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+    fn media_content(
+        &self,
+        view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
+    ) -> impl IntoElement {
         if self.state.dataset.assets.is_empty() {
             let import_view = view.clone();
             div()
@@ -55,7 +60,7 @@ impl NotatusWindow {
                 .gap_3()
                 .p_4()
                 .text_sm()
-                .text_color(rgb(0x6b7280))
+                .text_color(colors.muted_foreground)
                 .child("Import media after setting up project labels")
                 .child(
                     Button::new("media-empty-import")

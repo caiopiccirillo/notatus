@@ -9,8 +9,8 @@ impl NotatusWindow {
         div()
             .size_full()
             .border_r_1()
-            .border_color(rgb(0xd6d9de))
-            .bg(rgb(0xffffff))
+            .border_color(cx.theme().border)
+            .bg(cx.theme().sidebar)
             .overflow_hidden()
             .child(match self.left_dock {
                 LeftDock::Dataset => self.dataset_dock(cx).into_any_element(),

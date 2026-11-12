@@ -23,7 +23,7 @@ impl NotatusWindow {
                     .px_4()
                     .py_3()
                     .border_b_1()
-                    .border_color(rgb(0xe5e7eb))
+                    .border_color(cx.theme().border)
                     .child(section_title("Dataset"))
                     .child(self.project_actions(view.clone())),
             )
@@ -37,7 +37,7 @@ impl NotatusWindow {
                     .flex_col()
                     .gap_5()
                     .child(dataset_section("Project", self.project_editor()))
-                    .child(labels_section(self, view)),
+                    .child(labels_section(self, view, cx.theme().colors)),
             )
     }
 
@@ -101,7 +101,15 @@ impl NotatusWindow {
                 "Location",
                 compact_text(&self.project_location.display_name(), 34),
             ))
-            .child(dataset_created_label(&self.state.dataset))
+            .child(themed({
+                let created = dataset_created_label(&self.state.dataset);
+                move |theme| {
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(created)
+                }
+            }))
     }
 }
 

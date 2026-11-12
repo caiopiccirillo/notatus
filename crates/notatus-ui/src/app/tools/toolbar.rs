@@ -17,8 +17,8 @@ impl NotatusWindow {
             .gap_1()
             .rounded_sm()
             .border_1()
-            .border_color(rgb(0xd1d5db))
-            .bg(rgb(0xffffff))
+            .border_color(cx.theme().border)
+            .bg(cx.theme().popover)
             .p_1()
             .children(
                 canvas_tool_definitions()

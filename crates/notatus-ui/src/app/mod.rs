@@ -7,7 +7,8 @@ use gpui::{
     outline, px, rgb, size,
 };
 use gpui_component::{
-    Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
+    ActiveTheme as _, Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, Theme,
+    ThemeColor, TitleBar, WindowExt,
     button::{Button, ButtonVariant, ButtonVariants as _},
     color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState},
     dialog::DialogButtonProps,
@@ -86,8 +87,10 @@ pub fn launch_gpui() {
                     ..Default::default()
                 },
                 |window, cx| {
+                    Theme::sync_system_appearance(Some(window), cx);
                     let view = cx.new(|cx| {
-                        cx.observe_window_appearance(window, |_, window, _| {
+                        cx.observe_window_appearance(window, |_, window, cx| {
+                            Theme::sync_system_appearance(Some(window), cx);
                             window.refresh();
                         })
                         .detach();

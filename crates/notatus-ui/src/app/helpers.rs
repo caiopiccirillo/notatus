@@ -1,63 +1,105 @@
 use super::*;
 
+/// Defers building an element until render time so free helper functions can
+/// read the active [`gpui_component::Theme`] without threading `cx` through
+/// every caller.
+#[derive(IntoElement)]
+pub(super) struct Themed<F, E>
+where
+    F: FnOnce(&gpui_component::Theme) -> E + 'static,
+    E: IntoElement + 'static,
+{
+    build: F,
+    _element: std::marker::PhantomData<fn() -> E>,
+}
+
+pub(super) fn themed<F, E>(build: F) -> Themed<F, E>
+where
+    F: FnOnce(&gpui_component::Theme) -> E + 'static,
+    E: IntoElement + 'static,
+{
+    Themed {
+        build,
+        _element: std::marker::PhantomData,
+    }
+}
+
+impl<F, E> RenderOnce for Themed<F, E>
+where
+    F: FnOnce(&gpui_component::Theme) -> E + 'static,
+    E: IntoElement + 'static,
+{
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        (self.build)(cx.theme())
+    }
+}
+
 pub(super) fn plural(count: usize) -> &'static str {
     if count == 1 { "" } else { "s" }
 }
 
-pub(super) fn canvas_message(message: &'static str) -> gpui::Div {
-    div()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_sm()
-        .text_color(rgb(0x4b5563))
-        .child(message)
+pub(super) fn canvas_message(message: &'static str) -> impl IntoElement {
+    themed(move |theme| {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_sm()
+            .text_color(theme.muted_foreground)
+            .child(message)
+    })
 }
 
-pub(super) fn empty_panel(message: &'static str) -> gpui::Div {
-    div()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_4()
-        .text_sm()
-        .text_color(rgb(0x6b7280))
-        .child(message)
+pub(super) fn empty_panel(message: &'static str) -> impl IntoElement {
+    themed(move |theme| {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .text_sm()
+            .text_color(theme.muted_foreground)
+            .child(message)
+    })
 }
 
 pub(super) fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .min_w(px(24.0))
-        .h(px(20.0))
-        .px_1()
-        .rounded_sm()
-        .text_xs()
-        .text_color(rgb(0x4b5563))
-        .bg(rgb(0xf3f4f6))
-        .child(value.into())
+    let value = value.into();
+    themed(move |theme| {
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .min_w(px(24.0))
+            .h(px(20.0))
+            .px_1()
+            .rounded_sm()
+            .text_xs()
+            .text_color(theme.muted_foreground)
+            .bg(theme.muted)
+            .child(value)
+    })
 }
 
 pub(super) fn media_asset_meta(
     kind: &AssetKind,
     annotation_count: usize,
 ) -> impl IntoElement + use<> {
+    let label = asset_kind_label(kind);
     div()
         .flex_none()
         .flex()
         .items_center()
         .gap_1()
-        .child(
+        .child(themed(move |theme| {
             div()
                 .text_xs()
-                .text_color(rgb(0x6b7280))
-                .child(asset_kind_label(kind)),
-        )
+                .text_color(theme.muted_foreground)
+                .child(label)
+        }))
         .child(sidebar_count(annotation_count.to_string()))
 }
 
@@ -78,25 +120,27 @@ pub(super) fn label_color_button(
     label_id: LabelId,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement {
-    div()
-        .id(("label-color", color_ix))
-        .flex_none()
-        .size(px(28.0))
-        .rounded_sm()
-        .border_1()
-        .border_color(if selected {
-            rgb(0x111827)
-        } else {
-            rgb(0xd1d5db)
-        })
-        .p(px(3.0))
-        .hover(|swatch| swatch.border_color(rgb(0x6b7280)))
-        .on_click(move |_, _, cx| {
-            let _ = view.update(cx, |notatus, cx| {
-                notatus.update_label_color(label_id, color, cx);
-            });
-        })
-        .child(label_swatch(color, true))
+    themed(move |theme| {
+        div()
+            .id(("label-color", color_ix))
+            .flex_none()
+            .size(px(28.0))
+            .rounded_sm()
+            .border_1()
+            .border_color(if selected {
+                theme.foreground
+            } else {
+                theme.border
+            })
+            .p(px(3.0))
+            .hover(|swatch| swatch.border_color(theme.muted_foreground))
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |notatus, cx| {
+                    notatus.update_label_color(label_id, color, cx);
+                });
+            })
+            .child(label_swatch(color, true))
+    })
 }
 
 pub(super) fn label_swatch(color: &str, fill_parent: bool) -> impl IntoElement {
@@ -211,38 +255,42 @@ pub(super) fn dataset_has_local_path(state: &UiState, path: &str) -> bool {
 }
 
 pub(super) fn section_title(title: &'static str) -> impl IntoElement {
-    div()
-        .text_xs()
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(0x374151))
-        .child(title)
+    themed(move |theme| {
+        div()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.muted_foreground)
+            .child(title)
+    })
 }
 
 pub(super) fn metric(label: &'static str, value: String) -> impl IntoElement {
-    div()
-        .flex()
-        .items_start()
-        .gap_2()
-        .min_w_0()
-        .text_sm()
-        .child(
-            div()
-                .flex_none()
-                .w(px(84.0))
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .truncate()
-                .text_color(rgb(0x4b5563))
-                .child(label),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .truncate()
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(value),
-        )
+    themed(move |theme| {
+        div()
+            .flex()
+            .items_start()
+            .gap_2()
+            .min_w_0()
+            .text_sm()
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(84.0))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .truncate()
+                    .text_color(theme.muted_foreground)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .truncate()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(value),
+            )
+    })
 }

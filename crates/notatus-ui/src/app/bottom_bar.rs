@@ -11,8 +11,8 @@ impl NotatusWindow {
             .gap_2()
             .px_3()
             .border_t_1()
-            .border_color(rgb(0xd6d9de))
-            .bg(rgb(0xf8fafc))
+            .border_color(cx.theme().status_bar_border)
+            .bg(cx.theme().status_bar)
             .child(
                 div()
                     .flex()

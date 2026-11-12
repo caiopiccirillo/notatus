@@ -52,6 +52,7 @@ impl NotatusWindow {
             .unwrap_or(DEFAULT_LABEL_COLOR)
             .to_string();
         let view = cx.weak_entity();
+        let colors = cx.theme().colors;
 
         div()
             .size_full()
@@ -59,7 +60,7 @@ impl NotatusWindow {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0xf3f4f6))
+            .bg(colors.background)
             .child(
                 div()
                     .size_full()
@@ -67,8 +68,8 @@ impl NotatusWindow {
                     .items_center()
                     .justify_center()
                     .border_1()
-                    .border_color(rgb(0xcbd5e1))
-                    .bg(rgb(0xffffff))
+                    .border_color(colors.border)
+                    .bg(colors.muted)
                     .overflow_hidden()
                     .relative()
                     .when_some(selected_asset, |canvas, asset| {
@@ -107,7 +108,12 @@ fn canvas_empty_state(title: &'static str, message: &'static str) -> impl IntoEl
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title),
         )
-        .child(div().text_sm().text_color(rgb(0x4b5563)).child(message))
+        .child(themed(move |theme| {
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(message)
+        }))
 }
 
 struct InteractiveImageCanvas<'a> {

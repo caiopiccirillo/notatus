@@ -2,9 +2,10 @@ use super::helpers::compact_text;
 use super::*;
 
 impl NotatusWindow {
-    pub(super) fn app_titlebar(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn app_titlebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let project_name = compact_text(&self.state.dataset.manifest.project.name, 36);
         let state = if self.state.dirty { "Unsaved" } else { "Saved" };
+        let muted = cx.theme().muted_foreground;
 
         TitleBar::new().child(
             div()
@@ -26,12 +27,7 @@ impl NotatusWindow {
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child("Notatus"),
                         )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(0x6b7280))
-                                .child("visual annotation"),
-                        ),
+                        .child(div().text_xs().text_color(muted).child("visual annotation")),
                 )
                 .child(
                     div()
@@ -40,7 +36,7 @@ impl NotatusWindow {
                         .items_center()
                         .gap_2()
                         .text_xs()
-                        .text_color(rgb(0x6b7280))
+                        .text_color(muted)
                         .child(project_name)
                         .child("·")
                         .child(state),
