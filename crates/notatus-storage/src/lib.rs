@@ -595,6 +595,26 @@ mod tests {
         assert_eq!(store.load_dataset().unwrap(), dataset);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn save_replaces_a_symlinked_file_instead_of_writing_through_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalProjectStore::new(temp.path());
+        let dataset = sample_dataset(&store);
+        let outside = tempfile::tempdir().unwrap();
+        let victim = outside.path().join("victim");
+        fs::write(&victim, "untouched").unwrap();
+        let link = temp.path().join(ANNOTATIONS_FILE);
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&victim, &link).unwrap();
+
+        store.save_dataset(&dataset).unwrap();
+
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
+        assert!(fs::symlink_metadata(&link).unwrap().is_file());
+        assert_eq!(store.load_dataset().unwrap(), dataset);
+    }
+
     #[test]
     fn strict_load_rejects_unreadable_lines() {
         let temp = tempfile::tempdir().unwrap();

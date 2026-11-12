@@ -226,12 +226,34 @@ fn valid_confidence(value: f32) -> bool {
 
 /// Copies the project files as they are on disk into a new, timestamped
 /// folder under [`RECOVERY_DIR`] and returns that folder.
+///
+/// Projects can come from someone else, so symlinks are never followed: a
+/// symlinked recovery folder is refused, since it would put the copies
+/// outside the project, and a symlinked project file is backed up as the
+/// link itself, so whatever it points to is never copied into the project.
 pub(crate) fn back_up_project_files(root: &Path) -> Result<PathBuf, StorageError> {
     let parent = root.join(RECOVERY_DIR);
-    fs::create_dir_all(&parent).map_err(|source| StorageError::Io {
-        path: parent.clone(),
-        source,
-    })?;
+    match fs::symlink_metadata(&parent) {
+        Ok(metadata) if !metadata.is_dir() => {
+            return Err(StorageError::Io {
+                path: parent,
+                source: std::io::Error::other("recovery folder is not a plain folder"),
+            });
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(&parent).map_err(|source| StorageError::Io {
+                path: parent.clone(),
+                source,
+            })?;
+        }
+        Err(source) => {
+            return Err(StorageError::Io {
+                path: parent,
+                source,
+            });
+        }
+    }
 
     let now = OffsetDateTime::now_utc();
     let stamp = format!(
@@ -247,17 +269,34 @@ pub(crate) fn back_up_project_files(root: &Path) -> Result<PathBuf, StorageError
 
     for name in PROJECT_FILES {
         let source_path = root.join(name);
-        if !source_path.exists() {
+        let Ok(metadata) = fs::symlink_metadata(&source_path) else {
             continue;
-        }
+        };
         let target = dir.join(name);
-        fs::copy(&source_path, &target).map_err(|source| StorageError::Io {
+        let copied = if metadata.is_symlink() {
+            copy_symlink(&source_path, &target)
+        } else {
+            fs::copy(&source_path, &target).map(|_| ())
+        };
+        copied.map_err(|source| StorageError::Io {
             path: target.clone(),
             source,
         })?;
     }
     tracing::warn!(dir = %dir.display(), "copied project files before repair");
     Ok(dir)
+}
+
+#[cfg(unix)]
+fn copy_symlink(link: &Path, target: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(fs::read_link(link)?, target)
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(_link: &Path, _target: &Path) -> std::io::Result<()> {
+    // Creating symlinks needs extra privileges on Windows; skip the file
+    // rather than copy what it points to.
+    Ok(())
 }
 
 /// Creates `parent/stem`, or `parent/stem-2` and so on when it exists.
@@ -400,6 +439,35 @@ mod tests {
         assert_ne!(first, second);
         assert!(first.join(crate::MANIFEST_FILE).exists());
         assert!(second.join(crate::MANIFEST_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_keeps_symlinks_as_links() {
+        let (temp, _, _) = saved_project();
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join("secret");
+        fs::write(&secret, "not for the project").unwrap();
+        let link = temp.path().join(ANNOTATIONS_FILE);
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+        let backup = super::back_up_project_files(temp.path()).unwrap();
+
+        let copied = backup.join(ANNOTATIONS_FILE);
+        assert!(fs::symlink_metadata(&copied).unwrap().is_symlink());
+        assert_eq!(fs::read_link(&copied).unwrap(), secret);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_refuses_a_symlinked_recovery_folder() {
+        let (temp, _, _) = saved_project();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), temp.path().join(RECOVERY_DIR)).unwrap();
+
+        assert!(super::back_up_project_files(temp.path()).is_err());
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
     }
 
     #[test]
