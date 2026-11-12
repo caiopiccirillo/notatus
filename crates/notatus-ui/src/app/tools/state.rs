@@ -92,6 +92,8 @@ pub(in crate::app) struct ToolInteractionState {
     pub(in crate::app) bbox_edit: Option<super::BboxEditState>,
     pub(in crate::app) pan: Option<PanState>,
     pub(in crate::app) viewport: CanvasViewport,
+    /// Pointer position in image space, tracked for the crosshair.
+    pub(in crate::app) pointer_image_pos: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -12,6 +12,7 @@ pub(super) fn attach_canvas_interactions(
 ) -> gpui::Stateful<gpui::Div> {
     let zoom_view = view.clone();
     let canvas = attach_middle_pan(canvas, view.clone());
+    let canvas = attach_pointer_tracking(canvas, view.clone(), shared_image_layout.clone());
     canvas
         .when(matches!(active_tool, AnnotationTool::DrawBox), |canvas| {
             attach_draw_box_interactions(
@@ -427,6 +428,40 @@ fn hover_cursor(
         Some(BboxHitTarget::Body(_)) => gpui::CursorStyle::OpenHand,
         None => idle,
     }
+}
+
+/// Records the pointer's image position while the crosshair is shown.
+fn attach_pointer_tracking(
+    canvas: gpui::Stateful<gpui::Div>,
+    view: gpui::WeakEntity<NotatusWindow>,
+    shared_image_layout: SharedImageLayout,
+) -> gpui::Stateful<gpui::Div> {
+    let hover_view = view.clone();
+    canvas
+        .on_mouse_move(move |event: &MouseMoveEvent, _, cx| {
+            let Some(layout) = *shared_image_layout.borrow() else {
+                return;
+            };
+            let _ = view.update(cx, |notatus, cx| {
+                if !notatus.view_options.crosshair {
+                    return;
+                }
+                if let Some(asset) = notatus.selected_asset() {
+                    let pos = screen_to_image(layout.image_bounds, event.position, asset);
+                    notatus.tools.pointer_image_pos = Some(pos);
+                    cx.notify();
+                }
+            });
+        })
+        .on_hover(move |hovered, _, cx| {
+            if !hovered {
+                let _ = hover_view.update(cx, |notatus, cx| {
+                    if notatus.tools.pointer_image_pos.take().is_some() {
+                        cx.notify();
+                    }
+                });
+            }
+        })
 }
 
 /// Middle-drag pans the view in every tool.

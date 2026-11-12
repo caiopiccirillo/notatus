@@ -499,3 +499,26 @@ fn box_tool_draws_on_empty_space_and_moves_existing_boxes(cx: &mut TestAppContex
         assert!((bbox.x - 10.0).abs() < 1.5);
     });
 }
+
+#[gpui::test]
+fn view_shortcuts_toggle_display_options(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let revision = view.update(cx, |notatus, _| {
+        seed_three_media(notatus);
+        notatus.state.revision()
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "h shift-l");
+    view.update(cx, |notatus, _| {
+        assert!(notatus.view_options.hide_annotations);
+        assert!(!notatus.view_options.show_labels);
+        // Display options never touch the dataset.
+        assert_eq!(notatus.state.revision(), revision);
+    });
+    cx.simulate_keystrokes(window, "h");
+    view.update(cx, |notatus, _| {
+        assert!(!notatus.view_options.hide_annotations);
+    });
+}

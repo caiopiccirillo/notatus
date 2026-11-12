@@ -43,6 +43,10 @@ actions!(
         ZoomIn,
         ZoomOut,
         ToggleTheme,
+        ToggleHideAnnotations,
+        ToggleLabelNames,
+        ToggleCrosshair,
+        ToggleFocusSelected,
     ]
 );
 
@@ -100,6 +104,10 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-=", ZoomIn, global),
         KeyBinding::new("-", ZoomOut, canvas),
         KeyBinding::new("ctrl--", ZoomOut, global),
+        KeyBinding::new("h", ToggleHideAnnotations, canvas),
+        KeyBinding::new("shift-l", ToggleLabelNames, canvas),
+        KeyBinding::new("c", ToggleCrosshair, canvas),
+        KeyBinding::new("shift-f", ToggleFocusSelected, canvas),
     ]);
     cx.bind_keys((0..9).map(|slot| {
         const KEYS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -144,6 +152,18 @@ impl NotatusWindow {
             }))
             .on_action(cx.listener(|this, _: &PickLabel, window, cx| {
                 this.open_label_picker(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleHideAnnotations, _, cx| {
+                this.toggle_view_option(ViewToggle::HideAnnotations, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleLabelNames, _, cx| {
+                this.toggle_view_option(ViewToggle::Labels, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleCrosshair, _, cx| {
+                this.toggle_view_option(ViewToggle::Crosshair, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleFocusSelected, _, cx| {
+                this.toggle_view_option(ViewToggle::FocusSelected, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::Select, cx);

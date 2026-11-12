@@ -24,6 +24,7 @@ impl NotatusWindow {
                     .map(|definition| self.canvas_tool_button(definition, view.clone())),
             )
             .child(self.label_picker())
+            .child(self.view_options_button(cx))
             .child(
                 Button::new("tool-fit-canvas")
                     .small()

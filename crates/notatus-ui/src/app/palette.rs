@@ -30,11 +30,12 @@ impl PaletteGroup {
         mut self,
         label: impl Into<SharedString>,
         keywords: Vec<String>,
-        icon: IconName,
+        icon: impl Into<Lucide>,
         checked: bool,
         action: impl Action,
     ) -> Self {
         let label = label.into();
+        let icon = icon.into();
         let row_label = label.clone();
         let hint_action = action.boxed_clone();
         let item = CommandItem::new()
@@ -42,7 +43,7 @@ impl PaletteGroup {
             .keywords(keywords)
             .child(move |window, cx| {
                 palette_row(
-                    icon.clone(),
+                    icon,
                     row_label.clone(),
                     checked,
                     hint_action.as_ref(),
@@ -55,15 +56,23 @@ impl PaletteGroup {
         self
     }
 
-    fn command(self, label: impl Into<SharedString>, icon: IconName, action: impl Action) -> Self {
+    fn command(
+        self,
+        label: impl Into<SharedString>,
+        icon: impl Into<Lucide>,
+        action: impl Action,
+    ) -> Self {
         self.push(label, Vec::new(), icon, false, action)
     }
 }
 
+/// The full Lucide catalog, for icons the component set lacks.
+type Lucide = gpui_kit_assets::IconName;
+
 /// Icon, label, and the shortcut as bound in the main window, where the
 /// palette's own text field would otherwise hide bare-key bindings.
 fn palette_row(
-    icon: IconName,
+    icon: Lucide,
     label: SharedString,
     checked: bool,
     action: &dyn Action,
@@ -247,6 +256,37 @@ impl NotatusWindow {
             )
             .command("Toggle light and dark theme", IconName::Moon, ToggleTheme);
 
-        vec![annotate, media, labels, project]
+        let options = self.view_options;
+        let toggle_title = |toggle: ViewToggle| {
+            let verb = if toggle.get(&options) {
+                "Turn off"
+            } else {
+                "Turn on"
+            };
+            format!("{verb} {}", toggle.title().to_lowercase())
+        };
+        let view = PaletteGroup::new("View")
+            .command(
+                toggle_title(ViewToggle::HideAnnotations),
+                IconName::EyeOff,
+                ToggleHideAnnotations,
+            )
+            .command(
+                toggle_title(ViewToggle::Labels),
+                Lucide::Tag,
+                ToggleLabelNames,
+            )
+            .command(
+                toggle_title(ViewToggle::Crosshair),
+                Lucide::Crosshair,
+                ToggleCrosshair,
+            )
+            .command(
+                toggle_title(ViewToggle::FocusSelected),
+                Lucide::Focus,
+                ToggleFocusSelected,
+            );
+
+        vec![annotate, media, labels, view, project]
     }
 }

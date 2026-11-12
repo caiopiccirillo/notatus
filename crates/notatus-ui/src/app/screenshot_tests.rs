@@ -113,7 +113,54 @@ fn screenshots() {
     }
 
     let view = view_slot.expect("window view");
+
+    // View popover, opened by clicking its toolbar button.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |notatus, cx| {
+            let first = notatus.state.dataset.annotations.first().map(|a| a.id);
+            notatus.state.selected_annotation = first;
+            notatus.view_options.crosshair = true;
+            notatus.view_options.focus_selected = true;
+            notatus.tools.pointer_image_pos = Some((700.0, 300.0));
+            cx.notify();
+        });
+    })
+    .unwrap();
+    cx.update(|cx| Theme::change(ThemeMode::Light, None, cx));
+    let _ = cx.capture_screenshot(window);
     cx.update_window(window, |_, window, cx| {
+        let position = gpui::point(px(614.0), px(88.0));
+        for event in [
+            gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                button: gpui::MouseButton::Left,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            }),
+            gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                button: gpui::MouseButton::Left,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+            }),
+        ] {
+            let _ = window.dispatch_event(event, cx);
+        }
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("view-options-light.png"));
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |notatus, _| {
+            notatus.view_options = Default::default();
+            notatus.tools.pointer_image_pos = None;
+        });
+    })
+    .unwrap();
+    cx.update(|cx| Theme::change(ThemeMode::Dark, None, cx));
+
+    cx.update_window(window, |_, window, cx| {
+        window.close_all_dialogs(cx);
         view.update(cx, |notatus, cx| notatus.open_command_palette(window, cx));
     })
     .unwrap();

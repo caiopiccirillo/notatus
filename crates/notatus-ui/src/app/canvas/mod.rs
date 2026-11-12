@@ -9,7 +9,10 @@ mod overlay;
 
 use interaction::attach_canvas_interactions;
 use layout::{apply_viewport_to_bounds, canvas_image_layout, compute_image_bounds};
-use overlay::{AnnotationOverlay, paint_annotations, paint_drawing_preview, paint_polygon_preview};
+use overlay::{
+    AnnotationOverlay, paint_annotations, paint_crosshair, paint_drawing_preview,
+    paint_polygon_preview,
+};
 
 impl NotatusWindow {
     pub(super) fn canvas_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -20,19 +23,29 @@ impl NotatusWindow {
         let annotations: Vec<_> = selected_asset
             .map(|asset| self.annotations_for_asset(asset))
             .unwrap_or_default();
+        let options = self.view_options;
         let state_labels: Vec<_> = annotations
             .iter()
+            .filter(|_| !options.hide_annotations)
             .map(|ann| {
                 let label = self.state.dataset.label_by_id(ann.label_id);
                 let color = label
                     .and_then(|l| l.color.as_deref())
                     .unwrap_or(DEFAULT_LABEL_COLOR);
+                let selected = self.state.selected_annotation == Some(ann.id);
                 AnnotationOverlay {
                     id: ann.id,
                     geometry: ann.geometry.clone(),
                     color: color.to_string(),
-                    selected: self.state.selected_annotation == Some(ann.id),
+                    selected,
                     hovered: self.hovered_annotation == Some(ann.id),
+                    label: options
+                        .show_labels
+                        .then(|| label.map(|l| SharedString::from(l.name.clone())))
+                        .flatten(),
+                    dimmed: options.focus_selected
+                        && self.state.selected_annotation.is_some()
+                        && !selected,
                 }
             })
             .collect();
@@ -78,6 +91,14 @@ impl NotatusWindow {
                             viewport,
                             canvas_cursor,
                             preview_color: preview_color.clone(),
+                            options,
+                            crosshair: (options.crosshair
+                                && matches!(
+                                    active_tool,
+                                    AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
+                                ))
+                            .then_some(self.tools.pointer_image_pos)
+                            .flatten(),
                         }))
                     })
                     .when(selected_asset.is_none(), |canvas| {
@@ -162,6 +183,8 @@ struct InteractiveImageCanvas<'a> {
     viewport: super::tools::CanvasViewport,
     canvas_cursor: Option<gpui::CursorStyle>,
     preview_color: String,
+    options: super::view_options::CanvasViewOptions,
+    crosshair: Option<(f64, f64)>,
 }
 
 fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElement {
@@ -176,6 +199,8 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
         viewport,
         canvas_cursor,
         preview_color,
+        options,
+        crosshair,
     } = args;
 
     let image_path = match &asset.location {
@@ -227,14 +252,19 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
                     }
                     img_bounds
                 },
-                move |_bounds, img_bounds, window, _cx| {
+                move |_bounds, img_bounds, window, cx| {
                     paint_annotations(
                         &annotations_for_paint,
                         img_bounds,
                         img_width,
                         img_height,
+                        options.fill_opacity,
                         window,
+                        cx,
                     );
+                    if let Some(pos) = crosshair {
+                        paint_crosshair(pos, img_bounds, img_width, img_height, window);
+                    }
                     if let Some(drawing) = drawing {
                         paint_drawing_preview(
                             drawing,

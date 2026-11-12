@@ -187,6 +187,8 @@ mod tests {
                 color: DEFAULT_LABEL_COLOR.to_string(),
                 selected: false,
                 hovered: false,
+                label: None,
+                dimmed: false,
             },
             AnnotationOverlay {
                 id: top_id,
@@ -196,6 +198,8 @@ mod tests {
                 color: DEFAULT_LABEL_COLOR.to_string(),
                 selected: false,
                 hovered: false,
+                label: None,
+                dimmed: false,
             },
         ];
 
@@ -223,6 +227,8 @@ mod tests {
             color: DEFAULT_LABEL_COLOR.to_string(),
             selected: false,
             hovered: false,
+            label: None,
+            dimmed: false,
         }];
 
         assert_eq!(
@@ -246,6 +252,8 @@ mod tests {
             color: DEFAULT_LABEL_COLOR.to_string(),
             selected: true,
             hovered: false,
+            label: None,
+            dimmed: false,
         }];
 
         assert_eq!(
@@ -268,6 +276,8 @@ mod tests {
             color: DEFAULT_LABEL_COLOR.to_string(),
             selected: true,
             hovered: false,
+            label: None,
+            dimmed: false,
         }];
 
         assert_eq!(
@@ -290,6 +300,8 @@ mod tests {
             color: DEFAULT_LABEL_COLOR.to_string(),
             selected: true,
             hovered: false,
+            label: None,
+            dimmed: false,
         }];
 
         assert_eq!(

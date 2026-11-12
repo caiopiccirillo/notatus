@@ -37,6 +37,8 @@ pub(super) struct NotatusWindow {
     pub(super) autosave: super::autosave::AutosaveState,
     pub(super) label_picker: gpui::Entity<super::label_picker::LabelPickerState>,
     pub(super) label_picker_synced: Option<(u64, Option<LabelId>)>,
+    pub(super) view_options: super::view_options::CanvasViewOptions,
+    pub(super) opacity_slider: gpui::Entity<gpui_component::slider::SliderState>,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -53,11 +55,13 @@ impl NotatusWindow {
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
         let (label_picker, label_picker_subscription) = Self::new_label_picker(window, cx);
+        let (opacity_slider, opacity_subscription) = Self::new_opacity_slider(window, cx);
         project_name_input.update(cx, |input, cx| {
             input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
         });
         let _subscriptions = vec![
             label_picker_subscription,
+            opacity_subscription,
             // Every state change notifies, so this sees each edit.
             cx.observe_self(|this, cx| this.schedule_autosave(cx)),
             cx.subscribe_in(
@@ -139,6 +143,8 @@ impl NotatusWindow {
             autosave: super::autosave::AutosaveState::new(),
             label_picker,
             label_picker_synced: None,
+            view_options: Default::default(),
+            opacity_slider,
             _subscriptions,
         }
     }

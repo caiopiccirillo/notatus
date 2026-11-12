@@ -45,7 +45,10 @@ mod project_session;
 mod right_dock;
 mod titlebar;
 mod tools;
+mod view_options;
 mod window;
+
+use view_options::ViewToggle;
 
 #[cfg(test)]
 mod gpui_tests;
