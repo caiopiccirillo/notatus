@@ -31,7 +31,10 @@ impl Default for CanvasViewport {
 
 impl CanvasViewport {
     const MIN_ZOOM: f32 = 0.25;
-    const MAX_ZOOM: f32 = 8.0;
+    /// Relative to fit-to-view. High enough that a 4000 pixel image shrunk
+    /// to fit can be zoomed to several screen pixels per image pixel, for
+    /// placing box edges exactly.
+    const MAX_ZOOM: f32 = 32.0;
 
     pub(in crate::app) fn reset(&mut self) {
         *self = Self::default();
