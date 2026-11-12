@@ -4227,6 +4227,7 @@ dependencies = [
  "notatus-infer",
  "notatus-storage",
  "notatus-telemetry",
+ "tempfile",
  "tracing",
 ]
 

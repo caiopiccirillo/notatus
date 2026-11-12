@@ -34,6 +34,7 @@ pub(super) struct NotatusWindow {
     pub(super) canvas_image_layout: SharedImageLayout,
     pub(super) focus_handle: gpui::FocusHandle,
     pub(super) command_state: gpui::Entity<gpui_component::command::CommandState>,
+    pub(super) autosave: super::autosave::AutosaveState,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -53,6 +54,8 @@ impl NotatusWindow {
             input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
         });
         let _subscriptions = vec![
+            // Every state change notifies, so this sees each edit.
+            cx.observe_self(|this, cx| this.schedule_autosave(cx)),
             cx.subscribe_in(
                 &project_name_input,
                 window,
@@ -129,6 +132,7 @@ impl NotatusWindow {
             canvas_image_layout: Rc::new(RefCell::new(None)),
             focus_handle,
             command_state,
+            autosave: super::autosave::AutosaveState::new(),
             _subscriptions,
         }
     }

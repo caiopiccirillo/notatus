@@ -4,7 +4,7 @@ use super::*;
 impl NotatusWindow {
     pub(super) fn app_titlebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let project_name = compact_text(&self.state.dataset.manifest.project.name, 36);
-        let state = if self.state.dirty { "Unsaved" } else { "Saved" };
+        let state = self.save_status();
         let muted = cx.theme().muted_foreground;
 
         TitleBar::new().child(

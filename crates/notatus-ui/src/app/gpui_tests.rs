@@ -289,3 +289,46 @@ fn command_palette_runs_the_confirmed_command(cx: &mut TestAppContext) {
         assert_eq!(notatus.state.active_tool, AnnotationTool::Select);
     });
 }
+
+#[gpui::test]
+fn autosave_writes_local_projects_after_a_pause(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (_, view) = open_test_window(cx);
+
+    view.update(cx, |notatus, cx| {
+        notatus.project_location = ProjectLocation::local(dir.path());
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+    view.update(cx, |notatus, _| {
+        assert!(notatus.state.dirty);
+        assert_eq!(notatus.save_status(), "Edited");
+    });
+    assert!(!dir.path().join(MANIFEST_FILE).exists());
+
+    cx.executor().advance_clock(autosave::AUTOSAVE_DELAY);
+    cx.run_until_parked();
+
+    view.update(cx, |notatus, _| {
+        assert!(!notatus.state.dirty);
+        assert_eq!(notatus.save_status(), "Saved");
+    });
+    let saved = LocalProjectStore::new(dir.path()).load_dataset().unwrap();
+    assert_eq!(saved.labels.len(), 1);
+}
+
+#[gpui::test]
+fn autosave_skips_projects_without_a_location(cx: &mut TestAppContext) {
+    let (_, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.executor().advance_clock(autosave::AUTOSAVE_DELAY);
+    cx.run_until_parked();
+    view.update(cx, |notatus, _| {
+        assert!(notatus.state.dirty);
+        assert_eq!(notatus.save_status(), "Not saved to disk");
+    });
+}

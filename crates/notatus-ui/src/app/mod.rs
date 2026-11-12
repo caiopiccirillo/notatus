@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 mod actions;
+mod autosave;
 mod bottom_bar;
 mod canvas;
 mod commands;

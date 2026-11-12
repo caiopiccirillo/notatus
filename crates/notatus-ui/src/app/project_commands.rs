@@ -293,6 +293,7 @@ fn apply_project_load_result(
             Ok(mut state) => {
                 state.set_tool(AnnotationTool::DrawBox);
                 notatus.state = state;
+                notatus.autosave.reset();
                 notatus.project_location = location
                     .map(ProjectLocation::local)
                     .unwrap_or(ProjectLocation::Unsaved);

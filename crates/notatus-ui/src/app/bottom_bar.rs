@@ -56,11 +56,7 @@ impl NotatusWindow {
                     .items_center()
                     .gap_1()
                     .flex_none()
-                    .child(
-                        div()
-                            .mr_2()
-                            .child(if self.state.dirty { "Unsaved" } else { "Saved" }),
-                    )
+                    .child(div().mr_2().child(self.save_status()))
                     .child(self.bottom_right_dock_button(
                         "bottom-annotations",
                         IconName::Frame,
