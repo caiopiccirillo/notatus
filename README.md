@@ -52,6 +52,16 @@ They are never silently treated as accepted ground truth.
 
 Requires Rust 1.96.0 or newer.
 
+On Linux, the desktop UI links against the X11 keyboard libraries, so building
+`notatus-ui` (including its tests) needs their development packages:
+
+```sh
+sudo apt install libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+```
+
+Fontconfig is loaded at runtime (see `.cargo/config.toml`), so it needs no
+development package.
+
 Run all tests with default features:
 
 ```sh
