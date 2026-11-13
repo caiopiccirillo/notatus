@@ -165,3 +165,59 @@ fn project_shortcuts_run_without_panicking(cx: &mut TestAppContext) {
         cx.run_until_parked();
     }
 }
+
+/// Presses the title bar's close button. The test platform never draws
+/// client-side decorations, so this calls the button's handler directly.
+fn press_title_bar_close(
+    window: WindowHandle<Root>,
+    view: &gpui::Entity<NotatusWindow>,
+    cx: &mut TestAppContext,
+) {
+    let view = view.downgrade();
+    cx.update_window(window.into(), |_, window, cx| {
+        super::titlebar::close_from_title_bar(&view, window, cx)
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn title_bar_close_button_saves_before_closing(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.project_location = ProjectLocation::local(dir.path());
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+
+    press_title_bar_close(window, &view, cx);
+
+    assert_eq!(saved_label_count(dir.path()), 1);
+    assert!(cx.windows().is_empty(), "closes once saved");
+}
+
+#[gpui::test]
+fn title_bar_close_button_asks_before_discarding(cx: &mut TestAppContext) {
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+
+    press_title_bar_close(window, &view, cx);
+
+    assert_eq!(cx.windows().len(), 1);
+    assert!(has_dialog(window, cx));
+}
+
+#[gpui::test]
+fn title_bar_close_button_closes_a_clean_window(cx: &mut TestAppContext) {
+    let (window, view) = open_test_window(cx);
+
+    press_title_bar_close(window, &view, cx);
+
+    assert!(cx.windows().is_empty());
+}
