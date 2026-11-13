@@ -11,12 +11,16 @@ gpui_kit_assets::icon_assets!(
     AppIcons,
     [
         Crosshair,
+        Download,
+        FilePlus,
         Focus,
         ImagePlus,
         ListTree,
         MousePointer2,
         Pentagon,
         RotateCcw,
+        Save,
+        SaveAll,
         Tag,
         VectorSquare
     ]

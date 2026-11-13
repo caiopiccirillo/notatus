@@ -49,36 +49,36 @@ impl NotatusWindow {
             .gap_1()
             .child(project_action_button(
                 "project-new",
-                IconName::Plus,
-                "New project",
+                gpui_kit_assets::IconName::FilePlus,
+                "New project (Ctrl+N)",
                 project_commands::new_project,
                 view.clone(),
             ))
             .child(project_action_button(
                 "project-open",
                 IconName::FolderOpen,
-                "Open project",
+                "Open project (Ctrl+O)",
                 project_commands::open_project,
                 view.clone(),
             ))
             .child(project_action_button(
                 "project-save",
-                IconName::FolderClosed,
-                "Save project",
+                gpui_kit_assets::IconName::Save,
+                "Save project (Ctrl+S)",
                 project_commands::save_project,
                 view.clone(),
             ))
             .child(project_action_button(
                 "project-save-as",
-                IconName::Folder,
-                "Save project as",
+                gpui_kit_assets::IconName::SaveAll,
+                "Save project as (Ctrl+Shift+S)",
                 project_commands::save_project_as,
                 view.clone(),
             ))
             .child(project_action_button(
                 "project-export",
-                IconName::ExternalLink,
-                "Export annotations",
+                gpui_kit_assets::IconName::Download,
+                "Export annotations (Ctrl+E)",
                 export_commands::open_export_dialog,
                 view,
             ))
@@ -124,7 +124,7 @@ fn dataset_section(title: &'static str, content: impl IntoElement) -> impl IntoE
 
 fn project_action_button(
     id: &'static str,
-    icon: IconName,
+    icon: impl Into<Icon>,
     tooltip: &'static str,
     action: fn(gpui::WeakEntity<NotatusWindow>, &mut Window, &mut App),
     view: gpui::WeakEntity<NotatusWindow>,
