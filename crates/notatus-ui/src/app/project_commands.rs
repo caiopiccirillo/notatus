@@ -327,7 +327,7 @@ fn apply_project_load_result(
                     .map(ProjectLocation::local)
                     .unwrap_or(ProjectLocation::Unsaved);
                 notatus.left_dock = LeftDock::Dataset;
-                notatus.right_dock = RightDock::Info;
+                notatus.right_dock = RightDock::Annotations;
                 notatus.tools.fit_canvas_to_view();
                 notatus.canvas_image_layout.borrow_mut().take();
                 notatus.status_message = Some(success_message.to_string());

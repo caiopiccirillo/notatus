@@ -132,7 +132,9 @@ impl NotatusWindow {
         Self {
             state,
             left_dock: LeftDock::Dataset,
-            right_dock: RightDock::Info,
+            // The current media's annotations are what annotating needs;
+            // project details stay one click away.
+            right_dock: RightDock::Annotations,
             status_message: None,
             project_location: ProjectLocation::default(),
             project_name_input,

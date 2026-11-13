@@ -454,7 +454,8 @@ impl NotatusWindow {
                 "Labels",
                 label_count_label(self.state.dataset.labels.len()),
             ))
-            .child(metric("Review queue", review_queue.to_string()))
+            // Short enough for the metric label column.
+            .child(metric("To review", review_queue.to_string()))
             .when_some(self.status_message.clone(), |panel, status| {
                 panel.child(metric("Status", status))
             });
