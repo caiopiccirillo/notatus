@@ -23,8 +23,20 @@ pub fn init_telemetry() -> TelemetryGuard {
 
     let resource = Resource::builder().with_service_name(SERVICE_NAME).build();
 
-    let tracer_provider = build_tracer_provider(&resource);
-    let meter_provider = build_meter_provider(&resource);
+    // The OTLP exporters fall back to localhost:4318 when no endpoint is set,
+    // so building them unconditionally made every run log failed exports
+    // every few seconds. Export only when an endpoint is configured.
+    let (tracer_provider, meter_provider) = if otlp_endpoint_configured() {
+        (
+            build_tracer_provider(&resource).map_err(|err| err.to_string()),
+            build_meter_provider(&resource).ok(),
+        )
+    } else {
+        (
+            Err("OTEL_EXPORTER_OTLP_ENDPOINT is not set".to_string()),
+            None,
+        )
+    };
 
     match tracer_provider {
         Ok(ref provider) => {
@@ -49,8 +61,23 @@ pub fn init_telemetry() -> TelemetryGuard {
 
     TelemetryGuard {
         tracer_provider: tracer_provider.ok(),
-        meter_provider: meter_provider.ok(),
+        meter_provider,
     }
+}
+
+/// Whether any of the standard OTLP endpoint variables is set and non-empty.
+fn otlp_endpoint_configured() -> bool {
+    endpoint_configured(|name| std::env::var(name).ok())
+}
+
+fn endpoint_configured(var: impl Fn(&str) -> Option<String>) -> bool {
+    [
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+    ]
+    .into_iter()
+    .any(|name| var(name).is_some_and(|value| !value.trim().is_empty()))
 }
 
 fn build_tracer_provider(resource: &Resource) -> Result<SdkTracerProvider, ExporterBuildError> {
@@ -104,5 +131,19 @@ impl Drop for TelemetryGuard {
         if let Some(ref provider) = self.meter_provider {
             let _ = provider.shutdown();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::endpoint_configured;
+
+    #[test]
+    fn export_needs_an_endpoint() {
+        assert!(!endpoint_configured(|_| None));
+        assert!(!endpoint_configured(|_| Some("  ".to_string())));
+        assert!(endpoint_configured(|name| {
+            (name == "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT").then(|| "http://collector:4318".into())
+        }));
     }
 }
