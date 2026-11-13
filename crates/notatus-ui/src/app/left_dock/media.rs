@@ -1,6 +1,8 @@
 use super::*;
 use crate::app::helpers::*;
 use crate::app::media_import::{open_folder_picker, open_media_picker};
+use gpui::StyleRefinement;
+use std::collections::HashMap;
 
 impl NotatusWindow {
     pub(super) fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -107,88 +109,69 @@ impl NotatusWindow {
                 )
                 .into_any_element()
         } else {
-            SidebarMenuElement(SidebarMenu::new().children(self.asset_items(view)))
+            SidebarMenuElement(SidebarMenu::new().children(self.asset_items(view, colors)))
                 .into_any_element()
         }
     }
 
-    fn asset_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
+    fn asset_items(
+        &self,
+        view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
+    ) -> Vec<SidebarMenuItem> {
         if self.state.dataset.assets.is_empty() {
-            vec![SidebarMenuItem::new("No media yet").disable(true)]
-        } else {
-            self.state
-                .dataset
-                .assets
-                .iter()
-                .map(|asset| {
-                    let asset_id = asset.id;
-                    let annotation_count = self
-                        .state
-                        .dataset
-                        .annotations
-                        .iter()
-                        .filter(|annotation| annotation.asset_id == asset_id)
-                        .count();
-                    let select_view = view.clone();
-                    let remove_view = view.clone();
-                    let asset_kind = asset.kind.clone();
-                    let done = asset.status == notatus_core::AssetStatus::Done;
-                    SidebarMenuItem::new(compact_asset_name(asset))
-                        .suffix(move |_, _| {
-                            media_asset_actions(
-                                &asset_kind,
-                                annotation_count,
-                                done,
-                                asset_id,
-                                remove_view.clone(),
-                            )
-                        })
-                        .active(self.state.selected_asset == Some(asset_id))
-                        .on_click(move |_, window, cx| {
-                            let _ = select_view.update(cx, |notatus, cx| {
-                                notatus.go_to_media(asset_id, window, cx);
-                            });
-                        })
-                })
-                .collect()
+            return vec![SidebarMenuItem::new("No media yet").disable(true)];
         }
-    }
-}
 
-fn media_asset_actions(
-    kind: &AssetKind,
-    annotation_count: usize,
-    done: bool,
-    asset_id: AssetId,
-    view: gpui::WeakEntity<NotatusWindow>,
-) -> impl IntoElement + use<> {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap_1()
-        .when(done, |row| {
-            row.child(themed(|theme| {
-                Icon::new(IconName::CircleCheck)
-                    .xsmall()
-                    .text_color(theme.success)
-            }))
-        })
-        .child(media_asset_meta(kind, annotation_count))
-        .child(
-            Button::new(asset_element_id("media-remove", asset_id))
-                .xsmall()
-                .ghost()
-                .danger()
-                .icon(Icon::new(IconName::Delete))
-                .tooltip("Remove media and its annotations")
-                .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    let _ = view.update(cx, |notatus, cx| {
-                        notatus.remove_asset(asset_id, cx);
-                    });
-                }),
-        )
+        // Counted in one pass, so rendering the list does not rescan every
+        // annotation once per media item.
+        let mut annotation_counts: HashMap<AssetId, usize> = HashMap::new();
+        for annotation in &self.state.dataset.annotations {
+            *annotation_counts.entry(annotation.asset_id).or_default() += 1;
+        }
+
+        self.state
+            .dataset
+            .assets
+            .iter()
+            .map(|asset| {
+                let asset_id = asset.id;
+                let annotation_count = annotation_counts.get(&asset_id).copied().unwrap_or(0);
+                let done = asset.status == notatus_core::AssetStatus::Done;
+                let select_view = view.clone();
+                let menu_view = view.clone();
+                // Done or not leads the row, so the remaining work can be
+                // scanned down the list.
+                let status_icon = if done {
+                    Icon::new(IconName::CircleCheck).text_color(colors.success)
+                } else {
+                    Icon::new(gpui_kit_assets::IconName::Circle).text_color(colors.muted_foreground)
+                };
+                SidebarMenuItem::new(asset_display_name(asset))
+                    .icon(status_icon)
+                    .label_style(StyleRefinement::default().truncate())
+                    .suffix(move |_, _| sidebar_count(annotation_count.to_string()))
+                    .active(self.state.selected_asset == Some(asset_id))
+                    .on_click(move |_, window, cx| {
+                        let _ = select_view.update(cx, |notatus, cx| {
+                            notatus.go_to_media(asset_id, window, cx);
+                        });
+                    })
+                    .context_menu(move |menu, _, _| {
+                        let view = menu_view.clone();
+                        menu.item(
+                            PopupMenuItem::new("Remove media and its annotations")
+                                .icon(Icon::new(IconName::Delete))
+                                .on_click(move |_, _, cx| {
+                                    let _ = view.update(cx, |notatus, cx| {
+                                        notatus.remove_asset(asset_id, cx);
+                                    });
+                                }),
+                        )
+                    })
+            })
+            .collect()
+    }
 }
 
 /// Renders a standalone [`SidebarMenu`] outside of a `Sidebar` container.
@@ -202,11 +185,4 @@ impl RenderOnce for SidebarMenuElement {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         self.0.render("media-menu", window, cx)
     }
-}
-
-fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId {
-    let value = asset_id.as_uuid().as_u128();
-    let high = (value >> 64) as u64;
-    let low = (value as u64).to_string();
-    (gpui::ElementId::from((prefix, high)), low).into()
 }

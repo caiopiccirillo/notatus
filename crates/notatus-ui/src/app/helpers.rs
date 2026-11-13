@@ -84,25 +84,6 @@ pub(super) fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
     })
 }
 
-pub(super) fn media_asset_meta(
-    kind: &AssetKind,
-    annotation_count: usize,
-) -> impl IntoElement + use<> {
-    let label = asset_kind_label(kind);
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(themed(move |theme| {
-            div()
-                .text_xs()
-                .text_color(theme.muted_foreground)
-                .child(label)
-        }))
-        .child(sidebar_count(annotation_count.to_string()))
-}
-
 pub(super) fn label_asset_meta(color: Option<&str>, annotation_count: usize) -> impl IntoElement {
     div()
         .flex_none()
@@ -221,10 +202,6 @@ pub(super) fn asset_display_name(asset: &AssetRecord) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or(display_path.as_ref())
         .to_string()
-}
-
-pub(super) fn compact_asset_name(asset: &AssetRecord) -> String {
-    compact_text(&asset_display_name(asset), 36)
 }
 
 pub(super) fn asset_dimensions_label(asset: &AssetRecord) -> String {

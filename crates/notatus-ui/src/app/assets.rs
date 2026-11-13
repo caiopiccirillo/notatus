@@ -10,6 +10,7 @@ use std::borrow::Cow;
 gpui_kit_assets::icon_assets!(
     AppIcons,
     [
+        Circle,
         Crosshair,
         Download,
         FilePlus,

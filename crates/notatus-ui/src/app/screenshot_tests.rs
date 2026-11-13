@@ -114,6 +114,28 @@ fn screenshots() {
 
     let view = view_slot.expect("window view");
 
+    // The media list, with the first item marked done.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |notatus, cx| {
+            if let Some(first) = notatus.state.dataset.assets.first().map(|a| a.id) {
+                let _ = notatus
+                    .state
+                    .set_asset_status(first, notatus_core::AssetStatus::Done);
+            }
+            notatus.left_dock = LeftDock::Media;
+            cx.notify();
+        });
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("media-dark.png"));
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |notatus, cx| {
+            notatus.left_dock = LeftDock::Dataset;
+            cx.notify();
+        });
+    })
+    .unwrap();
+
     // View popover, opened by clicking its toolbar button.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
