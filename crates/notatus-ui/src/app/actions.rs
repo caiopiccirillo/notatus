@@ -55,6 +55,8 @@ actions!(
         RejectAnnotation,
         /// Return the selected annotation to draft.
         ResetAnnotationReview,
+        /// Show every keyboard shortcut.
+        ShowShortcuts,
     ]
 );
 
@@ -77,8 +79,10 @@ pub(super) fn bind_keys(cx: &mut App) {
     let global = Some(CONTEXT);
     let canvas = Some(CANVAS_CONTEXT);
     cx.bind_keys([
-        KeyBinding::new("ctrl-k", CommandPalette, global),
+        // Ctrl+K is the one the app advertises, so it is bound last: hints
+        // show the last binding.
         KeyBinding::new("ctrl-shift-p", CommandPalette, global),
+        KeyBinding::new("ctrl-k", CommandPalette, global),
         KeyBinding::new("ctrl-z", Undo, canvas),
         KeyBinding::new("ctrl-shift-z", Redo, canvas),
         KeyBinding::new("ctrl-y", Redo, canvas),
@@ -117,6 +121,7 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-l", ToggleLabelNames, canvas),
         KeyBinding::new("c", ToggleCrosshair, canvas),
         KeyBinding::new("shift-f", ToggleFocusSelected, canvas),
+        KeyBinding::new("?", ShowShortcuts, canvas),
         KeyBinding::new("y", AcceptAnnotation, canvas),
         KeyBinding::new("x", RejectAnnotation, canvas),
         KeyBinding::new("u", ResetAnnotationReview, canvas),
@@ -152,6 +157,9 @@ impl NotatusWindow {
     ) -> gpui::Stateful<gpui::Div> {
         root.key_context(CONTEXT)
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|this, _: &ShowShortcuts, window, cx| {
+                this.open_shortcuts(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.open_command_palette(window, cx);
             }))

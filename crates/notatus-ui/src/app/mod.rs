@@ -59,6 +59,7 @@ mod gpui_tests;
 mod save_tests;
 #[cfg(test)]
 mod screenshot_tests;
+mod shortcuts;
 #[cfg(test)]
 mod test_support;
 

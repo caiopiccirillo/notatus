@@ -128,6 +128,15 @@ fn screenshots() {
     })
     .unwrap();
     capture(&mut cx, window, &out_dir.join("media-dark.png"));
+
+    // The shortcut sheet, opened before any popover or dialog.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |notatus, cx| notatus.open_shortcuts(window, cx));
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("shortcuts-dark.png"));
+    cx.update_window(window, |_, window, cx| window.close_all_dialogs(cx))
+        .unwrap();
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
             notatus.left_dock = LeftDock::Dataset;

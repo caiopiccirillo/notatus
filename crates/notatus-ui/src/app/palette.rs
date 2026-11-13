@@ -254,16 +254,14 @@ impl NotatusWindow {
             };
         }
 
+        // The same icons as the Dataset panel's buttons.
         let project = PaletteGroup::new("Project")
-            .command("Save project", IconName::HardDrive, SaveProject)
-            .command("Save project as", IconName::FolderOpen, SaveProjectAs)
+            .command("Save project", Lucide::Save, SaveProject)
+            .command("Save project as", Lucide::SaveAll, SaveProjectAs)
             .command("Open project", IconName::FolderOpen, OpenProject)
-            .command("New project", IconName::Plus, NewProject)
-            .command(
-                "Export annotations",
-                IconName::ExternalLink,
-                ExportAnnotations,
-            )
+            .command("New project", Lucide::FilePlus, NewProject)
+            .command("Export annotations", Lucide::Download, ExportAnnotations)
+            .command("Keyboard shortcuts", Lucide::Keyboard, ShowShortcuts)
             .command("Toggle light and dark theme", IconName::Moon, ToggleTheme);
 
         let options = self.view_options;

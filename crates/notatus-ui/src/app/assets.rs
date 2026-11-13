@@ -16,6 +16,7 @@ gpui_kit_assets::icon_assets!(
         FilePlus,
         Focus,
         ImagePlus,
+        Keyboard,
         ListTree,
         MousePointer2,
         Pentagon,
