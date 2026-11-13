@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 mod actions;
+mod assets;
 mod autosave;
 mod bottom_bar;
 mod canvas;
@@ -81,7 +82,7 @@ type SharedImageLayout = Rc<RefCell<Option<CanvasImageLayout>>>;
 
 pub fn launch_gpui() {
     gpui_platform::application()
-        .with_assets(gpui_kit_assets::Assets)
+        .with_assets(assets::AppAssets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
             actions::bind_keys(cx);

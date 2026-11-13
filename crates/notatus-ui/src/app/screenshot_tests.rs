@@ -15,7 +15,7 @@ use std::sync::Arc;
 fn headless_cx() -> HeadlessAppContext {
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("Noto Sans"));
     let cx =
-        HeadlessAppContext::with_platform(text_system, Arc::new(gpui_kit_assets::Assets), || {
+        HeadlessAppContext::with_platform(text_system, Arc::new(super::assets::AppAssets), || {
             gpui_platform::current_headless_renderer()
         });
     cx.allow_parking();
