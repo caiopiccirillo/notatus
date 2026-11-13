@@ -122,7 +122,7 @@ fn review_label(name: &str, state: notatus_core::ReviewState) -> SharedString {
 
 /// Guides a new project to its first image, with the keys that do the same.
 fn canvas_empty_state(has_media: bool) -> impl IntoElement {
-    use super::actions::{CommandPalette, ImportMedia, OpenProject};
+    use super::actions::{CommandPalette, ImportFolder, ImportMedia, OpenProject};
     use gpui::Action as _;
     use gpui_component::empty::{
         Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant,
@@ -167,6 +167,11 @@ fn canvas_empty_state(has_media: bool) -> impl IntoElement {
                         action_button("empty-import", "Import images", ImportMedia.boxed_clone())
                             .primary(),
                     )
+                    .child(action_button(
+                        "empty-import-folder",
+                        "Import folder",
+                        ImportFolder.boxed_clone(),
+                    ))
                     .when(!has_media, |row| {
                         row.child(action_button(
                             "empty-open",

@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::helpers::*;
-use crate::app::media_import::open_media_picker;
+use crate::app::media_import::{open_folder_picker, open_media_picker};
 
 impl NotatusWindow {
     pub(super) fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -26,13 +26,30 @@ impl NotatusWindow {
                     .border_color(colors.border)
                     .child(section_title("Media"))
                     .child(
-                        Button::new("media-import")
-                            .small()
-                            .icon(Icon::new(IconName::Plus))
-                            .tooltip("Import media")
-                            .on_click(move |_, window, cx| {
-                                open_media_picker(import_view.clone(), window, cx);
-                            }),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(
+                                Button::new("media-import")
+                                    .small()
+                                    .icon(Icon::new(IconName::Plus))
+                                    .tooltip("Import images (Ctrl+I)")
+                                    .on_click({
+                                        let view = import_view.clone();
+                                        move |_, window, cx| {
+                                            open_media_picker(view.clone(), window, cx);
+                                        }
+                                    }),
+                            )
+                            .child(
+                                Button::new("media-import-folder")
+                                    .small()
+                                    .icon(Icon::new(IconName::FolderOpen))
+                                    .tooltip("Import folder (Ctrl+Shift+I)")
+                                    .on_click(move |_, window, cx| {
+                                        open_folder_picker(import_view.clone(), window, cx);
+                                    }),
+                            ),
                     ),
             )
             .child(
@@ -61,15 +78,32 @@ impl NotatusWindow {
                 .p_4()
                 .text_sm()
                 .text_color(colors.muted_foreground)
-                .child("Import media after setting up project labels")
+                .child("Import images or a whole folder to start")
                 .child(
-                    Button::new("media-empty-import")
-                        .small()
-                        .icon(Icon::new(IconName::Plus))
-                        .label("Import media")
-                        .on_click(move |_, window, cx| {
-                            open_media_picker(import_view.clone(), window, cx);
-                        }),
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(
+                            Button::new("media-empty-import")
+                                .small()
+                                .icon(Icon::new(IconName::Plus))
+                                .label("Images")
+                                .on_click({
+                                    let view = import_view.clone();
+                                    move |_, window, cx| {
+                                        open_media_picker(view.clone(), window, cx);
+                                    }
+                                }),
+                        )
+                        .child(
+                            Button::new("media-empty-import-folder")
+                                .small()
+                                .icon(Icon::new(IconName::FolderOpen))
+                                .label("Folder")
+                                .on_click(move |_, window, cx| {
+                                    open_folder_picker(import_view.clone(), window, cx);
+                                }),
+                        ),
                 )
                 .into_any_element()
         } else {

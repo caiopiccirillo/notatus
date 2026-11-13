@@ -23,6 +23,8 @@ actions!(
         SaveProject,
         SaveProjectAs,
         ImportMedia,
+        /// Import every image in a folder and its subfolders.
+        ImportFolder,
         ExportAnnotations,
         NewLabel,
         /// Focus the label picker to choose or create the active label.
@@ -85,6 +87,7 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-s", SaveProject, global),
         KeyBinding::new("ctrl-shift-s", SaveProjectAs, global),
         KeyBinding::new("ctrl-i", ImportMedia, global),
+        KeyBinding::new("ctrl-shift-i", ImportFolder, global),
         KeyBinding::new("ctrl-e", ExportAnnotations, global),
         KeyBinding::new("ctrl-shift-l", NewLabel, global),
         KeyBinding::new("l", PickLabel, canvas),
@@ -168,6 +171,9 @@ impl NotatusWindow {
             }))
             .on_action(cx.listener(|_, _: &ImportMedia, window, cx| {
                 run_outside_update(cx, window, media_import::open_media_picker);
+            }))
+            .on_action(cx.listener(|_, _: &ImportFolder, window, cx| {
+                run_outside_update(cx, window, media_import::open_folder_picker);
             }))
             .on_action(cx.listener(|_, _: &ExportAnnotations, window, cx| {
                 run_outside_update(cx, window, export_commands::open_export_dialog);

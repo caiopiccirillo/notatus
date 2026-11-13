@@ -208,7 +208,9 @@ impl NotatusWindow {
                 .command("Zoom in", IconName::Plus, ZoomIn)
                 .command("Zoom out", IconName::Minus, ZoomOut);
         }
-        media = media.command("Import media", IconName::Folder, ImportMedia);
+        media = media
+            .command("Import images", Lucide::ImagePlus, ImportMedia)
+            .command("Import folder", Lucide::FolderOpen, ImportFolder);
         for asset in self.state.dataset.assets.iter().take(MAX_MEDIA_ITEMS) {
             let name = asset_display_name(asset);
             media = media.push(

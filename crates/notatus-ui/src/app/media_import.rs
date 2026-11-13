@@ -57,13 +57,40 @@ struct MediaCandidate {
     height: u32,
 }
 
+/// What the picker asks for, and how picked paths become image files.
+#[derive(Clone, Copy)]
+enum ImportSource {
+    /// Image files, used as picked.
+    Files,
+    /// Folders, searched recursively for images.
+    Folders,
+}
+
 pub(super) fn open_media_picker(
     view: gpui::WeakEntity<NotatusWindow>,
     _window: &mut Window,
     cx: &mut App,
 ) {
+    pick_and_import(view, ImportSource::Files, cx);
+}
+
+pub(super) fn open_folder_picker(
+    view: gpui::WeakEntity<NotatusWindow>,
+    _window: &mut Window,
+    cx: &mut App,
+) {
+    pick_and_import(view, ImportSource::Folders, cx);
+}
+
+fn pick_and_import(view: gpui::WeakEntity<NotatusWindow>, source: ImportSource, cx: &mut App) {
     let picking = view.update(cx, |notatus, cx| {
-        notatus.status_message = Some("Waiting for media selection".to_string());
+        notatus.status_message = Some(
+            match source {
+                ImportSource::Files => "Waiting for media selection",
+                ImportSource::Folders => "Waiting for folder selection",
+            }
+            .to_string(),
+        );
         cx.notify();
     });
     if picking.is_err() {
@@ -71,19 +98,28 @@ pub(super) fn open_media_picker(
     }
 
     let paths = cx.prompt_for_paths(PathPromptOptions {
-        files: true,
-        directories: false,
+        files: matches!(source, ImportSource::Files),
+        directories: matches!(source, ImportSource::Folders),
         multiple: true,
-        prompt: Some(SharedString::from("Import media")),
+        prompt: Some(SharedString::from(match source {
+            ImportSource::Files => "Import media",
+            ImportSource::Folders => "Import folder",
+        })),
     });
 
     cx.spawn(async move |cx| match paths.await {
         Ok(Ok(Some(paths))) => {
-            // Reading every file's header can take a while for large
-            // selections, so it runs off the UI thread.
+            // Searching folders and reading every file's header can take a
+            // while for large selections, so it runs off the UI thread.
             let imported = cx
                 .background_executor()
-                .spawn(async move { inspect_media_paths(paths) })
+                .spawn(async move {
+                    let files = match source {
+                        ImportSource::Files => paths,
+                        ImportSource::Folders => images_in_folders(&paths),
+                    };
+                    inspect_media_paths(files)
+                })
                 .await;
             let _ = view.update(cx, |window, cx| {
                 window.apply_media_import(imported);
@@ -110,6 +146,51 @@ pub(super) fn open_media_picker(
         }
     })
     .detach();
+}
+
+/// File extensions treated as images when searching folders.
+const IMAGE_EXTENSIONS: [&str; 8] = ["jpg", "jpeg", "png", "bmp", "gif", "webp", "tif", "tiff"];
+
+/// Every image under `folders`, in path order. Hidden files and folders,
+/// such as `.git` or a project's `.notatus-recovery`, are skipped, and
+/// symlinked folders are not entered, so a link cannot loop the search.
+fn images_in_folders(folders: &[PathBuf]) -> Vec<PathBuf> {
+    let mut images = Vec::new();
+    let mut pending: Vec<PathBuf> = folders.to_vec();
+    while let Some(folder) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                pending.push(path);
+            } else if (kind.is_file() || kind.is_symlink() && path.is_file())
+                && is_image_path(&path)
+            {
+                images.push(path);
+            }
+        }
+    }
+    images.sort();
+    images
+}
+
+fn is_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            IMAGE_EXTENSIONS
+                .iter()
+                .any(|known| extension.eq_ignore_ascii_case(known))
+        })
 }
 
 fn inspect_media_paths(paths: Vec<PathBuf>) -> MediaImport {
@@ -158,7 +239,7 @@ fn displayed_dimensions(path: &Path) -> image::ImageResult<(u32, u32)> {
 
 fn media_import_summary(added: usize, failed: usize) -> String {
     match (added, failed) {
-        (0, 0) => "No media selected".to_string(),
+        (0, 0) => "No images found".to_string(),
         (0, failed) => format!("Skipped {failed} unsupported file{}", plural(failed)),
         (added, 0) => format!("Imported {added} media item{}", plural(added)),
         (added, failed) => {
@@ -197,6 +278,33 @@ mod tests {
         bytes.extend_from_slice(exif);
         bytes.extend_from_slice(&encoded[2..]);
         std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn folder_search_finds_images_in_path_order() {
+        let root = tempfile::tempdir().unwrap();
+        let path = |relative: &str| root.path().join(relative);
+        for relative in [
+            "b/2.JPG",
+            "b/1.png",
+            "a.webp",
+            "notes.txt",
+            "deep/er/x.tiff",
+            ".hidden/skip.png",
+            ".skip.png",
+        ] {
+            std::fs::create_dir_all(path(relative).parent().unwrap()).unwrap();
+            std::fs::write(path(relative), b"").unwrap();
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(root.path(), path("b/loop")).unwrap();
+
+        let found = images_in_folders(&[root.path().to_path_buf()]);
+
+        assert_eq!(
+            found,
+            ["a.webp", "b/1.png", "b/2.JPG", "deep/er/x.tiff"].map(path)
+        );
     }
 
     #[test]
