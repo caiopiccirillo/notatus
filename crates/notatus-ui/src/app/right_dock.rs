@@ -67,17 +67,13 @@ impl NotatusWindow {
                     "Media",
                     compact_text(&asset_display_name(asset), 28),
                 ))
-                .child(metric(
-                    "Image labels",
-                    label_count_label(classification_count),
-                ))
                 .child(
                     div()
                         .flex()
                         .items_center()
                         .justify_between()
                         .gap_2()
-                        .child(section_title("Image labels"))
+                        .child(counted_section_title("Image labels", classification_count))
                         .child(self.classification_label_menu(
                             asset.id,
                             labels.clone(),
@@ -102,8 +98,7 @@ impl NotatusWindow {
                         .children(classification_rows)
                         .into_any_element()
                 })
-                .child(section_title("Object annotations"))
-                .child(metric("Objects", annotation_count_label(annotation_count)))
+                .child(counted_section_title("Objects", annotation_count))
                 .child(if rows.is_empty() {
                     div()
                         .flex_1()

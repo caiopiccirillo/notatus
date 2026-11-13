@@ -269,6 +269,17 @@ pub(super) fn section_title(title: &'static str) -> impl IntoElement {
     })
 }
 
+/// A section title followed by how many items the section holds.
+pub(super) fn counted_section_title(title: &'static str, count: usize) -> impl IntoElement {
+    themed(move |theme| {
+        div()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.muted_foreground)
+            .child(format!("{title} · {count}"))
+    })
+}
+
 pub(super) fn metric(label: &'static str, value: String) -> impl IntoElement {
     themed(move |theme| {
         div()
