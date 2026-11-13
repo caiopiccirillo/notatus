@@ -60,118 +60,79 @@ used by component controls such as the dock buttons.
 
 ## Window Chrome
 
-The current shell uses `gpui-component::TitleBar` with GPUI's default platform
-decoration behavior. The titlebar is intentionally informational: it shows the
-application identity, current project name, and saved/unsaved status.
+The shell uses `gpui-component::TitleBar`. It shows the application identity,
+the project name, and the save state. On Linux the window may draw its own
+title bar; its close button goes through the same check as a compositor close
+request: pending changes are saved first, and a project never saved to a
+folder asks before it is discarded.
 
 ## Workflow Navigation
 
-Commands live in the workflow docks instead of the titlebar. The bottom bar
-switches the primary left dock in the order users usually work:
+The bottom bar switches the left dock between Dataset and Media, and the right
+dock between Annotations and Info. Nothing has to happen in a fixed order:
+media can be imported before labels exist, and drawing without a label creates
+one.
 
-- Dataset
-- Media
+Project persistence uses `notatus-storage::LocalProjectStore` through the
+autosave pipeline described in [Storage](storage.md). A project can be unsaved
+in memory or backed by a local folder.
 
-The Dataset dock owns project persistence, label management, and dataset handoff
-to external annotation formats. The Media dock owns media import and media
-selection.
+## Keyboard
 
-Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
-unsaved in memory or backed by a local folder. Creating or opening a project
-while the current project is dirty asks before discarding changes.
+The annotation loop is keyboard-driven. `?` opens a sheet of every shortcut,
+grouped under Draw, Media, Review, View, and Project; each row shows the key
+bound to its action, so the sheet follows the bindings in `actions.rs`. Ctrl+K
+opens the command palette, which lists the same commands with their keys.
 
-Attempts to jump ahead in the workflow, such as importing media before labels
-exist or drawing without an active label, redirect to the needed dock and show a
-GPUI component notification.
+Commands that open pickers or dialogs (new, open, save, import, export) are
+deferred out of their action listener with `run_outside_update`, because they
+update the window through a weak handle and gpui panics on a nested update.
 
 ## Media Import
 
-The Media dock has an Import media command. It opens a file picker and currently
-accepts image files by probing dimensions with the `image` crate.
-
-Unsupported files are skipped and reported through the Info dock status field.
-The command is media-oriented so video and folder import can be added without
-changing the left dock structure.
+Import images (Ctrl+I) picks image files. Import folder (Ctrl+Shift+I) searches
+the chosen folders recursively for JPEG, PNG, BMP, GIF, WebP, and TIFF files,
+skipping hidden files and folders and not entering symlinked folders. Both read
+image sizes off the UI thread, recording the size after EXIF orientation so
+rotated phone photos match what the canvas shows. Files already in the project
+are skipped and reported in the status message.
 
 ## Left Docks
 
-The left panel is switched by bottom-bar dock buttons.
+- Dataset: project identity, persistence and export buttons, and labels
+- Media: import and the media list
 
-It contains separate docks for:
+Each media row starts with a green check when the media is done or a hollow
+circle when it is not, then its name, then its annotation count. Removing
+media, which also removes its annotations, is in the row's right-click menu.
 
-- Dataset: project identity, persistence commands, label management, and export
-- Media: media import and media selection
-
-Media rows show their asset type, annotation count, and a compact remove action.
-They are selectable and update `UiState::selected_asset`. Removing media also
-removes annotations for that media. Annotation rows live in the right-side
-Annotations dock so media navigation stays compact.
-
-Label rows show their color swatch and annotation count. They are selectable and
-update `UiState::selected_label`. The selected-label editor can remove a label,
-which also removes annotations using that label.
-
-The Dataset dock exposes YOLO and COCO toggles, dataset/exportable annotation
-counts, and an export action. Export writes selected formats into subfolders
-under a user-selected output folder.
-
-Long filenames are shortened with a middle truncation helper before rendering.
-This keeps repeated screenshot-style filenames readable in a narrow panel.
-
-## Bottom Bar
-
-The bottom bar is the persistent dock switcher:
-
-- Dataset
-- Media
-- Annotations
-- Info
-
-The left group controls Dataset and Media. The right group controls the right
-dock.
+Label rows show their color and annotation count; renaming, recoloring, and
+removing are in the row's options and right-click menus.
 
 ## Canvas Area
 
-The center panel previews the selected image with GPUI's `img` element:
+The center panel shows the selected image with GPUI's `img` element, fitted to
+the canvas; S3 media is not previewed yet. Tool metadata and interaction state
+live in the app layer, and completed changes go through `UiState`.
 
-- local images are loaded from their selected path
-- object fit is `Contain`
-- loading and fallback messages are provided
-- S3 object previews currently show a not-implemented message
+- Box (B) draws on empty space and moves or resizes existing boxes; Alt always
+  draws. Drags shorter than four screen pixels are treated as clicks.
+- Polygon (P) adds a point per click and closes the shape on double-click.
+- Select (V) selects, moves, and resizes without drawing, and pans on empty
+  space.
+- The scroll wheel zooms around the pointer, up to 32 times the fit-to-view
+  size; F or a double-click fits the image again.
 
-The canvas has a tool-oriented interaction layer. Tool metadata and interaction
-state live in the app layer, while completed mutations go through `UiState`.
-The initial tools are:
-
-- Draw Box maps window coordinates to image pixel coordinates, draws a preview
-  while dragging, clamps positions to image bounds, and creates
-  `AnnotationGeometry::Bbox` through `UiState`.
-- Select hit-tests bounding boxes in image space, selects the topmost matching
-  annotation, and keeps selection changes out of dataset dirty state.
-- Pan/Zoom drags the shared image viewport and zooms the viewport with the
-  scroll wheel.
-- Fit resets the viewport to the canvas-contained image bounds. It is available
-  as a toolbar button and by double-clicking the canvas.
-- Active Label selects the label used by Draw Box without switching away from
-  the canvas.
-
-Future segmentation tools should add new handlers to the canvas tool layer and
-commit completed polygons through the canonical core schema.
+Every drag also ends when the button is released outside the canvas, so a box
+dragged past the edge is created at the edge and a move stays one undo step.
 
 ## Right Docks
 
-The right panel is split into:
-
-- Annotations
-- Info
-
-The Annotations dock lists annotations for the selected media, highlights the
-matching canvas annotation while a row is hovered, and exposes compact row
-actions for changing an annotation label. The Info dock shows cross-cutting
-context such as active tool, active label, counts, review queue, status messages,
-and selected-media metadata.
-
-Label customization lives in the Labels left dock.
+- Annotations, the default: the selected media's image labels and objects. Each
+  object row shows its review state, accept and reject toggles, and a label
+  menu. Y accepts, X rejects, and U resets the selected annotation; accepting
+  or rejecting moves to the next draft on the same media.
+- Info: active tool, zoom, counts, media still to review, and media metadata.
 
 ## Layout
 

@@ -88,9 +88,9 @@ mdbook serve docs
 
 ## Near-Term Roadmap
 
-- Add image-folder import and content hashing (single-image import with
-  dimension probing already ships in the Media dock).
-- Add an external model runner process manager around the existing
-  `notatus-infer` protocol.
-- Add polygon annotation in the canvas tool layer once the bounding-box
-  workflow is reliable.
+- Run models from the app through the existing `notatus-infer` protocol, with
+  predictions arriving as drafts to confirm with the review keys.
+- Review drafts and predictions across all media, not one image at a time.
+- Make undo record changes instead of copying the dataset.
+
+See `docs/src/roadmap.md` for the longer list.
