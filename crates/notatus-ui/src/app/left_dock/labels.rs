@@ -234,25 +234,6 @@ fn label_actions(
                     )
                 }),
         )
-        .child(
-            Button::new(label_element_id("label-remove", label_id))
-                .xsmall()
-                .ghost()
-                .danger()
-                .icon(Icon::new(IconName::Delete))
-                .tooltip("Remove label")
-                .on_click(move |_, window, cx| {
-                    cx.stop_propagation();
-                    remove_label_or_confirm(
-                        view.clone(),
-                        label_id,
-                        label_name.clone(),
-                        annotation_count,
-                        window,
-                        cx,
-                    );
-                }),
-        )
 }
 
 fn label_menu(
