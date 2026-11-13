@@ -124,6 +124,22 @@ pub(super) fn bind_keys(cx: &mut App) {
     }));
 }
 
+/// A command that reaches the window through a weak handle, like the dock
+/// buttons use.
+type WindowCommand = fn(gpui::WeakEntity<NotatusWindow>, &mut Window, &mut App);
+
+/// Runs `command` right after the current update. Action listeners run while
+/// the window is already being updated, and these commands update it again
+/// through their handle, which gpui refuses with a panic.
+fn run_outside_update(
+    cx: &mut Context<NotatusWindow>,
+    window: &mut Window,
+    command: WindowCommand,
+) {
+    let view = cx.weak_entity();
+    window.defer(cx, move |window, cx| command(view, window, cx));
+}
+
 impl NotatusWindow {
     /// Attaches every action handler to the window root.
     pub(super) fn action_handlers(
@@ -139,22 +155,22 @@ impl NotatusWindow {
             .on_action(cx.listener(|this, _: &Undo, window, cx| this.undo(window, cx)))
             .on_action(cx.listener(|this, _: &Redo, window, cx| this.redo(window, cx)))
             .on_action(cx.listener(|_, _: &NewProject, window, cx| {
-                project_commands::new_project(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, project_commands::new_project);
             }))
             .on_action(cx.listener(|_, _: &OpenProject, window, cx| {
-                project_commands::open_project(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, project_commands::open_project);
             }))
             .on_action(cx.listener(|_, _: &SaveProject, window, cx| {
-                project_commands::save_project(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, project_commands::save_project);
             }))
             .on_action(cx.listener(|_, _: &SaveProjectAs, window, cx| {
-                project_commands::save_project_as(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, project_commands::save_project_as);
             }))
             .on_action(cx.listener(|_, _: &ImportMedia, window, cx| {
-                media_import::open_media_picker(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, media_import::open_media_picker);
             }))
             .on_action(cx.listener(|_, _: &ExportAnnotations, window, cx| {
-                export_commands::open_export_dialog(cx.weak_entity(), window, cx);
+                run_outside_update(cx, window, export_commands::open_export_dialog);
             }))
             .on_action(cx.listener(|this, _: &NewLabel, window, cx| {
                 this.create_label(window, cx);

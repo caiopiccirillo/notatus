@@ -137,3 +137,31 @@ fn late_save_for_a_replaced_project_is_ignored(cx: &mut TestAppContext) {
     });
     assert_eq!(saved_label_count(first.path()), 1);
 }
+
+#[gpui::test]
+fn ctrl_s_saves_without_panicking(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (window, view) = open_test_window(cx);
+    view.update(cx, |notatus, cx| {
+        notatus.project_location = ProjectLocation::local(dir.path());
+        notatus.state.add_label("Person");
+        cx.notify();
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window.into(), "ctrl-s");
+    cx.run_until_parked();
+
+    assert_eq!(saved_label_count(dir.path()), 1);
+    view.update(cx, |notatus, _| assert!(!notatus.state.dirty));
+}
+
+#[gpui::test]
+fn project_shortcuts_run_without_panicking(cx: &mut TestAppContext) {
+    // Each of these used to update the window from inside its own update.
+    for keys in ["ctrl-n", "ctrl-o", "ctrl-shift-s", "ctrl-i", "ctrl-e"] {
+        let (window, _) = open_test_window(cx);
+        cx.simulate_keystrokes(window.into(), keys);
+        cx.run_until_parked();
+    }
+}
