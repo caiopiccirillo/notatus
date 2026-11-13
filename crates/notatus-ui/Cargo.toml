@@ -13,7 +13,6 @@ gpui-ui = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component", "dep:gpui-kit-
 [dependencies]
 notatus-core.workspace = true
 notatus-export.workspace = true
-notatus-infer.workspace = true
 notatus-storage.workspace = true
 notatus-telemetry.workspace = true
 tracing.workspace = true
