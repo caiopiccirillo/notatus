@@ -162,9 +162,9 @@ impl NotatusWindow {
             .unwrap_or_else(|| "Redo".to_string());
 
         let mut annotate = PaletteGroup::new("Annotate")
-            .command("Select tool", IconName::Inspector, SelectTool)
-            .command("Box tool", IconName::Frame, BoxTool)
-            .command("Polygon tool", IconName::Asterisk, PolygonTool)
+            .command("Select tool", Lucide::MousePointer2, SelectTool)
+            .command("Box tool", Lucide::VectorSquare, BoxTool)
+            .command("Polygon tool", Lucide::Pentagon, PolygonTool)
             .command(undo, IconName::Undo2, Undo)
             .command(redo, IconName::Redo2, Redo);
         if self.state.selected_annotation.is_some() {

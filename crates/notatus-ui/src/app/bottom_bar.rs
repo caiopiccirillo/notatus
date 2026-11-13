@@ -59,7 +59,7 @@ impl NotatusWindow {
                     .child(div().mr_2().child(self.save_status()))
                     .child(self.bottom_right_dock_button(
                         "bottom-annotations",
-                        IconName::Frame,
+                        gpui_kit_assets::IconName::ListTree,
                         "Annotations",
                         RightDock::Annotations,
                         cx,
@@ -142,7 +142,7 @@ impl NotatusWindow {
     fn bottom_left_dock_button(
         &self,
         id: &'static str,
-        icon: IconName,
+        icon: impl Into<Icon>,
         tooltip: &'static str,
         dock: LeftDock,
         cx: &mut Context<Self>,
@@ -164,7 +164,7 @@ impl NotatusWindow {
     fn bottom_right_dock_button(
         &self,
         id: &'static str,
-        icon: IconName,
+        icon: impl Into<Icon>,
         tooltip: &'static str,
         dock: RightDock,
         cx: &mut Context<Self>,

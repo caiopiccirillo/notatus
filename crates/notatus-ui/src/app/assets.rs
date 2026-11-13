@@ -13,8 +13,12 @@ gpui_kit_assets::icon_assets!(
         Crosshair,
         Focus,
         ImagePlus,
+        ListTree,
+        MousePointer2,
+        Pentagon,
         RotateCcw,
-        Tag
+        Tag,
+        VectorSquare
     ]
 );
 

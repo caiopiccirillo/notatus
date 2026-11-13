@@ -29,7 +29,7 @@ impl NotatusWindow {
                 Button::new("tool-fit-canvas")
                     .small()
                     .icon(Icon::new(IconName::Maximize))
-                    .tooltip("Fit image to canvas")
+                    .tooltip("Fit image to canvas (F)")
                     .on_click(move |_, _, cx| {
                         let _ = fit_view.update(cx, |notatus, cx| {
                             notatus.fit_canvas_to_view(cx);
@@ -48,7 +48,10 @@ impl NotatusWindow {
         Button::new(definition.id)
             .small()
             .icon(Icon::new(definition.icon))
-            .tooltip(format!("{}: {}", definition.label, definition.tooltip))
+            .tooltip(format!(
+                "{} ({}): {}",
+                definition.label, definition.key, definition.tooltip
+            ))
             .selected(self.state.active_tool == tool)
             .on_click(move |_, _, cx| {
                 let _ = view.update(cx, |notatus, cx| {

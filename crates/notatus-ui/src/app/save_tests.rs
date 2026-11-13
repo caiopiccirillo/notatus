@@ -159,7 +159,14 @@ fn ctrl_s_saves_without_panicking(cx: &mut TestAppContext) {
 #[gpui::test]
 fn project_shortcuts_run_without_panicking(cx: &mut TestAppContext) {
     // Each of these used to update the window from inside its own update.
-    for keys in ["ctrl-n", "ctrl-o", "ctrl-shift-s", "ctrl-i", "ctrl-shift-i", "ctrl-e"] {
+    for keys in [
+        "ctrl-n",
+        "ctrl-o",
+        "ctrl-shift-s",
+        "ctrl-i",
+        "ctrl-shift-i",
+        "ctrl-e",
+    ] {
         let (window, _) = open_test_window(cx);
         cx.simulate_keystrokes(window.into(), keys);
         cx.run_until_parked();
