@@ -295,6 +295,18 @@ impl NotatusWindow {
                 ToggleFocusSelected,
             );
 
-        vec![annotate, media, labels, view, project]
+        let mut model = PaletteGroup::new("Model")
+            .command("Run model on this image", Lucide::Sparkles, RunModel)
+            .command(
+                "Run model on unfinished images",
+                Lucide::Sparkles,
+                RunModelOnUnfinished,
+            );
+        if self.model_run.is_running() {
+            model = model.command("Stop model run", Lucide::CircleStop, StopModelRun);
+        }
+        model = model.command("Choose model runner…", Lucide::FileCog, ChooseModelRunner);
+
+        vec![annotate, media, labels, model, view, project]
     }
 }

@@ -1,6 +1,7 @@
 //! Keyboard actions, their default bindings, and the handlers that run them.
 
 use super::helpers::plural;
+use super::model_run::ModelScope;
 use super::*;
 use crate::Direction;
 use gpui::{Action, KeyBinding, actions};
@@ -57,6 +58,14 @@ actions!(
         ResetAnnotationReview,
         /// Show every keyboard shortcut.
         ShowShortcuts,
+        /// Run the project's model on the current media.
+        RunModel,
+        /// Run the project's model on every media not marked done.
+        RunModelOnUnfinished,
+        /// Stop a model run after the media in progress.
+        StopModelRun,
+        /// Choose the program that runs the project's model.
+        ChooseModelRunner,
     ]
 );
 
@@ -122,6 +131,8 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("c", ToggleCrosshair, canvas),
         KeyBinding::new("shift-f", ToggleFocusSelected, canvas),
         KeyBinding::new("?", ShowShortcuts, canvas),
+        KeyBinding::new("ctrl-r", RunModel, global),
+        KeyBinding::new("ctrl-shift-r", RunModelOnUnfinished, global),
         KeyBinding::new("y", AcceptAnnotation, canvas),
         KeyBinding::new("x", RejectAnnotation, canvas),
         KeyBinding::new("u", ResetAnnotationReview, canvas),
@@ -159,6 +170,18 @@ impl NotatusWindow {
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(|this, _: &ShowShortcuts, window, cx| {
                 this.open_shortcuts(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RunModel, _, cx| {
+                this.run_model(ModelScope::CurrentMedia, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RunModelOnUnfinished, _, cx| {
+                this.run_model(ModelScope::UnfinishedMedia, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StopModelRun, _, cx| {
+                this.stop_model_run(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ChooseModelRunner, _, cx| {
+                this.choose_model_runner(None, cx);
             }))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.open_command_palette(window, cx);

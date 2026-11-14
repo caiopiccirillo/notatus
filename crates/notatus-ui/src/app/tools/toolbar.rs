@@ -26,6 +26,16 @@ impl NotatusWindow {
             .child(self.label_picker())
             .child(self.view_options_button(cx))
             .child(
+                Button::new("tool-run-model")
+                    .small()
+                    .icon(Icon::new(gpui_kit_assets::IconName::Sparkles))
+                    .tooltip("Suggest annotations with the model (Ctrl+R)")
+                    .loading(self.model_run.is_running())
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(super::super::actions::RunModel), cx);
+                    }),
+            )
+            .child(
                 Button::new("tool-fit-canvas")
                     .small()
                     .icon(Icon::new(IconName::Maximize))

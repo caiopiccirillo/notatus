@@ -4225,8 +4225,10 @@ dependencies = [
  "image",
  "notatus-core",
  "notatus-export",
+ "notatus-infer",
  "notatus-storage",
  "notatus-telemetry",
+ "serde_json",
  "tempfile",
  "tracing",
 ]

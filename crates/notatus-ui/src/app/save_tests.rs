@@ -165,6 +165,8 @@ fn project_shortcuts_run_without_panicking(cx: &mut TestAppContext) {
         "ctrl-shift-s",
         "ctrl-i",
         "ctrl-shift-i",
+        "ctrl-r",
+        "ctrl-shift-r",
         "ctrl-e",
     ] {
         let (window, _) = open_test_window(cx);

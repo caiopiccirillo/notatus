@@ -55,6 +55,13 @@ fn shortcut_groups() -> Vec<ShortcutGroup> {
             ],
         },
         ShortcutGroup {
+            title: "Model",
+            rows: vec![
+                row("Suggest on this image", RunModel),
+                row("Suggest on unfinished images", RunModelOnUnfinished),
+            ],
+        },
+        ShortcutGroup {
             title: "View",
             rows: vec![
                 row("Fit image", FitCanvas),

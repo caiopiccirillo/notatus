@@ -19,6 +19,7 @@ rust-version = "1.96.0"
 notatus-core = { path = "crates/notatus-core" }
 notatus-storage = { path = "crates/notatus-storage" }
 notatus-export = { path = "crates/notatus-export" }
+notatus-infer = { path = "crates/notatus-infer" }
 notatus-telemetry = { path = "crates/notatus-telemetry" }
 
 serde = { version = "1.0.229", features = ["derive"] }

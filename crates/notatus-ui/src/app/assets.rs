@@ -11,8 +11,10 @@ gpui_kit_assets::icon_assets!(
     AppIcons,
     [
         Circle,
+        CircleStop,
         Crosshair,
         Download,
+        FileCog,
         FilePlus,
         Focus,
         ImagePlus,
@@ -23,6 +25,7 @@ gpui_kit_assets::icon_assets!(
         RotateCcw,
         Save,
         SaveAll,
+        Sparkles,
         Tag,
         VectorSquare
     ]
