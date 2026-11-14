@@ -41,7 +41,7 @@ impl NotatusWindow {
                     hovered: self.hovered_annotation == Some(ann.id),
                     label: options
                         .show_labels
-                        .then(|| label.map(|l| review_label(&l.name, ann.review_state)))
+                        .then(|| label.map(|l| annotation_tag(&l.name, ann)))
                         .flatten(),
                     dimmed: options.focus_selected
                         && self.state.selected_annotation.is_some()
@@ -111,12 +111,20 @@ impl NotatusWindow {
 }
 
 /// Label tag text, marked with the review outcome once decided.
-fn review_label(name: &str, state: notatus_core::ReviewState) -> SharedString {
+/// Label tag text: the review outcome once decided, and for a model's
+/// suggestion still waiting for review, the model's confidence, so
+/// suggestions stand apart from boxes a person drew.
+fn annotation_tag(name: &str, annotation: &AnnotationRecord) -> SharedString {
     use notatus_core::ReviewState;
-    match state {
+    match annotation.review_state {
         ReviewState::Accepted => format!("{name} ✓").into(),
         ReviewState::Rejected => format!("{name} ✗").into(),
-        ReviewState::Draft | ReviewState::Reviewed => SharedString::from(name.to_string()),
+        ReviewState::Draft | ReviewState::Reviewed => {
+            match super::helpers::model_confidence_label(annotation) {
+                Some(confidence) => format!("{name} {confidence}").into(),
+                None => SharedString::from(name.to_string()),
+            }
+        }
     }
 }
 

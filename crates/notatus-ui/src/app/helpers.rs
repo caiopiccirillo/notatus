@@ -124,6 +124,21 @@ pub(super) fn label_color_button(
     })
 }
 
+/// "87%" for a model's suggestion with a confidence; "?" without one. `None`
+/// for annotations a person drew or imported, and for suggestions a person
+/// has since edited.
+pub(super) fn model_confidence_label(annotation: &AnnotationRecord) -> Option<String> {
+    if annotation.human_edited
+        || !matches!(annotation.source, notatus_core::AnnotationSource::Model(_))
+    {
+        return None;
+    }
+    Some(match annotation.confidence {
+        Some(confidence) => format!("{:.0}%", confidence * 100.0),
+        None => "?".to_string(),
+    })
+}
+
 /// A small colored tag naming an annotation's review state.
 pub(super) fn review_tag(state: notatus_core::ReviewState) -> impl IntoElement {
     use gpui_component::tag::Tag;
@@ -286,4 +301,32 @@ pub(super) fn metric(label: &'static str, value: String) -> impl IntoElement {
                     .child(value),
             )
     })
+}
+
+#[cfg(test)]
+mod confidence_tests {
+    use super::*;
+
+    #[test]
+    fn only_untouched_model_suggestions_show_a_confidence() {
+        let bbox = AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 2.0, 2.0).unwrap());
+        let model = notatus_core::ModelProvenance {
+            name: "detector".to_string(),
+            version: None,
+            invocation_id: None,
+            metadata: Default::default(),
+        };
+        let asset = AssetId::new();
+        let label = LabelId::new();
+        let mut suggestion =
+            AnnotationRecord::new_model(asset, label, bbox.clone(), model.clone(), Some(0.874));
+        let unsure = AnnotationRecord::new_model(asset, label, bbox.clone(), model, None);
+        let drawn = AnnotationRecord::new_human(asset, label, bbox, None);
+
+        assert_eq!(model_confidence_label(&suggestion).as_deref(), Some("87%"));
+        assert_eq!(model_confidence_label(&unsure).as_deref(), Some("?"));
+        assert_eq!(model_confidence_label(&drawn), None);
+        suggestion.record_human_edit();
+        assert_eq!(model_confidence_label(&suggestion), None);
+    }
 }

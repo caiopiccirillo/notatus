@@ -59,6 +59,24 @@ fn seed_project(notatus: &mut NotatusWindow, sample_image: Option<&str>) {
         .state
         .add_human_bbox(asset_id, car, bbox, None)
         .unwrap();
+    // A model's suggestion, still waiting for review.
+    let suggestion = AnnotationRecord::new_model(
+        asset_id,
+        car,
+        AnnotationGeometry::Bbox(
+            BoundingBox::from_xywh(w * 0.62, h * 0.06, w * 0.2, h * 0.16).unwrap(),
+        ),
+        notatus_core::ModelProvenance {
+            name: "detector".to_string(),
+            version: None,
+            invocation_id: None,
+            metadata: Default::default(),
+        },
+        Some(0.87),
+    );
+    let _ = notatus
+        .state
+        .apply_model_predictions(asset_id, vec![suggestion]);
     let _ = notatus.state.select_annotation(Some(annotation));
 }
 

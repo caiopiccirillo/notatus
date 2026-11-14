@@ -309,6 +309,9 @@ impl NotatusWindow {
                             .text_xs()
                             .text_color(colors.muted_foreground)
                             .child(annotation_geometry_label(&annotation.geometry))
+                            .when_some(model_confidence_label(annotation), |row, confidence| {
+                                row.child(format!("· Model {confidence}"))
+                            })
                             .child(review_tag(annotation.review_state)),
                     ),
             )
