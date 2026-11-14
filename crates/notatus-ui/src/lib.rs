@@ -7,7 +7,7 @@ mod history;
 mod state;
 
 pub use history::CoalesceKey;
-pub use state::{AnnotationTool, Direction, UiMutationError, UiState};
+pub use state::{AnnotationTool, Direction, ModelPredictionSummary, UiMutationError, UiState};
 
 #[cfg(feature = "gpui-ui")]
 mod app;

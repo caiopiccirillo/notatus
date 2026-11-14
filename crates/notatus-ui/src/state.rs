@@ -1,9 +1,10 @@
 use crate::history::{CoalesceKey, History, Selection, Snapshot};
 use notatus_core::{
-    AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetLocation, AssetRecord,
-    AssetStatus, BoundingBox, ClassificationId, ClassificationRecord, Dataset, GeometryError,
-    LabelId, Point, Polygon, ReviewState, ValidationError,
+    AnnotationGeometry, AnnotationId, AnnotationRecord, AnnotationSource, AssetId, AssetLocation,
+    AssetRecord, AssetStatus, BoundingBox, ClassificationId, ClassificationRecord, Dataset,
+    GeometryError, LabelId, Point, Polygon, ReviewState, ValidationError,
 };
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
 
@@ -478,6 +479,68 @@ impl UiState {
         Ok(())
     }
 
+    /// Replaces the model's earlier suggestions on `asset_id` with
+    /// `predictions`, as one undo step.
+    ///
+    /// Earlier model drafts nobody has touched are removed first, so running
+    /// a model again does not stack duplicates; drafts a person edited or
+    /// reviewed stay. Predictions whose label was removed while the model
+    /// ran, or that do not fit the image, are skipped.
+    pub fn apply_model_predictions(
+        &mut self,
+        asset_id: AssetId,
+        predictions: Vec<AnnotationRecord>,
+    ) -> Result<ModelPredictionSummary, UiMutationError> {
+        let dimensions = self
+            .dataset
+            .asset_by_id(asset_id)
+            .ok_or(UiMutationError::MissingAsset { asset_id })?
+            .dimensions;
+        let label_ids: BTreeSet<_> = self.dataset.labels.iter().map(|label| label.id).collect();
+        let (usable, unusable): (Vec<_>, Vec<_>) =
+            predictions.into_iter().partition(|annotation| {
+                annotation.asset_id == asset_id
+                    && label_ids.contains(&annotation.label_id)
+                    && annotation
+                        .geometry
+                        .validate_within_image(dimensions)
+                        .is_ok()
+            });
+        let is_untouched_suggestion = |annotation: &AnnotationRecord| {
+            annotation.asset_id == asset_id
+                && matches!(annotation.source, AnnotationSource::Model(_))
+                && annotation.review_state == ReviewState::Draft
+                && !annotation.human_edited
+        };
+        let replaced = self
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| is_untouched_suggestion(annotation))
+            .count();
+        let summary = ModelPredictionSummary {
+            added: usable.len(),
+            replaced,
+            skipped: unusable.len(),
+        };
+        if replaced == 0 && usable.is_empty() {
+            return Ok(summary);
+        }
+
+        self.begin_change("Add model suggestions", None);
+        self.dataset
+            .annotations
+            .retain(|annotation| !is_untouched_suggestion(annotation));
+        if self
+            .selected_annotation
+            .is_some_and(|id| self.annotation_index(id).is_err())
+        {
+            self.selected_annotation = None;
+        }
+        self.dataset.annotations.extend(usable);
+        Ok(summary)
+    }
+
     #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %annotation_id))]
     pub fn remove_annotation(
         &mut self,
@@ -739,6 +802,16 @@ impl UiState {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Polygon::new(points)?)
     }
+}
+
+/// What applying a model's predictions to one media item did.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ModelPredictionSummary {
+    pub added: usize,
+    /// Earlier untouched model drafts that were removed.
+    pub replaced: usize,
+    /// Predictions that no longer fit the project.
+    pub skipped: usize,
 }
 
 #[derive(Debug)]
@@ -1503,5 +1576,122 @@ mod tests {
 
         state.update_annotation_label(id, truck).unwrap();
         assert!(state.dataset.annotations[0].human_edited);
+    }
+
+    fn suggestion(asset: AssetId, label: LabelId, x: f64) -> AnnotationRecord {
+        AnnotationRecord::new_model(
+            asset,
+            label,
+            AnnotationGeometry::Bbox(BoundingBox::from_xywh(x, 10.0, 10.0, 10.0).unwrap()),
+            notatus_core::ModelProvenance {
+                name: "detector".to_string(),
+                version: None,
+                invocation_id: None,
+                metadata: Default::default(),
+            },
+            Some(0.8),
+        )
+    }
+
+    #[test]
+    fn running_a_model_again_replaces_only_untouched_suggestions() {
+        let mut state = UiState::new_project("demo");
+        let car = state.add_label("Car");
+        let asset = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+        let other = state.add_local_image_asset("/tmp/b.png", 100, 100).unwrap();
+        state
+            .apply_model_predictions(
+                asset,
+                vec![suggestion(asset, car, 0.0), suggestion(asset, car, 20.0)],
+            )
+            .unwrap();
+        state
+            .apply_model_predictions(other, vec![suggestion(other, car, 0.0)])
+            .unwrap();
+        // A person accepts one suggestion and moves the other.
+        let first = state.dataset.annotations[0].id;
+        let second = state.dataset.annotations[1].id;
+        state
+            .set_annotation_review_state(first, ReviewState::Accepted)
+            .unwrap();
+        state
+            .update_annotation_bbox(
+                second,
+                BoundingBox::from_xywh(30.0, 10.0, 10.0, 10.0).unwrap(),
+            )
+            .unwrap();
+        state
+            .apply_model_predictions(asset, vec![suggestion(asset, car, 50.0)])
+            .unwrap();
+
+        let summary = state
+            .apply_model_predictions(asset, vec![suggestion(asset, car, 60.0)])
+            .unwrap();
+
+        assert_eq!(
+            summary,
+            ModelPredictionSummary {
+                added: 1,
+                replaced: 1,
+                skipped: 0
+            }
+        );
+        let on_asset: Vec<_> = state
+            .dataset
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.asset_id == asset)
+            .collect();
+        assert_eq!(
+            on_asset.len(),
+            3,
+            "accepted, edited, and the new suggestion"
+        );
+        assert!(on_asset.iter().any(|annotation| annotation.id == first));
+        assert!(on_asset.iter().any(|annotation| annotation.id == second));
+        assert_eq!(
+            state
+                .dataset
+                .annotations
+                .iter()
+                .filter(|a| a.asset_id == other)
+                .count(),
+            1,
+            "other media keeps its suggestions"
+        );
+    }
+
+    #[test]
+    fn suggestions_are_one_undo_step_and_skip_removed_labels() {
+        let mut state = UiState::new_project("demo");
+        let car = state.add_label("Car");
+        let gone = state.add_label("Gone");
+        let asset = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+        state.remove_label(gone).unwrap();
+        let before = state.dataset.annotations.len();
+
+        let summary = state
+            .apply_model_predictions(
+                asset,
+                vec![
+                    suggestion(asset, car, 0.0),
+                    suggestion(asset, car, 20.0),
+                    suggestion(asset, gone, 40.0),
+                ],
+            )
+            .unwrap();
+
+        assert_eq!(
+            summary,
+            ModelPredictionSummary {
+                added: 2,
+                replaced: 0,
+                skipped: 1
+            }
+        );
+        assert_eq!(state.undo_description(), Some("Add model suggestions"));
+        state.undo();
+        assert_eq!(state.dataset.annotations.len(), before);
+        assert!(state.dataset.validate().is_ok());
     }
 }
