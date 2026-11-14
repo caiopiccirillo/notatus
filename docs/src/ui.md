@@ -126,6 +126,13 @@ live in the app layer, and completed changes go through `UiState`.
 Every drag also ends when the button is released outside the canvas, so a box
 dragged past the edge is created at the edge and a move stays one undo step.
 
+## Model Suggestions
+
+Ctrl+R runs the project's model runner on the current image and Ctrl+Shift+R
+on every unfinished image; the sparkle button in the canvas toolbar does the
+former. Suggestions arrive as drafts whose tags show the model's confidence,
+ready for the Y/X review keys. See [Pre-Annotation](inference.md).
+
 ## Right Docks
 
 - Annotations, the default: the selected media's image labels and objects. Each

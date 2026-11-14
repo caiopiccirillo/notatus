@@ -4,22 +4,17 @@ Likely next steps, most valuable first, based on the current implementation.
 
 ## Near Term
 
-### Model Pre-Annotation in the UI
-
-`notatus-infer` defines the JSON-lines protocol; the app does not run models
-yet. Needed:
-
-- configure a runner and run it on the current media or on every media
-- turn predictions into draft annotations with model provenance
-- show drafts distinctly so the Y/X review keys confirm or reject them
-- surface runner diagnostics
-
-Exports already leave out model drafts nobody has reviewed.
-
 ### Review Across Media
 
 Review keys work one media item at a time. A review queue would step through
-every draft or prediction in the project, filtered by label or confidence.
+every draft or model suggestion in the project, filtered by label or
+confidence.
+
+### More Model Tasks
+
+Runners can only suggest boxes and polygons for object detection. Next:
+image classification, interactive segmentation (click to get a mask), and
+running a model in the background while annotating.
 
 ### Undo Without Copying the Dataset
 
