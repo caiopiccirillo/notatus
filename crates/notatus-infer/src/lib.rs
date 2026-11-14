@@ -14,6 +14,10 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod runner;
+
+pub use runner::{DEFAULT_TIMEOUT, ModelRunner, RunnerError};
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct InferenceRequestId(String);
