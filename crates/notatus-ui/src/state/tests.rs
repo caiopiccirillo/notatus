@@ -974,3 +974,16 @@ fn removing_the_filtered_label_clears_it_from_the_filter() {
         }
     );
 }
+
+#[test]
+fn separate_projects_never_share_a_revision() {
+    // Views cache what they show by revision, so a project opened in place
+    // of another must not look unchanged.
+    let first = UiState::new_project("First");
+    let second = UiState::new_project("Second");
+    let reopened = UiState::from_dataset(first.dataset().clone()).unwrap();
+
+    assert_ne!(first.revision(), second.revision());
+    assert_ne!(first.revision(), reopened.revision());
+    assert!(!second.is_dirty() && !reopened.is_dirty());
+}

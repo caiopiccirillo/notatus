@@ -59,9 +59,14 @@ pub struct UiState {
     review_filter: ReviewFilter,
     revision: u64,
     saved_revision: u64,
-    next_revision: u64,
     history: History,
     batch_depth: usize,
+}
+
+/// A revision no state in this process has used.
+fn fresh_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Which way to step through media or annotations.
@@ -73,6 +78,7 @@ pub enum Direction {
 
 impl UiState {
     fn with_dataset(dataset: Dataset) -> Self {
+        let revision = fresh_revision();
         Self {
             dataset,
             active_tool: AnnotationTool::Select,
@@ -80,9 +86,8 @@ impl UiState {
             selected_annotation: None,
             selected_label: None,
             review_filter: ReviewFilter::default(),
-            revision: 0,
-            saved_revision: 0,
-            next_revision: 1,
+            revision,
+            saved_revision: revision,
             history: History::default(),
             batch_depth: 0,
         }
@@ -120,8 +125,9 @@ impl UiState {
         self.selected_label = None;
     }
 
-    /// Monotonic identifier of the current dataset contents. Undo restores
-    /// earlier revisions, so equal revisions mean equal datasets.
+    /// Identifies the current dataset contents. Revisions are unique across
+    /// every state in the process and undo restores earlier ones, so equal
+    /// revisions mean equal datasets, even across projects.
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -133,8 +139,7 @@ impl UiState {
             let snapshot = self.snapshot();
             self.history.record(snapshot, description, key);
         }
-        self.revision = self.next_revision;
-        self.next_revision += 1;
+        self.revision = fresh_revision();
     }
 
     /// Runs several mutations as one undo step.
