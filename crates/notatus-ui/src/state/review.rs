@@ -1,8 +1,37 @@
 //! Reviewing annotations and applying model suggestions.
 
-use super::{UiMutationError, UiState};
-use notatus_core::{AnnotationId, AnnotationRecord, AnnotationSource, AssetId, ReviewState};
-use std::collections::BTreeSet;
+use super::{Direction, UiMutationError, UiState};
+use notatus_core::{
+    AnnotationId, AnnotationRecord, AnnotationSource, AssetId, LabelId, ReviewState,
+};
+use std::collections::{BTreeSet, HashMap};
+
+/// Which drafts the review queue visits. The default visits every draft.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ReviewFilter {
+    /// Only drafts with this label.
+    pub label: Option<LabelId>,
+    /// Only model suggestions less confident than this, from 0 to 1. Shapes
+    /// a person drew have no confidence, so this leaves them out.
+    pub below_confidence: Option<f32>,
+}
+
+impl ReviewFilter {
+    pub fn is_active(&self) -> bool {
+        self.label.is_some() || self.below_confidence.is_some()
+    }
+
+    /// Whether the queue visits `annotation`: a draft that matches.
+    pub fn accepts(&self, annotation: &AnnotationRecord) -> bool {
+        annotation.review_state == ReviewState::Draft
+            && self.label.is_none_or(|label| annotation.label_id == label)
+            && self.below_confidence.is_none_or(|threshold| {
+                annotation
+                    .confidence
+                    .is_some_and(|confidence| confidence < threshold)
+            })
+    }
+}
 
 impl UiState {
     /// Sets an annotation's review state, selecting it. No-op when unchanged.
@@ -27,8 +56,25 @@ impl UiState {
         Ok(())
     }
 
-    /// The first draft annotation after `from` on the same media, wrapping
-    /// around. `None` once every annotation there has been reviewed.
+    pub fn review_filter(&self) -> ReviewFilter {
+        self.review_filter
+    }
+
+    pub fn set_review_filter(&mut self, filter: ReviewFilter) {
+        self.review_filter = filter;
+    }
+
+    /// How many drafts the review queue still has to visit.
+    pub fn review_queue_len(&self) -> usize {
+        self.dataset
+            .annotations
+            .iter()
+            .filter(|annotation| self.review_filter.accepts(annotation))
+            .count()
+    }
+
+    /// The first draft in the review queue after `from` on the same media,
+    /// wrapping around. `None` once the queue has nothing left there.
     pub fn next_draft_annotation(&self, from: AnnotationId) -> Option<AnnotationId> {
         let asset_id = self
             .dataset
@@ -47,8 +93,77 @@ impl UiState {
             .position(|annotation| annotation.id == from)?;
         (1..on_asset.len())
             .map(|offset| on_asset[(start + offset) % on_asset.len()])
-            .find(|annotation| annotation.review_state == ReviewState::Draft)
+            .find(|annotation| self.review_filter.accepts(annotation))
             .map(|annotation| annotation.id)
+    }
+
+    /// The draft before or after the current position in the review queue,
+    /// across all media, wrapping around.
+    ///
+    /// The queue visits media in list order and each media's annotations in
+    /// the order they were made. The position is the selected annotation;
+    /// with none selected, it is the start of the selected media going
+    /// forward, or its end going back, so that media's drafts come first.
+    /// The selected annotation itself is never returned.
+    pub fn adjacent_review_draft(&self, direction: Direction) -> Option<AnnotationId> {
+        let asset_order: HashMap<AssetId, usize> = self
+            .dataset
+            .assets
+            .iter()
+            .enumerate()
+            .map(|(index, asset)| (asset.id, index))
+            .collect();
+        // Annotations sit at odd positions within their media, leaving the
+        // even ones as gaps to start from.
+        let position = |index: usize, annotation: &AnnotationRecord| {
+            asset_order
+                .get(&annotation.asset_id)
+                .map(|asset| (*asset, 2 * index + 1))
+        };
+        let selected_position = self.selected_annotation.and_then(|id| {
+            self.dataset
+                .annotations
+                .iter()
+                .enumerate()
+                .find(|(_, annotation)| annotation.id == id)
+                .and_then(|(index, annotation)| position(index, annotation))
+        });
+        let media_position = self
+            .selected_asset
+            .and_then(|id| asset_order.get(&id).copied());
+        let anchor = match (selected_position, media_position, direction) {
+            (Some(position), _, _) => position,
+            (None, Some(asset), Direction::Next) => (asset, 0),
+            (None, Some(asset), Direction::Previous) => (asset, usize::MAX),
+            (None, None, Direction::Next) => (0, 0),
+            (None, None, Direction::Previous) => (usize::MAX, usize::MAX),
+        };
+
+        let mut queue: Vec<_> = self
+            .dataset
+            .annotations
+            .iter()
+            .enumerate()
+            .filter(|(_, annotation)| {
+                self.review_filter.accepts(annotation)
+                    && Some(annotation.id) != self.selected_annotation
+            })
+            .filter_map(|(index, annotation)| Some((position(index, annotation)?, annotation.id)))
+            .collect();
+        queue.sort_unstable_by_key(|(position, _)| *position);
+
+        let found = match direction {
+            Direction::Next => queue
+                .iter()
+                .find(|(position, _)| *position > anchor)
+                .or(queue.first()),
+            Direction::Previous => queue
+                .iter()
+                .rev()
+                .find(|(position, _)| *position < anchor)
+                .or(queue.last()),
+        };
+        found.map(|(_, id)| *id)
     }
 
     /// Replaces the model's earlier suggestions on `asset_id` with

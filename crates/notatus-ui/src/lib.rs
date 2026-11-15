@@ -7,7 +7,8 @@
 mod state;
 
 pub use state::{
-    AnnotationTool, CoalesceKey, Direction, ModelPredictionSummary, UiMutationError, UiState,
+    AnnotationTool, CoalesceKey, Direction, ModelPredictionSummary, ReviewFilter, UiMutationError,
+    UiState,
 };
 
 #[cfg(feature = "gpui-ui")]

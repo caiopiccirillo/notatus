@@ -822,3 +822,155 @@ fn suggestions_are_one_undo_step_and_skip_removed_labels() {
     assert_eq!(state.dataset.annotations.len(), before);
     assert!(state.dataset.validate().is_ok());
 }
+
+fn draft_box(state: &mut UiState, asset: AssetId, label: LabelId, x: f64) -> AnnotationId {
+    state
+        .add_human_bbox(
+            asset,
+            label,
+            BoundingBox::from_xywh(x, 10.0, 10.0, 10.0).unwrap(),
+            None,
+        )
+        .unwrap()
+}
+
+/// Three media: the first has a draft, an accepted box, and a draft; the
+/// second has nothing; the third has one draft.
+fn review_project() -> (UiState, [AssetId; 3], [AnnotationId; 3]) {
+    let mut state = UiState::new_project("demo");
+    let label = state.add_label("car");
+    let assets = [
+        state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap(),
+        state.add_local_image_asset("/tmp/b.png", 100, 100).unwrap(),
+        state.add_local_image_asset("/tmp/c.png", 100, 100).unwrap(),
+    ];
+    let first = draft_box(&mut state, assets[0], label, 0.0);
+    let accepted = draft_box(&mut state, assets[0], label, 20.0);
+    state
+        .set_annotation_review_state(accepted, ReviewState::Accepted)
+        .unwrap();
+    let second = draft_box(&mut state, assets[0], label, 40.0);
+    let third = draft_box(&mut state, assets[2], label, 0.0);
+    state.select_asset(assets[0]).unwrap();
+    (state, assets, [first, second, third])
+}
+
+#[test]
+fn the_review_queue_visits_drafts_across_media_and_wraps() {
+    let (mut state, _, [first, second, third]) = review_project();
+    assert_eq!(state.review_queue_len(), 3);
+
+    let mut visited = Vec::new();
+    for _ in 0..4 {
+        let next = state.adjacent_review_draft(Direction::Next).unwrap();
+        state.select_annotation(Some(next)).unwrap();
+        visited.push(next);
+    }
+    assert_eq!(visited, [first, second, third, first]);
+
+    assert_eq!(
+        state.adjacent_review_draft(Direction::Previous),
+        Some(third)
+    );
+}
+
+#[test]
+fn without_a_selected_annotation_the_queue_starts_at_the_selected_media() {
+    let (mut state, assets, [_, second, third]) = review_project();
+
+    state.select_asset(assets[1]).unwrap();
+    assert_eq!(state.adjacent_review_draft(Direction::Next), Some(third));
+    assert_eq!(
+        state.adjacent_review_draft(Direction::Previous),
+        Some(second)
+    );
+
+    state.select_asset(assets[2]).unwrap();
+    assert_eq!(state.adjacent_review_draft(Direction::Next), Some(third));
+    assert_eq!(
+        state.adjacent_review_draft(Direction::Previous),
+        Some(third)
+    );
+}
+
+#[test]
+fn the_only_draft_left_has_nowhere_to_go() {
+    let (mut state, _, [first, second, third]) = review_project();
+    for id in [first, second] {
+        state
+            .set_annotation_review_state(id, ReviewState::Rejected)
+            .unwrap();
+    }
+    state.select_annotation(Some(third)).unwrap();
+
+    assert_eq!(state.review_queue_len(), 1);
+    assert_eq!(state.adjacent_review_draft(Direction::Next), None);
+}
+
+#[test]
+fn the_review_filter_narrows_the_queue_by_label_and_confidence() {
+    let mut state = UiState::new_project("demo");
+    let car = state.add_label("car");
+    let person = state.add_label("person");
+    let asset = state.add_local_image_asset("/tmp/a.png", 100, 100).unwrap();
+    let mut unsure = suggestion(asset, car, 0.0);
+    unsure.confidence = Some(0.3);
+    let unsure_id = unsure.id;
+    let sure = suggestion(asset, car, 20.0);
+    let unsure_person = {
+        let mut annotation = suggestion(asset, person, 40.0);
+        annotation.confidence = Some(0.2);
+        annotation
+    };
+    state
+        .apply_model_predictions(asset, vec![unsure, sure, unsure_person])
+        .unwrap();
+    let drawn = draft_box(&mut state, asset, car, 60.0);
+    state.select_annotation(None).unwrap();
+    assert_eq!(state.review_queue_len(), 4);
+
+    state.set_review_filter(ReviewFilter {
+        label: Some(car),
+        below_confidence: None,
+    });
+    assert_eq!(state.review_queue_len(), 3);
+
+    state.set_review_filter(ReviewFilter {
+        label: None,
+        below_confidence: Some(0.5),
+    });
+    assert_eq!(state.review_queue_len(), 2);
+    assert_eq!(
+        state.adjacent_review_draft(Direction::Next),
+        Some(unsure_id)
+    );
+
+    state.set_review_filter(ReviewFilter {
+        label: Some(car),
+        below_confidence: Some(0.5),
+    });
+    assert_eq!(state.review_queue_len(), 1);
+    // Reviewing moves within the media only to drafts the filter keeps.
+    assert_eq!(state.next_draft_annotation(drawn), Some(unsure_id));
+    assert_eq!(state.next_draft_annotation(unsure_id), None);
+}
+
+#[test]
+fn removing_the_filtered_label_clears_it_from_the_filter() {
+    let mut state = UiState::new_project("demo");
+    let car = state.add_label("car");
+    state.set_review_filter(ReviewFilter {
+        label: Some(car),
+        below_confidence: Some(0.5),
+    });
+
+    state.remove_label(car).unwrap();
+
+    assert_eq!(
+        state.review_filter(),
+        ReviewFilter {
+            label: None,
+            below_confidence: Some(0.5),
+        }
+    );
+}

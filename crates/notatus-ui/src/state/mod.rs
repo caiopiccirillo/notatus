@@ -16,7 +16,7 @@ mod tests;
 
 pub use error::UiMutationError;
 pub use history::CoalesceKey;
-pub use review::ModelPredictionSummary;
+pub use review::{ModelPredictionSummary, ReviewFilter};
 
 use history::{History, Selection, Snapshot};
 use notatus_core::{AnnotationId, AssetId, Dataset, LabelId};
@@ -55,6 +55,8 @@ pub struct UiState {
     selected_annotation: Option<AnnotationId>,
     /// The label new shapes get, and the selected annotation's label.
     selected_label: Option<LabelId>,
+    /// Which drafts the review queue visits. Not part of undo.
+    review_filter: ReviewFilter,
     revision: u64,
     saved_revision: u64,
     next_revision: u64,
@@ -77,6 +79,7 @@ impl UiState {
             selected_asset: None,
             selected_annotation: None,
             selected_label: None,
+            review_filter: ReviewFilter::default(),
             revision: 0,
             saved_revision: 0,
             next_revision: 1,

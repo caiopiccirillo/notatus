@@ -98,6 +98,9 @@ impl UiState {
             .classifications
             .retain(|classification| classification.label_id != label_id);
 
+        if self.review_filter.label == Some(label_id) {
+            self.review_filter.label = None;
+        }
         if self.selected_label == Some(label_id) {
             self.selected_label = self.dataset.labels.first().map(|label| label.id);
         }
