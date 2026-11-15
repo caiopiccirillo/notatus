@@ -177,6 +177,7 @@ fn screenshots() {
             }
             notatus.left_dock = LeftDock::Labels;
             notatus.right_dock = RightDock::Details;
+            notatus.model_run.pretend_running(3, 8, 12);
             cx.notify();
         });
     })
@@ -195,6 +196,7 @@ fn screenshots() {
         view.update(cx, |notatus, cx| {
             notatus.left_dock = LeftDock::Media;
             notatus.right_dock = RightDock::Annotations;
+            notatus.model_run = Default::default();
             cx.notify();
         });
     })

@@ -33,9 +33,38 @@ struct ModelJob {
     _task: gpui::Task<()>,
 }
 
+/// How far the current run is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct ModelProgress {
+    pub(super) done: usize,
+    pub(super) total: usize,
+    pub(super) added: usize,
+}
+
 impl ModelRunState {
     pub(super) fn is_running(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// A run in progress that does nothing, for screenshots.
+    #[cfg(test)]
+    pub(super) fn pretend_running(&mut self, done: usize, total: usize, added: usize) {
+        self.job = Some(ModelJob {
+            cancel: Arc::default(),
+            done,
+            total,
+            added,
+            skipped: 0,
+            _task: gpui::Task::ready(()),
+        });
+    }
+
+    pub(super) fn progress(&self) -> Option<ModelProgress> {
+        self.job.as_ref().map(|job| ModelProgress {
+            done: job.done,
+            total: job.total,
+            added: job.added,
+        })
     }
 }
 
@@ -212,7 +241,7 @@ impl NotatusWindow {
             skipped: 0,
             _task: task,
         });
-        self.status_message = Some(format!("Model: 0/{total} images"));
+        self.status_message = None;
         cx.notify();
     }
 
@@ -251,13 +280,6 @@ impl NotatusWindow {
             job.done += 1;
             job.added += added;
             job.skipped += skipped;
-            self.status_message = Some(format!(
-                "Model: {}/{} images · {} suggestion{}",
-                job.done,
-                job.total,
-                job.added,
-                super::helpers::plural(job.added)
-            ));
         }
         cx.notify();
         false

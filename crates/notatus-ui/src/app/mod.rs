@@ -31,7 +31,6 @@ use std::rc::Rc;
 mod actions;
 mod assets;
 mod autosave;
-mod bottom_bar;
 mod canvas;
 mod commands;
 mod dock;
@@ -56,6 +55,7 @@ mod window;
 use view_options::ViewToggle;
 
 mod shortcuts;
+mod status_bar;
 
 #[cfg(test)]
 mod tests;

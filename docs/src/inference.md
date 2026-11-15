@@ -7,12 +7,14 @@ be a runner.
 
 ## Using It in the App
 
-1. Choose the runner with **Choose model runner…** in the command palette. A
-   Python script (`.py`) runs through `python3`; anything else runs directly.
+1. Choose the runner with **Model → Choose model runner…** or the command
+   palette. A Python script (`.py`) runs through `python3`; anything else runs
+   directly.
 2. Press **Ctrl+R** (or the sparkle button in the canvas toolbar) to run the
    model on the current image, or **Ctrl+Shift+R** to run it on every image not
-   marked done. Progress shows in the status bar; **Stop model run** in the
-   palette stops after the current image.
+   marked done. The status bar shows a progress bar and how many suggestions
+   have arrived; its stop button, or **Model → Stop**, stops after the current
+   image.
 3. Suggestions appear as drafts whose tags show the model's confidence
    ("Car 87%"). Review them with **Y** to accept, **X** to reject, or edit them,
    and press **N** to go to the next image with suggestions; the review filter

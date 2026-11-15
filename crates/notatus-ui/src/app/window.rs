@@ -242,7 +242,7 @@ impl NotatusWindow {
                         ),
                 ),
             )
-            .child(self.bottom_bar(cx))
+            .child(self.status_bar(cx))
     }
 }
 

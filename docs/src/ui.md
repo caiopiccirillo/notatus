@@ -63,7 +63,7 @@ modules under `src/app/` by feature:
 - `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
 - `tools/`: tool definitions, in-progress drawing state, and the toolbar
 - `menus.rs`: the application menus
-- `dock.rs`, `left_dock/`, `right_dock/`, `bottom_bar.rs`, `titlebar.rs`,
+- `dock.rs`, `left_dock/`, `right_dock/`, `status_bar.rs`, `titlebar.rs`,
   `label_picker.rs`, `view_options.rs`: the panels around the canvas
 - `assets.rs`: icons beyond the default set
 - `tests/`: tests that open the real window in GPUI's test platform
@@ -91,6 +91,14 @@ one.
 Project persistence uses `notatus-storage::LocalProjectStore` through the
 autosave pipeline described in [Storage](storage.md). A project can be unsaved
 in memory or backed by a local folder.
+
+## Status Bar
+
+The status bar keeps the media navigation centered under the canvas: previous
+and next, progress through the project, and marking the media done. Its left
+side shows the last command's feedback; its right side shows a running model's
+progress, with a stop button, and the zoom level, which fits the image when
+clicked.
 
 ## Keyboard
 
