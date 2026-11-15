@@ -284,31 +284,34 @@ impl NotatusWindow {
         let folder_view = view.clone();
         let filter_view = view.clone();
         let current = self.media_list.read(cx).delegate().filter();
+        let has_media = !self.state.dataset().assets.is_empty();
         div()
             .flex()
             .gap_1()
-            .child(
-                Button::new("media-filter")
-                    .xsmall()
-                    .ghost()
-                    .icon(Icon::new(gpui_kit_assets::IconName::ListFilter))
-                    .selected(current != MediaFilter::All)
-                    .tooltip(current.title())
-                    .dropdown_menu(move |menu, _, _| {
-                        MediaFilter::ALL.into_iter().fold(menu, |menu, filter| {
-                            let view = filter_view.clone();
-                            menu.item(
-                                PopupMenuItem::new(filter.title())
-                                    .checked(filter == current)
-                                    .on_click(move |_, _, cx| {
-                                        let _ = view.update(cx, |notatus, cx| {
-                                            notatus.set_media_filter(filter, cx);
-                                        });
-                                    }),
-                            )
-                        })
-                    }),
-            )
+            .when(has_media, |actions| {
+                actions.child(
+                    Button::new("media-filter")
+                        .xsmall()
+                        .ghost()
+                        .icon(Icon::new(gpui_kit_assets::IconName::ListFilter))
+                        .selected(current != MediaFilter::All)
+                        .tooltip(current.title())
+                        .dropdown_menu(move |menu, _, _| {
+                            MediaFilter::ALL.into_iter().fold(menu, |menu, filter| {
+                                let view = filter_view.clone();
+                                menu.item(
+                                    PopupMenuItem::new(filter.title())
+                                        .checked(filter == current)
+                                        .on_click(move |_, _, cx| {
+                                            let _ = view.update(cx, |notatus, cx| {
+                                                notatus.set_media_filter(filter, cx);
+                                            });
+                                        }),
+                                )
+                            })
+                        }),
+                )
+            })
             .child(
                 Button::new("media-import")
                     .xsmall()
@@ -338,7 +341,7 @@ impl NotatusWindow {
     ) -> impl IntoElement {
         let colors = cx.theme().colors;
         if self.state.dataset().assets.is_empty() {
-            return media_empty_state(view, colors).into_any_element();
+            return media_empty_state(colors).into_any_element();
         }
         let list = self.media_list.clone();
         div()
@@ -373,42 +376,18 @@ impl NotatusWindow {
     }
 }
 
-fn media_empty_state(view: gpui::WeakEntity<NotatusWindow>, colors: ThemeColor) -> gpui::Div {
-    let folder_view = view.clone();
+/// The canvas holds the import buttons while the project has no media, so
+/// the dock only says why it is empty.
+fn media_empty_state(colors: ThemeColor) -> gpui::Div {
     div()
         .size_full()
         .flex()
-        .flex_col()
         .items_center()
         .justify_center()
-        .gap_3()
         .p_4()
         .text_sm()
         .text_color(colors.muted_foreground)
-        .child("Import images or a whole folder to start")
-        .child(
-            div()
-                .flex()
-                .gap_2()
-                .child(
-                    Button::new("media-empty-import")
-                        .small()
-                        .icon(Icon::new(IconName::Plus))
-                        .label("Images")
-                        .on_click(move |_, window, cx| {
-                            open_media_picker(view.clone(), window, cx);
-                        }),
-                )
-                .child(
-                    Button::new("media-empty-import-folder")
-                        .small()
-                        .icon(Icon::new(IconName::FolderOpen))
-                        .label("Folder")
-                        .on_click(move |_, window, cx| {
-                            open_folder_picker(folder_view.clone(), window, cx);
-                        }),
-                ),
-        )
+        .child("No media yet")
 }
 
 #[cfg(test)]
