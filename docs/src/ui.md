@@ -140,7 +140,10 @@ removing are in the row's options and right-click menus.
 ## Canvas Area
 
 The center panel shows the selected image with GPUI's `img` element, fitted to
-the canvas; S3 media is not previewed yet. Tool metadata and interaction state
+the canvas, which fills the whole panel; S3 media is not previewed yet. A
+`gpui-component::toolbar::Toolbar` floats over its corner: the tools as one
+group, the active label, display options, the model, and fit. Tooltips show
+the keys bound to each command's action. Tool metadata and interaction state
 live in the app layer, and completed changes go through `UiState`.
 
 - Box (B) draws on empty space and moves or resizes existing boxes; Alt always

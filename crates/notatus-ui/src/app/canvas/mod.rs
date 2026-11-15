@@ -62,51 +62,44 @@ impl NotatusWindow {
         let view = cx.weak_entity();
         let colors = cx.theme().colors;
 
-        div()
-            .size_full()
-            .p_6()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(colors.background)
-            .child(
-                div()
-                    .size_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.muted)
-                    .overflow_hidden()
-                    .relative()
-                    .when_some(selected_asset, |canvas, asset| {
-                        canvas.child(interactive_image_canvas(InteractiveImageCanvas {
-                            asset,
-                            view,
-                            drawing,
-                            polygon_drawing,
-                            shared_image_layout: canvas_image_layout,
-                            annotations: &state_labels,
-                            active_tool,
-                            viewport,
-                            canvas_cursor,
-                            preview_color: preview_color.clone(),
-                            options,
-                            crosshair: (options.crosshair
-                                && matches!(
-                                    active_tool,
-                                    AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
-                                ))
-                            .then_some(self.tools.pointer_image_pos)
-                            .flatten(),
-                        }))
-                    })
-                    .when(selected_asset.is_none(), |canvas| {
-                        canvas.child(canvas_empty_state(has_media))
-                    })
-                    .child(self.canvas_toolbar(cx)),
-            )
+        // The image fills the whole center panel, with the toolbar floating
+        // over its corner.
+        div().size_full().child(
+            div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(colors.muted)
+                .overflow_hidden()
+                .relative()
+                .when_some(selected_asset, |canvas, asset| {
+                    canvas.child(interactive_image_canvas(InteractiveImageCanvas {
+                        asset,
+                        view,
+                        drawing,
+                        polygon_drawing,
+                        shared_image_layout: canvas_image_layout,
+                        annotations: &state_labels,
+                        active_tool,
+                        viewport,
+                        canvas_cursor,
+                        preview_color: preview_color.clone(),
+                        options,
+                        crosshair: (options.crosshair
+                            && matches!(
+                                active_tool,
+                                AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
+                            ))
+                        .then_some(self.tools.pointer_image_pos)
+                        .flatten(),
+                    }))
+                })
+                .when(selected_asset.is_none(), |canvas| {
+                    canvas.child(canvas_empty_state(has_media))
+                })
+                .child(self.canvas_toolbar(cx)),
+        )
     }
 }
 

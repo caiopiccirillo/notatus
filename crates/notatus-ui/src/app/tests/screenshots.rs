@@ -217,10 +217,10 @@ fn screenshots() {
     .unwrap();
     cx.update(|cx| Theme::change(ThemeMode::Light, None, cx));
     let _ = cx.capture_screenshot(window);
-    click(&mut cx, window, gpui::point(px(614.0), px(88.0)));
+    click(&mut cx, window, gpui::point(px(589.0), px(63.0)));
     capture(&mut cx, window, &out_dir.join("view-options-light.png"));
     // Close the popover again, so later scenes do not show it.
-    click(&mut cx, window, gpui::point(px(614.0), px(88.0)));
+    click(&mut cx, window, gpui::point(px(589.0), px(63.0)));
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, _| {
             notatus.view_options = Default::default();

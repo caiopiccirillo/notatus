@@ -128,6 +128,7 @@ impl NotatusWindow {
             .trigger(
                 Button::new("tool-view-options")
                     .small()
+                    .ghost()
                     .icon(Icon::new(icon))
                     .tooltip("View options"),
             )

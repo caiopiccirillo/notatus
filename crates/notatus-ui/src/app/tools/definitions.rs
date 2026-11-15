@@ -6,8 +6,8 @@ pub(in crate::app) struct CanvasToolDefinition {
     pub(in crate::app) id: &'static str,
     pub(in crate::app) label: &'static str,
     pub(in crate::app) tooltip: &'static str,
-    /// The bare key that switches to the tool, shown in its tooltip.
-    pub(in crate::app) key: &'static str,
+    /// The action that switches to the tool, whose key the tooltip shows.
+    pub(in crate::app) action: &'static dyn gpui::Action,
     /// From the full Lucide set, which has shapes that read as each tool.
     pub(in crate::app) icon: gpui_kit_assets::IconName,
 }
@@ -19,7 +19,7 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
             id: "tool-draw-box",
             label: "Box",
             tooltip: "Draw boxes on empty space, drag boxes to edit (alt: always draw)",
-            key: "B",
+            action: &crate::app::actions::BoxTool,
             icon: gpui_kit_assets::IconName::VectorSquare,
         },
         CanvasToolDefinition {
@@ -27,7 +27,7 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
             id: "tool-draw-polygon",
             label: "Polygon",
             tooltip: "Click to add points, double-click to close the shape",
-            key: "P",
+            action: &crate::app::actions::PolygonTool,
             icon: gpui_kit_assets::IconName::Pentagon,
         },
         CanvasToolDefinition {
@@ -35,7 +35,7 @@ pub(in crate::app) fn canvas_tool_definitions() -> [CanvasToolDefinition; 3] {
             id: "tool-select",
             label: "Select",
             tooltip: "Select, move, and resize without drawing; drag empty space to pan",
-            key: "V",
+            action: &crate::app::actions::SelectTool,
             icon: gpui_kit_assets::IconName::MousePointer2,
         },
     ]
