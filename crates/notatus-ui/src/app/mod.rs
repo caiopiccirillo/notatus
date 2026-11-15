@@ -32,6 +32,7 @@ mod actions;
 mod assets;
 mod autosave;
 mod canvas;
+mod catalog;
 mod commands;
 mod dock;
 mod export_commands;

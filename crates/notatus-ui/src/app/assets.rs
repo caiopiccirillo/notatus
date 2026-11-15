@@ -10,8 +10,13 @@ use std::borrow::Cow;
 gpui_kit_assets::icon_assets!(
     AppIcons,
     [
+        ArrowDown,
+        ArrowUp,
+        CheckCheck,
+        ChevronsRight,
         Circle,
         CircleStop,
+        Command,
         Crosshair,
         Download,
         FileCog,
@@ -28,7 +33,11 @@ gpui_kit_assets::icon_assets!(
         SaveAll,
         Sparkles,
         Tag,
-        VectorSquare
+        Trash,
+        VectorSquare,
+        X,
+        ZoomIn,
+        ZoomOut
     ]
 );
 

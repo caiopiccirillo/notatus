@@ -2,79 +2,26 @@
 //! and Windows. Every item dispatches an action, so menus, shortcuts, and the
 //! command palette all run the same handlers and show the same keys.
 
-use super::actions::*;
+use super::catalog::{Entry, GROUPS};
 use gpui::{App, Menu, MenuItem};
 use gpui_component::GlobalState;
 
 fn menus() -> Vec<Menu> {
-    vec![
-        Menu::new("File").items([
-            MenuItem::action("New project", NewProject),
-            MenuItem::action("Open project…", OpenProject),
-            MenuItem::separator(),
-            MenuItem::action("Save", SaveProject),
-            MenuItem::action("Save as…", SaveProjectAs),
-            MenuItem::separator(),
-            MenuItem::action("Import images…", ImportMedia),
-            MenuItem::action("Import folder…", ImportFolder),
-            MenuItem::separator(),
-            MenuItem::action("Export annotations…", ExportAnnotations),
-        ]),
-        Menu::new("Edit").items([
-            MenuItem::action("Undo", Undo),
-            MenuItem::action("Redo", Redo),
-            MenuItem::separator(),
-            MenuItem::action("Delete selection", DeleteSelection),
-            MenuItem::separator(),
-            MenuItem::action("New label", NewLabel),
-            MenuItem::action("Choose label", PickLabel),
-        ]),
-        Menu::new("View").items([
-            MenuItem::action("Fit image", FitCanvas),
-            MenuItem::action("Zoom in", ZoomIn),
-            MenuItem::action("Zoom out", ZoomOut),
-            MenuItem::separator(),
-            MenuItem::action("Hide annotations", ToggleHideAnnotations),
-            MenuItem::action("Label names", ToggleLabelNames),
-            MenuItem::action("Crosshair", ToggleCrosshair),
-            MenuItem::action("Focus selected", ToggleFocusSelected),
-            MenuItem::separator(),
-            MenuItem::action("Toggle light and dark theme", ToggleTheme),
-        ]),
-        Menu::new("Annotate").items([
-            MenuItem::action("Select tool", SelectTool),
-            MenuItem::action("Box tool", BoxTool),
-            MenuItem::action("Polygon tool", PolygonTool),
-            MenuItem::separator(),
-            MenuItem::action("Next annotation", NextAnnotation),
-            MenuItem::action("Previous annotation", PreviousAnnotation),
-            MenuItem::separator(),
-            MenuItem::action("Next media", NextMedia),
-            MenuItem::action("Previous media", PreviousMedia),
-            MenuItem::action("Next unfinished media", NextPendingMedia),
-            MenuItem::action("Mark media done", ToggleMediaDone),
-            MenuItem::action("Done and next", DoneAndNext),
-        ]),
-        Menu::new("Review").items([
-            MenuItem::action("Accept", AcceptAnnotation),
-            MenuItem::action("Reject", RejectAnnotation),
-            MenuItem::action("Reset to draft", ResetAnnotationReview),
-            MenuItem::separator(),
-            MenuItem::action("Next draft", NextDraft),
-            MenuItem::action("Previous draft", PreviousDraft),
-        ]),
-        Menu::new("Model").items([
-            MenuItem::action("Suggest on this image", RunModel),
-            MenuItem::action("Suggest on unfinished images", RunModelOnUnfinished),
-            MenuItem::action("Stop", StopModelRun),
-            MenuItem::separator(),
-            MenuItem::action("Choose model runner…", ChooseModelRunner),
-        ]),
-        Menu::new("Help").items([
-            MenuItem::action("Command palette", CommandPalette),
-            MenuItem::action("Keyboard shortcuts", ShowShortcuts),
-        ]),
-    ]
+    GROUPS
+        .iter()
+        .map(|group| {
+            Menu::new(group.title).items(group.entries.iter().map(|entry| match entry {
+                Entry::Command(command) => MenuItem::Action {
+                    name: command.title.into(),
+                    action: command.action.boxed_clone(),
+                    os_action: None,
+                    checked: false,
+                    disabled: false,
+                },
+                Entry::Separator => MenuItem::separator(),
+            }))
+        })
+        .collect()
 }
 
 /// Installs the menus with the platform, for macOS, and for the title bar's
@@ -90,6 +37,7 @@ pub(super) const IN_TITLE_BAR: bool = !cfg!(target_os = "macos");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::actions::*;
     use crate::app::tests::support::open_test_window;
     use gpui::{AppContext as _, OwnedMenuItem, TestAppContext};
     use gpui_component::kbd::Kbd;

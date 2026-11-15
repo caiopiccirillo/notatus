@@ -50,6 +50,7 @@ The `gpui-ui` feature enables `gpui`, `gpui_platform`, `gpui-component`,
 `NotatusWindow` (`app/window.rs`) is the one view; its behavior is split into
 modules under `src/app/` by feature:
 
+- `catalog.rs`: every command's name, icon, and group
 - `actions.rs`: actions, key bindings, and their handlers
 - `commands.rs`, `palette.rs`, `shortcuts.rs`: shared commands, the command
   palette, and the shortcut sheet
@@ -102,10 +103,15 @@ clicked.
 
 ## Keyboard
 
-The annotation loop is keyboard-driven. `?` opens a sheet of every shortcut,
-grouped under Draw, Media, Review, View, and Project; each row shows the key
-bound to its action, so the sheet follows the bindings in `actions.rs`. Ctrl+K
-opens the command palette, which lists the same commands with their keys.
+The annotation loop is keyboard-driven. Every command is named and grouped
+once, in `catalog.rs`; the menus, the shortcut sheet, and the command palette
+are built from that list, and each shows the key bound to the command's action
+in `actions.rs`, so none of them can drift from the others or from the
+bindings. `?` opens the sheet, grouped like the menus and listing the commands
+that have a key. Ctrl+K opens the palette, which leads with the annotation
+commands, offers commands on a selection or the current media only while there
+is one, says what Undo and the view toggles will do, and adds a row per label
+and per media.
 
 Commands that open pickers or dialogs (new, open, save, import, export) are
 deferred out of their action listener with `run_outside_update`, because they

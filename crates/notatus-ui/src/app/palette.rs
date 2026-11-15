@@ -1,6 +1,7 @@
 //! Ctrl+K command palette, built from the same actions as the keymap.
 
 use super::actions::*;
+use super::catalog::{Command as CatalogCommand, GROUPS, Lucide};
 use super::helpers::{asset_display_name, compact_text};
 use super::*;
 use gpui::Action;
@@ -32,7 +33,7 @@ impl PaletteGroup {
         keywords: Vec<String>,
         icon: impl Into<Lucide>,
         checked: bool,
-        action: impl Action,
+        action: Box<dyn Action>,
     ) -> Self {
         let label = label.into();
         let icon = icon.into();
@@ -52,22 +53,10 @@ impl PaletteGroup {
                 )
             });
         self.group = self.group.item(item);
-        self.actions.push(Box::new(action));
+        self.actions.push(action);
         self
     }
-
-    fn command(
-        self,
-        label: impl Into<SharedString>,
-        icon: impl Into<Lucide>,
-        action: impl Action,
-    ) -> Self {
-        self.push(label, Vec::new(), icon, false, action)
-    }
 }
-
-/// The full Lucide catalog, for icons the component set lacks.
-type Lucide = gpui_kit_assets::IconName;
 
 /// Icon, label, and the shortcut as bound in the main window, where the
 /// palette's own text field would otherwise hide bare-key bindings.
@@ -149,174 +138,146 @@ impl NotatusWindow {
         });
     }
 
+    /// The catalog's commands that apply right now, then a row per label
+    /// and per media.
     fn palette_groups(&self) -> Vec<PaletteGroup> {
-        let undo = self
-            .state
-            .undo_description()
-            .map(|description| format!("Undo {}", description.to_lowercase()))
-            .unwrap_or_else(|| "Undo".to_string());
-        let redo = self
-            .state
-            .redo_description()
-            .map(|description| format!("Redo {}", description.to_lowercase()))
-            .unwrap_or_else(|| "Redo".to_string());
+        // The annotation loop first; project chores last.
+        const ORDER: [&str; 7] = [
+            "Annotate", "Review", "Edit", "View", "Model", "File", "Help",
+        ];
+        let mut groups: Vec<_> = ORDER
+            .iter()
+            .filter_map(|title| GROUPS.iter().find(|group| group.title == *title))
+            .map(|group| {
+                group
+                    .commands()
+                    .filter(|command| self.palette_offers(command.action))
+                    .fold(PaletteGroup::new(group.title), |palette, command| {
+                        palette.push(
+                            self.palette_title(command),
+                            Vec::new(),
+                            command.icon,
+                            false,
+                            command.action.boxed_clone(),
+                        )
+                    })
+            })
+            .collect();
 
-        let mut annotate = PaletteGroup::new("Annotate")
-            .command("Select tool", Lucide::MousePointer2, SelectTool)
-            .command("Box tool", Lucide::VectorSquare, BoxTool)
-            .command("Polygon tool", Lucide::Pentagon, PolygonTool)
-            .command(undo, IconName::Undo2, Undo)
-            .command(redo, IconName::Redo2, Redo);
-        if self.state.selected_annotation().is_some() {
-            annotate = annotate
-                .command(
-                    "Delete selected annotation",
-                    IconName::Delete,
-                    DeleteSelection,
-                )
-                .command("Accept annotation", Lucide::CircleCheck, AcceptAnnotation)
-                .command("Reject annotation", Lucide::CircleX, RejectAnnotation)
-                .command(
-                    "Reset review to draft",
-                    Lucide::RotateCcw,
-                    ResetAnnotationReview,
-                );
-        }
-
-        if self.state.review_queue_len() > 0 {
-            annotate = annotate
-                .command("Next draft to review", IconName::ChevronRight, NextDraft)
-                .command(
-                    "Previous draft to review",
-                    IconName::ChevronLeft,
-                    PreviousDraft,
-                );
-        }
-
-        let mut media = PaletteGroup::new("Media");
-        if let Some(asset) = self.selected_asset() {
-            let done = asset.status == notatus_core::AssetStatus::Done;
-            media = media
-                .command("Next media", IconName::ArrowRight, NextMedia)
-                .command("Previous media", IconName::ArrowLeft, PreviousMedia)
-                .command(
-                    "Next pending media",
-                    IconName::ChevronRight,
-                    NextPendingMedia,
-                )
-                .command(
-                    if done {
-                        "Mark media pending"
-                    } else {
-                        "Mark media done"
-                    },
-                    IconName::CircleCheck,
-                    ToggleMediaDone,
-                )
-                .command("Done and next", IconName::Check, DoneAndNext)
-                .command("Fit image to canvas", IconName::Maximize, FitCanvas)
-                .command("Zoom in", IconName::Plus, ZoomIn)
-                .command("Zoom out", IconName::Minus, ZoomOut);
-        }
-        media = media
-            .command("Import images", Lucide::ImagePlus, ImportMedia)
-            .command("Import folder", Lucide::FolderOpen, ImportFolder);
-        for asset in self.state.dataset().assets.iter().take(MAX_MEDIA_ITEMS) {
-            let name = asset_display_name(asset);
-            media = media.push(
-                format!("Go to {}", compact_text(&name, 48)),
-                vec![name, asset.location.display_path().into_owned()],
-                IconName::GalleryVerticalEnd,
-                self.state.selected_asset() == Some(asset.id),
-                GoToMedia(asset.id),
-            );
-        }
-
-        let mut labels = PaletteGroup::new("Labels")
-            .command("Find or create label", IconName::Search, PickLabel)
-            .command("New label", IconName::Plus, NewLabel);
         let verb = if self.state.selected_annotation().is_some() {
             "Relabel as"
         } else {
             "Use label"
         };
+        let mut labels = PaletteGroup::new("Labels");
         for (slot, label) in self.state.dataset().labels.iter().enumerate() {
-            let title = format!("{verb} {}", label.name);
-            let keywords = vec![label.name.clone()];
-            let checked = self.state.selected_label() == Some(label.id);
-            // The first nine labels have number keys; show those in the row.
-            labels = if slot < 9 {
-                labels.push(
-                    title,
-                    keywords,
-                    IconName::Palette,
-                    checked,
-                    SelectLabelSlot(slot),
-                )
+            // The first nine labels have number keys; their rows show them.
+            let action: Box<dyn Action> = if slot < 9 {
+                Box::new(SelectLabelSlot(slot))
             } else {
-                labels.push(
-                    title,
-                    keywords,
-                    IconName::Palette,
-                    checked,
-                    SelectLabelById(label.id),
-                )
+                Box::new(SelectLabelById(label.id))
             };
-        }
-
-        // The same icons as the Dataset panel's buttons.
-        let project = PaletteGroup::new("Project")
-            .command("Save project", Lucide::Save, SaveProject)
-            .command("Save project as", Lucide::SaveAll, SaveProjectAs)
-            .command("Open project", IconName::FolderOpen, OpenProject)
-            .command("New project", Lucide::FilePlus, NewProject)
-            .command("Export annotations", Lucide::Download, ExportAnnotations)
-            .command("Keyboard shortcuts", Lucide::Keyboard, ShowShortcuts)
-            .command("Toggle light and dark theme", IconName::Moon, ToggleTheme);
-
-        let options = self.view_options;
-        let toggle_title = |toggle: ViewToggle| {
-            let verb = if toggle.get(&options) {
-                "Turn off"
-            } else {
-                "Turn on"
-            };
-            format!("{verb} {}", toggle.title().to_lowercase())
-        };
-        let view = PaletteGroup::new("View")
-            .command(
-                toggle_title(ViewToggle::HideAnnotations),
-                IconName::EyeOff,
-                ToggleHideAnnotations,
-            )
-            .command(
-                toggle_title(ViewToggle::Labels),
+            labels = labels.push(
+                format!("{verb} {}", label.name),
+                vec![label.name.clone()],
                 Lucide::Tag,
-                ToggleLabelNames,
-            )
-            .command(
-                toggle_title(ViewToggle::Crosshair),
-                Lucide::Crosshair,
-                ToggleCrosshair,
-            )
-            .command(
-                toggle_title(ViewToggle::FocusSelected),
-                Lucide::Focus,
-                ToggleFocusSelected,
+                self.state.selected_label() == Some(label.id),
+                action,
             );
-
-        let mut model = PaletteGroup::new("Model")
-            .command("Run model on this image", Lucide::Sparkles, RunModel)
-            .command(
-                "Run model on unfinished images",
-                Lucide::Sparkles,
-                RunModelOnUnfinished,
-            );
-        if self.model_run.is_running() {
-            model = model.command("Stop model run", Lucide::CircleStop, StopModelRun);
         }
-        model = model.command("Choose model runner…", Lucide::FileCog, ChooseModelRunner);
+        // Labels right after the annotation commands.
+        groups.insert(2, labels);
 
-        vec![annotate, media, labels, model, view, project]
+        let mut media = PaletteGroup::new("Media");
+        for asset in self.state.dataset().assets.iter().take(MAX_MEDIA_ITEMS) {
+            let name = asset_display_name(asset);
+            media = media.push(
+                format!("Go to {}", compact_text(&name, 48)),
+                vec![name, asset.location.display_path().into_owned()],
+                Lucide::GalleryVerticalEnd,
+                self.state.selected_asset() == Some(asset.id),
+                Box::new(GoToMedia(asset.id)),
+            );
+        }
+        groups.push(media);
+        groups
+    }
+
+    /// Whether the palette lists `action` now: commands on a selection or
+    /// the current media only while there is one.
+    fn palette_offers(&self, action: &dyn Action) -> bool {
+        let action = action.as_any();
+        let has_annotation = self.state.selected_annotation().is_some();
+        let has_media = self.state.selected_asset().is_some();
+        if action.is::<DeleteSelection>()
+            || action.is::<AcceptAnnotation>()
+            || action.is::<RejectAnnotation>()
+            || action.is::<ResetAnnotationReview>()
+        {
+            has_annotation
+        } else if action.is::<NextDraft>() || action.is::<PreviousDraft>() {
+            self.state.review_queue_len() > 0
+        } else if action.is::<NextMedia>()
+            || action.is::<PreviousMedia>()
+            || action.is::<NextPendingMedia>()
+            || action.is::<ToggleMediaDone>()
+            || action.is::<DoneAndNext>()
+            || action.is::<NextAnnotation>()
+            || action.is::<PreviousAnnotation>()
+            || action.is::<FitCanvas>()
+            || action.is::<ZoomIn>()
+            || action.is::<ZoomOut>()
+        {
+            has_media
+        } else if action.is::<StopModelRun>() {
+            self.model_run.is_running()
+        } else {
+            // Escape cancels a drawing in place; the palette is already open.
+            !action.is::<Cancel>() && !action.is::<CommandPalette>()
+        }
+    }
+
+    /// The catalog title, or one that says what the command will do now.
+    fn palette_title(&self, command: &CatalogCommand) -> String {
+        let action = command.action.as_any();
+        let with_description = |verb: &str, description: Option<&str>| match description {
+            Some(description) => format!("{verb} {}", description.to_lowercase()),
+            None => verb.to_string(),
+        };
+        if action.is::<Undo>() {
+            return with_description("Undo", self.state.undo_description());
+        }
+        if action.is::<Redo>() {
+            return with_description("Redo", self.state.redo_description());
+        }
+        if action.is::<ToggleMediaDone>()
+            && self
+                .selected_asset()
+                .is_some_and(|asset| asset.status == notatus_core::AssetStatus::Done)
+        {
+            return "Mark media not done".to_string();
+        }
+        let toggle = if action.is::<ToggleHideAnnotations>() {
+            Some(ViewToggle::HideAnnotations)
+        } else if action.is::<ToggleLabelNames>() {
+            Some(ViewToggle::Labels)
+        } else if action.is::<ToggleCrosshair>() {
+            Some(ViewToggle::Crosshair)
+        } else if action.is::<ToggleFocusSelected>() {
+            Some(ViewToggle::FocusSelected)
+        } else {
+            None
+        };
+        match toggle {
+            Some(toggle) => {
+                let verb = if toggle.get(&self.view_options) {
+                    "Turn off"
+                } else {
+                    "Turn on"
+                };
+                format!("{verb} {}", toggle.title().to_lowercase())
+            }
+            None => command.title.to_string(),
+        }
     }
 }
