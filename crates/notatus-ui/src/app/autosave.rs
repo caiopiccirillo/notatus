@@ -8,7 +8,14 @@
 //! Saves run on a background thread. A save that finishes after newer edits
 //! only marks the revision it wrote as saved.
 
-use super::*;
+use crate::app::project_session::ProjectLocation;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Context, Window};
+use gpui_component::WindowExt as _;
+use gpui_component::dialog::DialogButtonProps;
+use notatus_storage::{LocalProjectStore, ProjectStore as _};
+use std::path::Path;
 use std::time::Duration;
 
 pub(super) const AUTOSAVE_DELAY: Duration = Duration::from_millis(1500);

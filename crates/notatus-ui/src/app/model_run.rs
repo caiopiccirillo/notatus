@@ -5,8 +5,11 @@
 //! item's suggestions as they arrive, so they can be reviewed with the
 //! review keys while the rest are still coming.
 
-use super::*;
+use crate::app::window::NotatusWindow;
+use gpui::{Context, PathPromptOptions, SharedString};
+use notatus_core::AssetLocation;
 use notatus_infer::{ExternalModelSpec, InferenceRequest, ModelRunner};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -337,6 +340,7 @@ mod tests {
     use super::*;
     use crate::app::tests::support::open_test_window;
     use gpui::TestAppContext;
+    use std::path::Path;
 
     #[test]
     fn python_scripts_run_through_python() {

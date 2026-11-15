@@ -1,9 +1,9 @@
 //! The review queue: stepping through drafts across all media, and the
 //! filter that narrows it to one label or to unsure model suggestions.
 
-use super::actions::{self, NextDraft, PreviousDraft};
-use super::helpers::{counted_section_title, plural};
-use super::window::NotatusWindow;
+use crate::app::actions::{self, NextDraft, PreviousDraft};
+use crate::app::helpers::{counted_section_title, plural};
+use crate::app::window::NotatusWindow;
 use crate::{Direction, ReviewFilter};
 use gpui::prelude::*;
 use gpui::{Context, Window, div};

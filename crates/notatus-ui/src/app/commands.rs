@@ -1,5 +1,9 @@
-use super::helpers::{hex_color, plural};
-use super::*;
+use crate::app::helpers::{hex_color, plural};
+use crate::app::window::{LeftDock, NotatusWindow};
+use crate::app::{DEFAULT_LABEL_COLOR, LABEL_COLORS};
+use crate::{AnnotationTool, UiState};
+use gpui::{Context, Window};
+use notatus_core::{AnnotationId, AssetId, BoundingBox, ClassificationId, LabelId};
 
 /// Name given to the label created when someone draws before making any.
 pub(super) const FALLBACK_LABEL_NAME: &str = "Object";

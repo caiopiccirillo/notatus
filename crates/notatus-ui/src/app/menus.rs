@@ -2,7 +2,7 @@
 //! and Windows. Every item dispatches an action, so menus, shortcuts, and the
 //! command palette all run the same handlers and show the same keys.
 
-use super::catalog::{Entry, GROUPS};
+use crate::app::catalog::{Entry, GROUPS};
 use gpui::{App, Menu, MenuItem};
 use gpui_component::GlobalState;
 

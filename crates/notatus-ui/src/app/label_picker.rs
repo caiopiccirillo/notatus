@@ -1,10 +1,13 @@
 //! Searchable active-label picker that creates labels from the typed name.
 
-use super::*;
-use gpui::Task;
-use gpui_component::IndexPath;
+use crate::app::window::NotatusWindow;
+use crate::app::{DEFAULT_LABEL_COLOR, commands};
+use gpui::prelude::*;
+use gpui::{App, Context, IntoElement, SharedString, Subscription, Task, Window, div, px};
 use gpui_component::combobox::{Caret, Combobox, ComboboxEvent, ComboboxState};
 use gpui_component::searchable_list::{SearchableListDelegate, SearchableListItem};
+use gpui_component::{ActiveTheme as _, Icon, IconName, IndexPath, Sizable as _};
+use notatus_core::{Label, LabelId};
 
 /// What choosing a row does: use an existing label, or create one by name.
 #[derive(Clone, Debug, PartialEq)]

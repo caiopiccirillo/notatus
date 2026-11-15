@@ -48,7 +48,9 @@ The `gpui-ui` feature enables `gpui`, `gpui_platform`, `gpui-component`,
 `gpui-kit-assets` (Lucide icons), and `image` (reading image sizes on import).
 
 `NotatusWindow` (`app/window.rs`) is the one view; its behavior is split into
-modules under `src/app/` by feature:
+modules under `src/app/` by feature. Each module imports what it uses by
+name, with sibling modules spelled `crate::app::…`, so its dependencies show at
+the top of the file:
 
 - `catalog.rs`: every command's name, icon, and group
 - `actions.rs`: actions, key bindings, and their handlers

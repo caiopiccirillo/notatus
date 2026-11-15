@@ -1,6 +1,10 @@
 use super::workflow::push_export_workflow_notification;
-use super::*;
 use crate::app::helpers::plural;
+use crate::app::window::NotatusWindow;
+use gpui::{App, PathPromptOptions, SharedString, Window};
+use gpui_component::WindowExt as _;
+use gpui_component::notification::Notification;
+use std::path::Path;
 
 pub(in crate::app) fn export_annotations(
     view: gpui::WeakEntity<NotatusWindow>,
@@ -200,6 +204,7 @@ fn run_export(mut request: ExportRequest, output_dir: &Path) -> Result<String, S
 mod tests {
     use super::*;
     use notatus_core::{AnnotationGeometry, AssetStatus, Dataset};
+    use notatus_core::{AnnotationRecord, AssetLocation, AssetRecord, BoundingBox};
 
     fn two_media_dataset() -> Dataset {
         let mut dataset = Dataset::new("demo");

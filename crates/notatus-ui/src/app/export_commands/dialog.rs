@@ -6,11 +6,15 @@
 
 use super::options::{ExportFormat, ExportOptions};
 use super::runner::export_annotations;
-use super::*;
 use crate::app::helpers::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, IntoElement, SharedString, Window, div, px};
 use gpui_component::checkbox::Checkbox;
 use gpui_component::description_list::DescriptionList;
+use gpui_component::dialog::DialogButtonProps;
 use gpui_component::switch::Switch;
+use gpui_component::{Sizable as _, WindowExt as _};
 
 pub(in crate::app) fn open_export_dialog(
     view: gpui::WeakEntity<NotatusWindow>,

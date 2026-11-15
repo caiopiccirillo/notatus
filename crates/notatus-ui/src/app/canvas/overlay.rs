@@ -1,7 +1,10 @@
 use super::color::{hex_to_rgba, rgba_with_alpha};
 use super::hit_test::bbox_handle_points;
 use super::layout::{image_bbox_to_screen, image_point_to_screen};
-use super::*;
+use gpui::{
+    App, Bounds, Pixels, Point, SharedString, Window, bounds, fill, outline, px, rgb, size,
+};
+use notatus_core::{AnnotationGeometry, AnnotationId, BoundingBox, Polygon};
 
 const HANDLE_DIAMETER_PX: f32 = 10.0;
 const POLYGON_VERTEX_DIAMETER_PX: f32 = 8.0;

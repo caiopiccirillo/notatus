@@ -1,12 +1,15 @@
 //! The toolbar floating over the canvas: tools, the active label, display
 //! options, the model, and fitting the image.
 
-use super::super::*;
 use super::{CanvasToolDefinition, canvas_tool_definitions};
 use crate::app::actions::{self, FitCanvas, RunModel};
-use gpui::Action as _;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Action as _, Context, IntoElement, px};
+use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::separator::Separator;
 use gpui_component::toolbar::{Toolbar, ToolbarGroup};
+use gpui_component::{ActiveTheme as _, Icon, IconName, Selectable as _};
 
 impl NotatusWindow {
     pub(in crate::app) fn canvas_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {

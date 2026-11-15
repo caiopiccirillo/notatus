@@ -1,5 +1,4 @@
-use super::super::*;
-
+use crate::AnnotationTool;
 #[derive(Clone)]
 pub(in crate::app) struct CanvasToolDefinition {
     pub(in crate::app) tool: AnnotationTool,

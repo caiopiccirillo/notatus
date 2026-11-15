@@ -1,4 +1,14 @@
-use super::*;
+use crate::app::project_session::ProjectLocation;
+use crate::app::window::{LeftDock, NotatusWindow, RightDock};
+use crate::{AnnotationTool, UiState};
+use gpui::prelude::*;
+use gpui::{App, PathPromptOptions, SharedString, Window};
+use gpui_component::WindowExt as _;
+use gpui_component::dialog::DialogButtonProps;
+use gpui_component::notification::Notification;
+use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore as _};
+use std::env;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy)]
 enum ProjectPickerAction {

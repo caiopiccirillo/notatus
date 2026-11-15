@@ -1,14 +1,19 @@
 //! The media list: virtualized, searchable by name or path, and filtered by
 //! status, so it stays quick with thousands of images.
 
-use super::*;
 use crate::app::actions::{self, ImportFolder, ImportMedia};
 use crate::app::helpers::*;
 use crate::app::media_import::{open_folder_picker, open_media_picker};
-use gpui::Task;
-use gpui_component::IndexPath;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, Context, IntoElement, SharedString, Subscription, Task, Window, div, px};
+use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::list::{List, ListDelegate, ListEvent, ListItem, ListState};
-use notatus_core::{AssetStatus, ReviewState};
+use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem};
+use gpui_component::{
+    ActiveTheme as _, Icon, IconName, IndexPath, Selectable as _, Sizable as _, ThemeColor,
+};
+use notatus_core::{AssetId, AssetStatus, ReviewState};
 use std::collections::HashMap;
 
 /// Which media the list shows.
@@ -393,6 +398,7 @@ fn media_empty_state(colors: ThemeColor) -> gpui::Div {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UiState;
     use notatus_core::BoundingBox;
 
     fn delegate() -> (MediaListDelegate, Vec<AssetId>) {

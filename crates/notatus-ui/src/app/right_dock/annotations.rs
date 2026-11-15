@@ -1,10 +1,20 @@
 //! The Annotations tab: the review queue, the current media's image labels,
 //! and its objects.
 
-use super::*;
+use crate::app::DEFAULT_LABEL_COLOR;
 use crate::app::helpers::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{IntoElement, div, px};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::tag::Tag;
-use notatus_core::ReviewState;
+use gpui_component::{Icon, IconName, Selectable as _, Sizable as _, ThemeColor};
+use notatus_core::{
+    AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationId, Label, LabelId,
+    ReviewState,
+};
 
 impl NotatusWindow {
     pub(super) fn annotations_panel_content(

@@ -1,6 +1,9 @@
 use super::options::ExportFormat;
-use super::*;
 use crate::app::helpers::exportable_annotation_count;
+use crate::app::window::{LeftDock, NotatusWindow};
+use gpui::{App, Context, Window};
+use gpui_component::WindowExt as _;
+use gpui_component::notification::Notification;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum ExportWorkflowIssue {

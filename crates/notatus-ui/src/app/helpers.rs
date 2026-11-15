@@ -1,4 +1,10 @@
-use super::*;
+use crate::app::DEFAULT_LABEL_COLOR;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, FontWeight, IntoElement, Window, div, px, rgb};
+use gpui_component::{ActiveTheme as _, Sizable as _};
+use notatus_core::{AnnotationGeometry, AnnotationRecord, AssetKind, AssetRecord, LabelId};
+use std::path::Path;
 
 /// Defers building an element until render time so free helper functions can
 /// read the active [`gpui_component::Theme`] without threading `cx` through
@@ -279,6 +285,7 @@ pub(super) fn counted_section_title(title: &'static str, count: usize) -> impl I
 #[cfg(test)]
 mod confidence_tests {
     use super::*;
+    use notatus_core::{AssetId, BoundingBox};
 
     #[test]
     fn only_untouched_model_suggestions_show_a_confidence() {

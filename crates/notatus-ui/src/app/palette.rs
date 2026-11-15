@@ -1,13 +1,16 @@
 //! Ctrl+K command palette, built from the same actions as the keymap.
 
-use super::actions::*;
-use super::catalog::{Command as CatalogCommand, GROUPS, Lucide};
-use super::helpers::{asset_display_name, compact_text};
-use super::*;
-use gpui::Action;
-use gpui_component::IndexPath;
+use crate::app::actions::{self, *};
+use crate::app::catalog::{Command as CatalogCommand, GROUPS, Lucide};
+use crate::app::helpers::{asset_display_name, compact_text};
+use crate::app::view_options::ViewToggle;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Action, App, Context, IntoElement, SharedString, Window, div, px};
 use gpui_component::command::{Command, CommandGroup, CommandItem};
 use gpui_component::kbd::Kbd;
+use gpui_component::{ActiveTheme as _, Icon, IconName, IndexPath, Sizable as _, WindowExt as _};
+use std::rc::Rc;
 
 const MAX_MEDIA_ITEMS: usize = 500;
 

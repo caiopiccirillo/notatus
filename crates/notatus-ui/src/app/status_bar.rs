@@ -1,11 +1,14 @@
-use super::actions::{
-    DoneAndNext, FitCanvas, NextMedia, PreviousMedia, StopModelRun, ToggleMediaDone,
+use crate::app::actions::{
+    self, DoneAndNext, FitCanvas, NextMedia, PreviousMedia, StopModelRun, ToggleMediaDone,
 };
-use super::model_run::ModelProgress;
-use super::*;
-use gpui::Action;
+use crate::app::model_run::ModelProgress;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Action, Context, IntoElement, div, px};
+use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::progress::Progress;
 use gpui_component::status_bar::StatusBar;
+use gpui_component::{Icon, IconName, Selectable as _, Sizable as _};
 
 impl NotatusWindow {
     /// Feedback on the left, media navigation in the middle, and the model

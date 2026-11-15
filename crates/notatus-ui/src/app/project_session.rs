@@ -1,5 +1,5 @@
-use super::helpers::compact_text;
-use super::*;
+use crate::app::helpers::compact_text;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) enum ProjectLocation {

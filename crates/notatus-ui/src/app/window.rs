@@ -1,5 +1,19 @@
-use super::helpers::hex_color;
-use super::*;
+use crate::app::helpers::hex_color;
+use crate::app::project_session::ProjectLocation;
+use crate::app::tools::ToolInteractionState;
+use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
+use crate::{AnnotationTool, UiState};
+use gpui::prelude::*;
+use gpui::{Context, IntoElement, Pixels, Render, Subscription, Window, div, px};
+use gpui_component::color_picker::{ColorPickerEvent, ColorPickerState};
+use gpui_component::input::{InputEvent, InputState};
+use gpui_component::resizable::{h_resizable, resizable_panel};
+use gpui_component::{ActiveTheme as _, Colorize as _};
+use notatus_core::{
+    AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationRecord, LabelId,
+};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LeftDock {

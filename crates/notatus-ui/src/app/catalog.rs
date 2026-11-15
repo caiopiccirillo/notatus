@@ -4,7 +4,7 @@
 //! this list, so a command reads the same everywhere and a new one is added
 //! in one place. Keys come from the bindings in `actions.rs`.
 
-use super::actions::*;
+use crate::app::actions::*;
 use gpui::Action;
 
 /// The full Lucide catalog; icons beyond gpui-component's set are

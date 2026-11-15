@@ -1,7 +1,16 @@
 use super::hit_test::{BboxHitTarget, hit_test_bbox_edit_target};
 use super::layout::screen_to_image;
 use super::overlay::AnnotationOverlay;
-use super::*;
+use crate::AnnotationTool;
+use crate::app::SharedImageLayout;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{
+    App, Bounds, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, ScrollEvent, Window,
+};
+use gpui_component::WindowExt as _;
+use gpui_component::notification::Notification;
+use notatus_core::{AnnotationId, AssetRecord, BoundingBox};
 
 pub(super) fn attach_canvas_interactions(
     canvas: gpui::Stateful<gpui::Div>,

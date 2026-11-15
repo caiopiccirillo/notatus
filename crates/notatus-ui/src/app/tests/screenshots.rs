@@ -7,9 +7,15 @@
 //!     cargo test -p notatus-ui screenshots -- --ignored --nocapture
 //! ```
 
-use crate::app::*;
-use gpui::{AnyWindowHandle, HeadlessAppContext};
-use gpui_component::ThemeMode;
+use crate::UiState;
+use crate::app::window::{LeftDock, NotatusWindow, RightDock};
+use crate::app::{LABEL_COLORS, export_commands};
+use gpui::prelude::*;
+use gpui::{AnyWindowHandle, HeadlessAppContext, Pixels, px, size};
+use gpui_component::{Root, Theme, ThemeMode, WindowExt as _};
+use notatus_core::{AnnotationGeometry, AnnotationRecord, BoundingBox};
+use std::env;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 fn headless_cx() -> HeadlessAppContext {

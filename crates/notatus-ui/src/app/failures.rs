@@ -4,7 +4,9 @@
 //! save or model run is also shown as a notification that stays until it is
 //! dismissed.
 
-use super::*;
+use crate::app::window::NotatusWindow;
+use gpui::Context;
+use gpui_component::WindowExt as _;
 use gpui_component::notification::Notification;
 
 /// Groups failure notifications, so a repeated failure replaces the last

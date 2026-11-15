@@ -1,8 +1,14 @@
 //! Saving, closing, and reopening projects through the window.
 
 use super::support::open_test_window;
-use crate::app::*;
+use crate::UiState;
+use crate::app::project_session::ProjectLocation;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
 use gpui::{TestAppContext, VisualTestContext, WindowHandle};
+use gpui_component::{Root, WindowExt as _};
+use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore as _};
+use std::path::Path;
 
 fn saved_label_count(dir: &Path) -> usize {
     LocalProjectStore::new(dir)

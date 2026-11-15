@@ -1,5 +1,6 @@
 use super::overlay::AnnotationOverlay;
-use super::*;
+use gpui::{Bounds, Pixels};
+use notatus_core::{AnnotationGeometry, AnnotationId, AssetRecord, BoundingBox, Polygon};
 
 const HANDLE_HIT_RADIUS_PX: f64 = 8.0;
 const EDGE_HIT_RADIUS_PX: f64 = 6.0;
@@ -7,7 +8,7 @@ const EDGE_HIT_RADIUS_PX: f64 = 6.0;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BboxHitTarget {
     Body(AnnotationId),
-    Handle(AnnotationId, super::super::tools::ResizeHandle),
+    Handle(AnnotationId, crate::app::tools::ResizeHandle),
 }
 
 #[cfg(test)]
@@ -86,7 +87,7 @@ fn hit_test_bbox_handle(
     image_pos: (f64, f64),
     img_bounds: Bounds<Pixels>,
     asset: &AssetRecord,
-) -> Option<super::super::tools::ResizeHandle> {
+) -> Option<crate::app::tools::ResizeHandle> {
     let image_radius_x = pixel_radius_to_image_x(HANDLE_HIT_RADIUS_PX, img_bounds, asset);
     let image_radius_y = pixel_radius_to_image_y(HANDLE_HIT_RADIUS_PX, img_bounds, asset);
 
@@ -103,13 +104,13 @@ fn hit_test_bbox_handle(
     let within_y = y >= bbox.y && y <= bbox.max_y();
 
     if within_x && (y - bbox.y).abs() <= edge_radius_y {
-        Some(super::super::tools::ResizeHandle::Top)
+        Some(crate::app::tools::ResizeHandle::Top)
     } else if within_x && (y - bbox.max_y()).abs() <= edge_radius_y {
-        Some(super::super::tools::ResizeHandle::Bottom)
+        Some(crate::app::tools::ResizeHandle::Bottom)
     } else if within_y && (x - bbox.x).abs() <= edge_radius_x {
-        Some(super::super::tools::ResizeHandle::Left)
+        Some(crate::app::tools::ResizeHandle::Left)
     } else if within_y && (x - bbox.max_x()).abs() <= edge_radius_x {
-        Some(super::super::tools::ResizeHandle::Right)
+        Some(crate::app::tools::ResizeHandle::Right)
     } else {
         None
     }
@@ -117,33 +118,33 @@ fn hit_test_bbox_handle(
 
 pub(super) fn bbox_handle_points(
     bbox: BoundingBox,
-) -> [(super::super::tools::ResizeHandle, (f64, f64)); 8] {
+) -> [(crate::app::tools::ResizeHandle, (f64, f64)); 8] {
     let mid_x = bbox.x + bbox.width / 2.0;
     let mid_y = bbox.y + bbox.height / 2.0;
     [
-        (super::super::tools::ResizeHandle::TopLeft, (bbox.x, bbox.y)),
-        (super::super::tools::ResizeHandle::Top, (mid_x, bbox.y)),
+        (crate::app::tools::ResizeHandle::TopLeft, (bbox.x, bbox.y)),
+        (crate::app::tools::ResizeHandle::Top, (mid_x, bbox.y)),
         (
-            super::super::tools::ResizeHandle::TopRight,
+            crate::app::tools::ResizeHandle::TopRight,
             (bbox.max_x(), bbox.y),
         ),
         (
-            super::super::tools::ResizeHandle::Right,
+            crate::app::tools::ResizeHandle::Right,
             (bbox.max_x(), mid_y),
         ),
         (
-            super::super::tools::ResizeHandle::BottomRight,
+            crate::app::tools::ResizeHandle::BottomRight,
             (bbox.max_x(), bbox.max_y()),
         ),
         (
-            super::super::tools::ResizeHandle::Bottom,
+            crate::app::tools::ResizeHandle::Bottom,
             (mid_x, bbox.max_y()),
         ),
         (
-            super::super::tools::ResizeHandle::BottomLeft,
+            crate::app::tools::ResizeHandle::BottomLeft,
             (bbox.x, bbox.max_y()),
         ),
-        (super::super::tools::ResizeHandle::Left, (bbox.x, mid_y)),
+        (crate::app::tools::ResizeHandle::Left, (bbox.x, mid_y)),
     ]
 }
 
@@ -164,7 +165,9 @@ fn pixel_radius_to_image_y(radius_px: f64, img_bounds: Bounds<Pixels>, asset: &A
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::DEFAULT_LABEL_COLOR;
     use gpui::{bounds, px, size};
+    use notatus_core::AssetLocation;
 
     fn asset() -> AssetRecord {
         AssetRecord::new_image(AssetLocation::local("test.jpg"), 200, 100).unwrap()
@@ -264,7 +267,7 @@ mod tests {
             hit_test_bbox_edit_target(&annotations, (20.0, 20.0), img_bounds(), &asset()),
             Some(BboxHitTarget::Handle(
                 id,
-                super::super::tools::ResizeHandle::TopLeft
+                crate::app::tools::ResizeHandle::TopLeft
             ))
         );
     }
@@ -289,7 +292,7 @@ mod tests {
             hit_test_bbox_edit_target(&annotations, (50.0, 20.0), img_bounds(), &asset()),
             Some(BboxHitTarget::Handle(
                 id,
-                super::super::tools::ResizeHandle::Top
+                crate::app::tools::ResizeHandle::Top
             ))
         );
     }

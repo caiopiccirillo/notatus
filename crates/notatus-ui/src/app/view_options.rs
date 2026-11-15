@@ -1,10 +1,13 @@
 //! Canvas display options: overlay fill, label tags, crosshair, and focus.
 
-use super::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Context, IntoElement, SharedString, Subscription, Window, div, px};
+use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::popover::Popover;
 use gpui_component::slider::{Slider, SliderEvent, SliderState};
 use gpui_component::switch::Switch;
-use gpui_component::v_flex;
+use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _, v_flex};
 
 /// How annotations are drawn over the image. Display only, never saved.
 #[derive(Clone, Copy, Debug, PartialEq)]

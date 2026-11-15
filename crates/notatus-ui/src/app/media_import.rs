@@ -1,6 +1,9 @@
-use super::helpers::plural;
-use super::*;
+use crate::app::helpers::plural;
+use crate::app::window::{LeftDock, NotatusWindow};
+use gpui::{App, PathPromptOptions, SharedString, Window};
+use notatus_core::AssetLocation;
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 impl NotatusWindow {
     fn apply_media_import(&mut self, imported: MediaImport) {

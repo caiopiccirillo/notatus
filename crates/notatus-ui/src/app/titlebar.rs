@@ -1,5 +1,8 @@
-use super::helpers::compact_text;
-use super::*;
+use crate::app::helpers::compact_text;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, Context, FontWeight, IntoElement, Window, div, px};
+use gpui_component::{ActiveTheme as _, TitleBar};
 
 /// The title bar's close button: closes the window only when
 /// [`NotatusWindow::should_close`] allows it, which may first save or ask.

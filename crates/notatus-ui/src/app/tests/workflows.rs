@@ -2,10 +2,15 @@
 //! drawing, labels, and review.
 
 use super::support::open_test_window;
-use crate::ReviewFilter;
-use crate::app::*;
-use gpui::TestAppContext;
-use notatus_core::ReviewState;
+use crate::app::project_session::ProjectLocation;
+use crate::app::window::{LeftDock, NotatusWindow};
+use crate::app::{autosave, commands, export_commands};
+use crate::{AnnotationTool, ReviewFilter, UiState};
+use gpui::prelude::*;
+use gpui::{TestAppContext, px};
+use gpui_component::WindowExt as _;
+use notatus_core::{AssetId, BoundingBox, LabelId, ReviewState};
+use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore as _};
 
 #[gpui::test]
 fn export_workflow_issue_tracks_required_steps(cx: &mut TestAppContext) {

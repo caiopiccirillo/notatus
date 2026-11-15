@@ -1,32 +1,11 @@
-use super::{AnnotationTool, UiState};
 use gpui::prelude::*;
 use gpui::{
-    App, Bounds, Context, FontWeight, IntoElement, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ObjectFit, PathPromptOptions, Pixels, Point, Render, ScrollEvent, SharedString, Subscription,
-    Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, bounds, div, fill, img,
-    outline, px, rgb, size,
+    App, Bounds, Pixels, WindowBackgroundAppearance, WindowBounds, WindowOptions, px, size,
 };
-use gpui_component::{
-    ActiveTheme as _, Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, Theme,
-    ThemeColor, TitleBar, WindowExt,
-    button::{Button, ButtonVariant, ButtonVariants as _},
-    color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState},
-    dialog::DialogButtonProps,
-    input::{Input, InputEvent, InputState},
-    menu::{ContextMenuExt as _, DropdownMenu, PopupMenu, PopupMenuItem},
-    notification::Notification,
-    resizable::{h_resizable, resizable_panel},
-    scroll::ScrollableElement as _,
-};
-use notatus_core::{
-    AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,
-    AssetRecord, BoundingBox, ClassificationId, ClassificationRecord, Label, LabelId, Polygon,
-};
-use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore};
+use gpui_component::{Root, Theme, TitleBar};
 use std::cell::RefCell;
-use std::env;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use window::NotatusWindow;
 
 mod actions;
 mod assets;
@@ -49,22 +28,15 @@ mod project_session;
 mod review_queue;
 mod right_dock;
 mod runner_settings;
+mod shortcuts;
+mod status_bar;
 mod titlebar;
 mod tools;
 mod view_options;
 mod window;
 
-use view_options::ViewToggle;
-
-mod shortcuts;
-mod status_bar;
-
 #[cfg(test)]
 mod tests;
-
-use project_session::ProjectLocation;
-use tools::ToolInteractionState;
-use window::{LeftDock, NotatusWindow, RightDock};
 
 const DEFAULT_LABEL_COLOR: &str = "#2563eb";
 const LABEL_COLORS: [&str; 8] = [

@@ -1,7 +1,11 @@
 //! Helpers shared by the window tests.
 
-use crate::app::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
 use gpui::{TestAppContext, WindowHandle, WindowOptions};
+use gpui_component::Root;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Opens a Notatus window the way the app does and returns its handle and
 /// view, after the first layout.

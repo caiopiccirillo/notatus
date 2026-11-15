@@ -1,5 +1,8 @@
-use super::dock::{DockTabs, dock_frame};
-use super::*;
+use crate::app::dock::{DockTabs, dock_frame};
+use crate::app::window::{LeftDock, NotatusWindow};
+use gpui::prelude::*;
+use gpui::{Context, IntoElement};
+use gpui_component::ActiveTheme as _;
 
 mod labels;
 mod media;

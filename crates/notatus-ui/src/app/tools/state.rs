@@ -1,4 +1,6 @@
-use super::super::*;
+use crate::{AnnotationTool, UiState};
+use gpui::{Bounds, Pixels, Point};
+use notatus_core::{AnnotationId, AssetRecord, BoundingBox, Polygon};
 
 #[derive(Clone, Copy, Debug)]
 pub(in crate::app) struct DrawingState {
@@ -252,6 +254,7 @@ impl ToolInteractionState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui::{px, size};
 
     #[test]
     fn finishing_draw_box_returns_bbox_for_large_drag() {

@@ -3,10 +3,13 @@
 //! Rows name actions and show whatever key is bound to them, so the sheet
 //! cannot drift from the real bindings.
 
-use super::actions::*;
-use super::catalog::{Command, GROUPS, Group};
-use super::*;
+use crate::app::actions::*;
+use crate::app::catalog::{Command, GROUPS, Group};
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, Window, div, px};
 use gpui_component::kbd::Kbd;
+use gpui_component::{ActiveTheme as _, WindowExt as _};
 
 impl NotatusWindow {
     pub(super) fn open_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {

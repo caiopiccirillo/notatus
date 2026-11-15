@@ -1,8 +1,13 @@
 //! The Details tab: the project, the dataset's totals, and the current media.
 
-use super::*;
 use crate::app::helpers::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, IntoElement, div, px};
 use gpui_component::description_list::DescriptionList;
+use gpui_component::input::Input;
+use gpui_component::scroll::ScrollableElement as _;
+use gpui_component::{ActiveTheme as _, Sizable as _};
 
 impl NotatusWindow {
     pub(super) fn details_panel_content(&self, cx: &App) -> impl IntoElement {

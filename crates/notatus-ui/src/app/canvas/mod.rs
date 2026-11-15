@@ -1,5 +1,13 @@
-use super::helpers::*;
-use super::*;
+use crate::AnnotationTool;
+use crate::app::helpers::*;
+use crate::app::window::NotatusWindow;
+use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
+use gpui::prelude::*;
+use gpui::{Context, IntoElement, ObjectFit, SharedString, div, img};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _};
+use notatus_core::{AnnotationRecord, AssetLocation, AssetRecord};
+use std::path::PathBuf;
 
 mod color;
 mod hit_test;

@@ -1,4 +1,4 @@
-use super::super::*;
+use notatus_core::{AnnotationId, AssetRecord, BoundingBox};
 
 const MIN_BBOX_EXTENT: f64 = 1.0;
 
@@ -165,6 +165,7 @@ fn normalized_bbox(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use notatus_core::AssetLocation;
 
     fn asset() -> AssetRecord {
         AssetRecord::new_image(AssetLocation::local("test.png"), 200, 100).unwrap()

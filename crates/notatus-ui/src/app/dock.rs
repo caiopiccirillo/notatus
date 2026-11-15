@@ -1,8 +1,11 @@
 //! The frame shared by the side docks: a tab bar naming each view, with the
 //! current view's actions at its end, above the view itself.
 
-use super::*;
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, IntoElement, div};
 use gpui_component::tab::{Tab, TabBar};
+use gpui_component::{ActiveTheme as _, Sizable as _};
 
 /// A dock's views: their titles, the one shown, and what a click on a tab
 /// does with its index.

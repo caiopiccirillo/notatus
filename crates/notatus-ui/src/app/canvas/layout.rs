@@ -1,4 +1,6 @@
-use super::*;
+use crate::app::CanvasImageLayout;
+use gpui::{Bounds, Pixels, Point, bounds, px, size};
+use notatus_core::AssetRecord;
 
 pub(super) fn compute_image_bounds(
     canvas_bounds: Bounds<Pixels>,

@@ -1,5 +1,16 @@
-use super::*;
 use crate::app::helpers::*;
+use crate::app::window::NotatusWindow;
+use crate::app::{DEFAULT_LABEL_COLOR, LABEL_COLORS};
+use gpui::prelude::*;
+use gpui::{App, Context, FontWeight, IntoElement, Window, div, px};
+use gpui_component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_component::color_picker::ColorPicker;
+use gpui_component::dialog::DialogButtonProps;
+use gpui_component::input::Input;
+use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_component::scroll::ScrollableElement as _;
+use gpui_component::{Icon, IconName, Sizable as _, ThemeColor, WindowExt as _};
+use notatus_core::LabelId;
 
 #[derive(Clone)]
 struct LabelMenuContext {
