@@ -49,9 +49,9 @@ Pre-annotation is intentionally an external-process boundary in v1. A runner can
 use Python, ONNX Runtime, TensorRT, a container, or a remote shim as long as it
 speaks the JSON-lines request/response protocol in `notatus-infer`.
 
-In the app, choose a runner with "Choose model runner…" in the command palette,
-then press Ctrl+R to suggest annotations on the current image or Ctrl+Shift+R on
-every unfinished one. `examples/runners/ultralytics_runner.py` runs Ultralytics
+In the app, choose a runner with Model → "Choose model runner…", then press
+Ctrl+R to suggest annotations on the current image or Ctrl+Shift+R on every
+unfinished one. `examples/runners/ultralytics_runner.py` runs Ultralytics
 YOLO models. See `docs/src/inference.md`.
 
 Model predictions become draft annotations with model provenance and confidence.
@@ -99,6 +99,7 @@ mdbook serve docs
 ## Near-Term Roadmap
 
 - Model tasks beyond detection: image classification and click-to-segment.
+- Thumbnails in the media list.
 - Make undo record changes instead of copying the dataset.
 
 See `docs/src/roadmap.md` for the longer list.

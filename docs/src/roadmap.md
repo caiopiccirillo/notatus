@@ -16,10 +16,11 @@ Undo snapshots the whole dataset on every change, up to 200 times. Recording
 only the records each change touches keeps memory flat on large projects and
 is a first step toward an operation log.
 
-### Media at Scale
+### Media Thumbnails
 
-- thumbnails and filters in the media list
-- a virtualized list for projects with thousands of images
+The media list is virtualized, searchable, and filtered by status, but shows
+names only. Thumbnails need a cache of downscaled images, built off the UI
+thread, so scrolling thousands of images stays smooth.
 
 ## Medium Term
 

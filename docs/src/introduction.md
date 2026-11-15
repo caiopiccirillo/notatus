@@ -24,8 +24,10 @@ parallel representations.
 - Bounding-box and polygon drawing, box moving and resizing, image
   classification, pan and zoom, and undo.
 - Keyboard-driven annotation and review: tool and review keys, a review queue
-  across all media filtered by label or confidence, a command palette, and a
-  shortcut sheet.
+  across all media filtered by label or confidence, application menus, a
+  command palette, and a shortcut sheet.
+- A virtualized media list with search and status filters, for projects with
+  thousands of images.
 - Model pre-annotation through external runner processes, with suggestions
   kept as drafts until a person reviews them.
 - YOLO detection import and export (Ultralytics layout), COCO detection
@@ -37,7 +39,7 @@ parallel representations.
 - Polygons can be drawn and relabeled but not reshaped.
 - Undo copies the whole dataset per step, which costs memory on large
   projects.
-- The media list has no thumbnails and is not virtualized.
+- The media list shows names only, without thumbnails.
 - Remote S3-compatible storage is represented in the schema but has no storage
   backend yet.
 - Video annotation is planned, not implemented.
