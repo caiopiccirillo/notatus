@@ -3,9 +3,9 @@
 Local-first visual data annotation in Rust.
 
 Notatus is being built as a desktop annotation tool for computer-vision
-datasets, starting with image bounding boxes and a schema that can grow into
-segmentation, video tracking, remote object storage, and model-assisted
-pre-annotation.
+datasets: boxes, polygons, and whole-image labels on images, model-assisted
+pre-annotation, and YOLO/COCO export, with a schema that can grow into video
+tracking and remote object storage.
 
 ## Current Shape
 
@@ -18,10 +18,11 @@ This repository is a Rust workspace split by responsibility:
 - `notatus-export`: YOLO detection import/export, COCO detection export, and
   image classification export.
 - `notatus-infer`: JSON-lines protocol for external pre-annotation model
-  runners.
+  runners, and the process manager that runs them.
 - `notatus-telemetry`: OpenTelemetry tracing and metrics init with OTLP/HTTP
   export and a console fallback when no endpoint is configured.
-- `notatus-ui`: testable desktop UI state plus an optional GPUI launch feature.
+- `notatus-ui`: the GPUI desktop app, around a renderer-independent and
+  testable `UiState`.
 
 The core design rule is that YOLO, COCO, CVAT, model outputs, and UI state are
 adapters around the Notatus schema. They are not the source of truth.

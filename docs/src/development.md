@@ -4,7 +4,15 @@
 
 - Rust `1.96.0` or newer
 - Rust edition `2024`
-- Native GPUI dependencies for the desktop shell
+- On Linux, the X11 keyboard development packages, which the desktop app
+  links against:
+
+  ```sh
+  sudo apt install libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+  ```
+
+  Fontconfig is loaded at runtime (see `.cargo/config.toml`), so it needs no
+  development package.
 
 ## Common Commands
 
@@ -76,16 +84,31 @@ mdbook build docs
 
 ## Testing Strategy
 
-The current tests focus on the stable domain and adapter layers:
+- `notatus-core`: geometry and dataset validation, serialization.
+- `notatus-storage`: save and load roundtrips, atomic saves, lenient loading
+  and recovery backups.
+- `notatus-export`: YOLO import and export, COCO and classification export,
+  filters, and finished-media selection.
+- `notatus-infer`: the protocol, prediction clipping, and the runner process
+  manager driven against `notatus-fake-runner` (crashes, bad output,
+  timeouts), plus the Ultralytics example runner against a stub of the
+  library.
+- `notatus-ui` state: every `UiState` change, undo, and model suggestions.
+- `notatus-ui` app: the real window in GPUI's test platform, driven by
+  keyboard shortcuts, the command palette, mouse gestures, saving, closing,
+  and running a model.
 
-- geometry validation
-- dataset validation
-- local project storage roundtrip
-- YOLO import/export
-- COCO export
-- inference protocol roundtrip
-- UI state mutation
+Screenshots of the window can be rendered offscreen for visual review. They
+need a GPU adapter, so they are ignored by default:
 
-The GPUI app is verified by compiling the default UI package and by focused unit
-tests around project state, tool state, coordinate mapping, and annotation
-creation.
+```sh
+NOTATUS_SCREENSHOT_DIR=/tmp/shots NOTATUS_SAMPLE_IMAGE=/path/to/image.png \
+    cargo test -p notatus-ui screenshots -- --ignored --nocapture
+```
+
+To try model suggestions without a model, build the fake runner and choose
+`target/debug/notatus-fake-runner` with "Choose model runner…" in the app:
+
+```sh
+cargo build -p notatus-infer --bin notatus-fake-runner
+```

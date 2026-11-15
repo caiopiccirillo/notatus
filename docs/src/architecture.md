@@ -1,36 +1,38 @@
 # System Overview
 
-Notatus is organized around a clean adapter boundary:
+Notatus is organized around one canonical schema with adapters around it:
 
 ```text
-                 +------------------+
-                 |   notatus-core   |
-                 | canonical schema |
-                 +---------+--------+
-                           |
-        +------------------+------------------+
-        |                  |                  |
-+-------v------+   +-------v------+   +-------v------+
-| notatus-ui   |   | notatus-     |   | notatus-     |
-| GPUI app     |   | storage      |   | export       |
-+------+-------+   +--------------+   +--------------+
-       |
-       |  (initializes on startup)
-       v
-+------+--------+
-| notatus-      |
-| telemetry     |
-| OTLP + console|
-+---------------+
-
-                    +--------------+
-                    | notatus-     |
-                    | infer        |
-                    +--------------+
+                      +---------------------------+
+                      |        notatus-ui         |
+                      | GPUI app around UiState   |
+                      +---+--------+--------+--+--+
+                          |        |        |  |
+          +---------------+  +-----+   +----+  +-----------------+
+          |                  |         |                         |
++---------v------+  +--------v-----+  +v-------------+  +--------v--------+
+| notatus-       |  | notatus-     |  | notatus-     |  | notatus-        |
+| storage        |  | export       |  | infer        |  | telemetry       |
+| project folder |  | YOLO, COCO,  |  | runner       |  | tracing, OTLP   |
+|                |  | classif.     |  | protocol and |  |                 |
+|                |  |              |  | processes    |  |                 |
++-------+--------+  +------+-------+  +------+-------+  +-----------------+
+        |                  |                 |
+        +------------------+--------+--------+
+                                    |
+                           +--------v---------+
+                           |   notatus-core   |
+                           | canonical schema |
+                           +------------------+
 ```
 
-`notatus-core` owns the dataset schema and validation rules. Every other crate
-depends on it and treats it as the canonical representation.
+The UI is the only crate that combines the others. Storage, export, and
+inference each depend on `notatus-core` alone, so each can be used and tested
+without the app. Telemetry depends on nothing else in the workspace.
+
+`notatus-core` owns the dataset schema and validation rules. Every crate but
+telemetry depends on it, the UI included, and treats it as the canonical
+representation.
 
 ## Design Principles
 
@@ -69,14 +71,19 @@ metadata. They are never silently treated as accepted labels.
 ### UI State Is Not the Schema
 
 `notatus-ui::UiState` is a testable mutation layer around `Dataset`. It tracks
-active tool, selected asset, selected annotation, and dirty state, but the
-dataset itself remains the authoritative data structure.
+the active tool, the selection, undo history, and unsaved changes, but the
+dataset itself remains the authoritative data structure. Its fields are
+private, so every change goes through a method that validates it, records an
+undo step, and marks the project dirty for autosave.
 
 ### External Model Boundary
 
 Model execution is intentionally outside the desktop binary. A runner may be
 Python, ONNX Runtime, TensorRT, a container, or a remote shim, as long as it
-speaks the JSON-lines protocol in `notatus-infer`.
+speaks the JSON-lines protocol in `notatus-infer`, which also starts and
+supervises the runner process. Which runner a project uses is kept in the
+user's own settings, never in the project, because a shared project must not
+be able to name a command to run.
 
 ### Observability Boundary
 

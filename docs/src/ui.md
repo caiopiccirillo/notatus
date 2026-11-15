@@ -4,59 +4,66 @@ The UI implementation lives in `crates/notatus-ui`.
 
 The crate has two layers:
 
-- `UiState`, which is renderer-independent and testable.
-- `app`, which is compiled by default through the `gpui-ui` feature.
+- `state`: `UiState`, which is renderer-independent and testable.
+- `app`: the GPUI application, compiled by default through the `gpui-ui`
+  feature.
 
 ## UI State
 
 `UiState` wraps the canonical `Dataset` and tracks UI-specific state:
 
-- active annotation tool (`Select`, `Draw Box`, `Pan/Zoom`)
-- selected asset
-- selected annotation
-- selected label
-- dirty flag
+- active annotation tool (Select, Draw Box, Draw Polygon)
+- selected media, annotation, and label (the label new shapes get)
+- undo and redo history
+- the revision last saved, from which `is_dirty()` follows
 
-Implemented mutations:
+Its fields are private and read through accessors such as `dataset()` and
+`selected_asset()`. Every change is a method that validates it, records an
+undo step, and moves to a new revision, so autosave and the close guard see
+every edit. `batch` groups several changes into one undo step.
 
-- create a new project
-- create UI state from an existing validated dataset
-- rename the project
-- set active tool
-- mark saved
-- add label
-- select label
-- update label name
-- update label color
-- remove label
-- add local image asset
-- select asset
-- remove media asset
-- select annotation
-- update annotation label
-- add human bounding-box annotation
+The methods are grouped by file under `src/state/`:
+
+- `labels.rs`: create, rename, recolor, and remove labels
+- `media.rs`: import, select, remove, and finish media, and step between media
+- `annotations.rs`: draw boxes and polygons, select, relabel, move, and remove
+  annotations, and step between them
+- `review.rs`: review states, the next draft, and applying model suggestions
+- `classifications.rs`: tag whole images with labels
+- `history.rs`: the undo stack and edit coalescing for drags and typing
 
 `UiState` always mutates the canonical dataset. It does not define a separate
 annotation schema.
 
-## GPUI Feature
+## GPUI App
 
-The native desktop shell runs by default:
+The native desktop app runs by default:
 
 ```sh
 cargo run -p notatus-ui
 ```
 
-The feature enables:
+The `gpui-ui` feature enables `gpui`, `gpui_platform`, `gpui-component`,
+`gpui-kit-assets` (Lucide icons), and `image` (reading image sizes on import).
 
-- `gpui`
-- `gpui-component`
-- `gpui-component-assets`
-- `image`
+`NotatusWindow` (`app/window.rs`) is the one view; its behavior is split into
+modules under `src/app/` by feature:
 
-The `image` crate is used to probe dimensions for selected image files before
-adding them as assets. The `gpui-component-assets` crate provides the SVG icons
-used by component controls such as the dock buttons.
+- `actions.rs`: actions, key bindings, and their handlers
+- `commands.rs`, `palette.rs`, `shortcuts.rs`: shared commands, the command
+  palette, and the shortcut sheet
+- `autosave.rs`, `project_commands.rs`, `project_session.rs`: saving, opening,
+  and closing projects
+- `media_import.rs`: importing files and folders
+- `model_run.rs`, `runner_settings.rs`: running models and remembering each
+  project's runner
+- `export_commands/`: the export dialog and writing exports
+- `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
+- `tools/`: tool definitions, in-progress drawing state, and the toolbar
+- `left_dock/`, `right_dock.rs`, `bottom_bar.rs`, `titlebar.rs`,
+  `label_picker.rs`, `view_options.rs`: the panels around the canvas
+- `assets.rs`: icons beyond the default set
+- `tests/`: tests that open the real window in GPUI's test platform
 
 ## Window Chrome
 
