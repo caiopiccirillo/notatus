@@ -14,8 +14,10 @@ be a runner.
    marked done. Progress shows in the status bar; **Stop model run** in the
    palette stops after the current image.
 3. Suggestions appear as drafts whose tags show the model's confidence
-   ("Car 87%"). Review them with **Y** to accept, **X** to reject, or edit them;
-   exports leave out suggestions nobody has reviewed.
+   ("Car 87%"). Review them with **Y** to accept, **X** to reject, or edit them,
+   and press **N** to go to the next image with suggestions; the review filter
+   can narrow that to suggestions the model was unsure of. Exports leave out
+   suggestions nobody has reviewed.
 
 The runner process stays alive between runs, so the model loads once. Running
 the model again on an image replaces its earlier suggestions that nobody has

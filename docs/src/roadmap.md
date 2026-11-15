@@ -4,12 +4,6 @@ Likely next steps, most valuable first, based on the current implementation.
 
 ## Near Term
 
-### Review Across Media
-
-Review keys work one media item at a time. A review queue would step through
-every draft or model suggestion in the project, filtered by label or
-confidence.
-
 ### More Model Tasks
 
 Runners can only suggest boxes and polygons for object detection. Next:

@@ -98,8 +98,7 @@ mdbook serve docs
 
 ## Near-Term Roadmap
 
-- Review drafts and model suggestions across all media, not one image at a
-  time, filtered by label or confidence.
+- Model tasks beyond detection: image classification and click-to-segment.
 - Make undo record changes instead of copying the dataset.
 
 See `docs/src/roadmap.md` for the longer list.

@@ -23,8 +23,9 @@ parallel representations.
 - Image import from files or whole folders, with EXIF orientation.
 - Bounding-box and polygon drawing, box moving and resizing, image
   classification, pan and zoom, and undo.
-- Keyboard-driven annotation and review: tool and review keys, a command
-  palette, and a shortcut sheet.
+- Keyboard-driven annotation and review: tool and review keys, a review queue
+  across all media filtered by label or confidence, a command palette, and a
+  shortcut sheet.
 - Model pre-annotation through external runner processes, with suggestions
   kept as drafts until a person reviews them.
 - YOLO detection import and export (Ultralytics layout), COCO detection
@@ -34,8 +35,6 @@ parallel representations.
 ## Current Limitations
 
 - Polygons can be drawn and relabeled but not reshaped.
-- Review works one media item at a time; there is no review queue across the
-  project yet.
 - Undo copies the whole dataset per step, which costs memory on large
   projects.
 - The media list has no thumbnails and is not virtualized.

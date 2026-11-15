@@ -28,7 +28,8 @@ The methods are grouped by file under `src/state/`:
 - `media.rs`: import, select, remove, and finish media, and step between media
 - `annotations.rs`: draw boxes and polygons, select, relabel, move, and remove
   annotations, and step between them
-- `review.rs`: review states, the next draft, and applying model suggestions
+- `review.rs`: review states, the review queue and its filter, and applying
+  model suggestions
 - `classifications.rs`: tag whole images with labels
 - `history.rs`: the undo stack and edit coalescing for drags and typing
 
@@ -57,6 +58,7 @@ modules under `src/app/` by feature:
 - `media_import.rs`: importing files and folders
 - `model_run.rs`, `runner_settings.rs`: running models and remembering each
   project's runner
+- `review_queue.rs`: stepping through drafts across media, and its filter
 - `export_commands/`: the export dialog and writing exports
 - `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
 - `tools/`: tool definitions, in-progress drawing state, and the toolbar
@@ -140,9 +142,28 @@ on every unfinished image; the sparkle button in the canvas toolbar does the
 former. Suggestions arrive as drafts whose tags show the model's confidence,
 ready for the Y/X review keys. See [Pre-Annotation](inference.md).
 
+## Review Queue
+
+The review queue is every draft in the project: media in list order, and each
+media's annotations in the order they were made. N goes to the next draft and
+Shift+N to the previous one, moving to its media, wrapping around at the end.
+With no annotation selected, the queue starts at the current media.
+
+Y and X review the selected annotation and move to the next draft on the same
+media. When none is left there, the app stays on the image and the status bar
+says so, so moving on is a choice: N goes on to the next media with drafts.
+
+The "To review" section of the Annotations dock shows how many drafts are left,
+with previous and next buttons and two filters: one label, and model
+suggestions below a confidence (90%, 75%, 50%, or 25%), which leaves out shapes
+a person drew. The filter also limits which draft Y and X move to. It lasts for
+the session and resets when another project opens. The status bar shows the
+count too.
+
 ## Right Docks
 
-- Annotations, the default: the selected media's image labels and objects. Each
+- Annotations, the default: the review queue, then the selected media's image
+  labels and objects. Each
   object row shows its review state, accept and reject toggles, and a label
   menu. Y accepts, X rejects, and U resets the selected annotation; accepting
   or rejecting moves to the next draft on the same media.
