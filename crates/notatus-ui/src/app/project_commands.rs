@@ -350,8 +350,6 @@ fn apply_project_load_result(
                         cx,
                     );
                 }
-                notatus.sync_project_name_input(window, cx);
-                notatus.sync_label_name_input(window, cx);
             }
             Err(error) => notatus.report_failure(failure_title, error, cx),
         }

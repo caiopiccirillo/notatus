@@ -196,8 +196,8 @@ impl NotatusWindow {
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.open_command_palette(window, cx);
             }))
-            .on_action(cx.listener(|this, _: &Undo, window, cx| this.undo(window, cx)))
-            .on_action(cx.listener(|this, _: &Redo, window, cx| this.redo(window, cx)))
+            .on_action(cx.listener(|this, _: &Undo, _, cx| this.undo(cx)))
+            .on_action(cx.listener(|this, _: &Redo, _, cx| this.redo(cx)))
             .on_action(cx.listener(|_, _: &NewProject, window, cx| {
                 run_outside_update(cx, window, project_commands::new_project);
             }))
@@ -219,8 +219,8 @@ impl NotatusWindow {
             .on_action(cx.listener(|_, _: &ExportAnnotations, window, cx| {
                 run_outside_update(cx, window, export_commands::open_export_dialog);
             }))
-            .on_action(cx.listener(|this, _: &NewLabel, window, cx| {
-                this.create_label(window, cx);
+            .on_action(cx.listener(|this, _: &NewLabel, _, cx| {
+                this.create_label(cx);
             }))
             .on_action(cx.listener(|this, _: &PickLabel, window, cx| {
                 this.open_label_picker(window, cx);
@@ -237,20 +237,20 @@ impl NotatusWindow {
             .on_action(cx.listener(|this, _: &ToggleFocusSelected, _, cx| {
                 this.toggle_view_option(ViewToggle::FocusSelected, cx);
             }))
-            .on_action(cx.listener(|this, _: &AcceptAnnotation, window, cx| {
-                this.review_selection(ReviewState::Accepted, window, cx);
+            .on_action(cx.listener(|this, _: &AcceptAnnotation, _, cx| {
+                this.review_selection(ReviewState::Accepted, cx);
             }))
-            .on_action(cx.listener(|this, _: &RejectAnnotation, window, cx| {
-                this.review_selection(ReviewState::Rejected, window, cx);
+            .on_action(cx.listener(|this, _: &RejectAnnotation, _, cx| {
+                this.review_selection(ReviewState::Rejected, cx);
             }))
-            .on_action(cx.listener(|this, _: &ResetAnnotationReview, window, cx| {
-                this.review_selection(ReviewState::Draft, window, cx);
+            .on_action(cx.listener(|this, _: &ResetAnnotationReview, _, cx| {
+                this.review_selection(ReviewState::Draft, cx);
             }))
-            .on_action(cx.listener(|this, _: &NextDraft, window, cx| {
-                this.step_review_queue(Direction::Next, window, cx);
+            .on_action(cx.listener(|this, _: &NextDraft, _, cx| {
+                this.step_review_queue(Direction::Next, cx);
             }))
-            .on_action(cx.listener(|this, _: &PreviousDraft, window, cx| {
-                this.step_review_queue(Direction::Previous, window, cx);
+            .on_action(cx.listener(|this, _: &PreviousDraft, _, cx| {
+                this.step_review_queue(Direction::Previous, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::Select, cx);
@@ -261,32 +261,32 @@ impl NotatusWindow {
             .on_action(cx.listener(|this, _: &PolygonTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::DrawPolygon, cx);
             }))
-            .on_action(cx.listener(|this, _: &NextMedia, window, cx| {
-                this.step_media(Direction::Next, false, window, cx);
+            .on_action(cx.listener(|this, _: &NextMedia, _, cx| {
+                this.step_media(Direction::Next, false, cx);
             }))
-            .on_action(cx.listener(|this, _: &PreviousMedia, window, cx| {
-                this.step_media(Direction::Previous, false, window, cx);
+            .on_action(cx.listener(|this, _: &PreviousMedia, _, cx| {
+                this.step_media(Direction::Previous, false, cx);
             }))
-            .on_action(cx.listener(|this, _: &NextPendingMedia, window, cx| {
-                this.step_media(Direction::Next, true, window, cx);
+            .on_action(cx.listener(|this, _: &NextPendingMedia, _, cx| {
+                this.step_media(Direction::Next, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleMediaDone, _, cx| {
                 this.toggle_media_done(cx);
             }))
-            .on_action(cx.listener(|this, _: &DoneAndNext, window, cx| {
-                this.done_and_next(window, cx);
+            .on_action(cx.listener(|this, _: &DoneAndNext, _, cx| {
+                this.done_and_next(cx);
             }))
-            .on_action(cx.listener(|this, _: &NextAnnotation, window, cx| {
-                this.step_annotation(Direction::Next, window, cx);
+            .on_action(cx.listener(|this, _: &NextAnnotation, _, cx| {
+                this.step_annotation(Direction::Next, cx);
             }))
-            .on_action(cx.listener(|this, _: &PreviousAnnotation, window, cx| {
-                this.step_annotation(Direction::Previous, window, cx);
+            .on_action(cx.listener(|this, _: &PreviousAnnotation, _, cx| {
+                this.step_annotation(Direction::Previous, cx);
             }))
-            .on_action(cx.listener(|this, _: &DeleteSelection, window, cx| {
-                this.delete_selection(window, cx);
+            .on_action(cx.listener(|this, _: &DeleteSelection, _, cx| {
+                this.delete_selection(cx);
             }))
-            .on_action(cx.listener(|this, _: &Cancel, window, cx| {
-                this.cancel(window, cx);
+            .on_action(cx.listener(|this, _: &Cancel, _, cx| {
+                this.cancel(cx);
             }))
             .on_action(cx.listener(|this, _: &FitCanvas, _, cx| {
                 this.fit_canvas_to_view(cx);
@@ -302,51 +302,44 @@ impl NotatusWindow {
                 Theme::change(mode, Some(window), cx);
                 window.refresh();
             }))
-            .on_action(cx.listener(|this, action: &SelectLabelSlot, window, cx| {
+            .on_action(cx.listener(|this, action: &SelectLabelSlot, _, cx| {
                 if let Some(label_id) = this.state.dataset().labels.get(action.0).map(|l| l.id) {
-                    this.choose_label(label_id, window, cx);
+                    this.choose_label(label_id, cx);
                 }
             }))
-            .on_action(cx.listener(|this, action: &SelectLabelById, window, cx| {
-                this.choose_label(action.0, window, cx);
+            .on_action(cx.listener(|this, action: &SelectLabelById, _, cx| {
+                this.choose_label(action.0, cx);
             }))
-            .on_action(cx.listener(|this, action: &GoToMedia, window, cx| {
-                this.go_to_media(action.0, window, cx);
+            .on_action(cx.listener(|this, action: &GoToMedia, _, cx| {
+                this.go_to_media(action.0, cx);
             }))
     }
 
-    pub(super) fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn undo(&mut self, cx: &mut Context<Self>) {
         self.tools.cancel_drawing();
         self.status_message = Some(match self.state.undo() {
             Some(description) => format!("Undid {}", description.to_lowercase()),
             None => "Nothing to undo".to_string(),
         });
-        self.after_history_jump(window, cx);
+        self.after_history_jump(cx);
     }
 
-    pub(super) fn redo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn redo(&mut self, cx: &mut Context<Self>) {
         self.tools.cancel_drawing();
         self.status_message = Some(match self.state.redo() {
             Some(description) => format!("Redid {}", description.to_lowercase()),
             None => "Nothing to redo".to_string(),
         });
-        self.after_history_jump(window, cx);
+        self.after_history_jump(cx);
     }
 
-    fn after_history_jump(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn after_history_jump(&mut self, cx: &mut Context<Self>) {
         self.hovered_annotation = None;
-        self.sync_project_name_input(window, cx);
-        self.sync_label_name_input(window, cx);
         cx.notify();
     }
 
     /// Selects a media item and resets the canvas for it.
-    pub(super) fn go_to_media(
-        &mut self,
-        asset_id: AssetId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn go_to_media(&mut self, asset_id: AssetId, cx: &mut Context<Self>) {
         if self.state.selected_asset() == Some(asset_id) {
             return;
         }
@@ -356,7 +349,6 @@ impl NotatusWindow {
                 self.canvas_image_layout.borrow_mut().take();
                 self.hovered_annotation = None;
                 self.status_message = None;
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -367,14 +359,13 @@ impl NotatusWindow {
         &mut self,
         direction: Direction,
         pending_only: bool,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match self
             .state
             .adjacent_asset(self.state.selected_asset(), direction, pending_only)
         {
-            Some(asset_id) => self.go_to_media(asset_id, window, cx),
+            Some(asset_id) => self.go_to_media(asset_id, cx),
             None => {
                 self.status_message = Some(
                     match (direction, pending_only) {
@@ -410,7 +401,7 @@ impl NotatusWindow {
     }
 
     /// Marks the current media done and moves on to the next pending one.
-    pub(super) fn done_and_next(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn done_and_next(&mut self, cx: &mut Context<Self>) {
         let Some(asset_id) = self.state.selected_asset() else {
             return;
         };
@@ -424,7 +415,7 @@ impl NotatusWindow {
             .adjacent_asset(Some(asset_id), Direction::Next, true)
             .or_else(|| self.state.adjacent_asset(None, Direction::Next, true));
         match next {
-            Some(next) => self.go_to_media(next, window, cx),
+            Some(next) => self.go_to_media(next, cx),
             None => {
                 self.status_message = Some("All media done".to_string());
                 cx.notify();
@@ -432,14 +423,9 @@ impl NotatusWindow {
         }
     }
 
-    fn step_annotation(
-        &mut self,
-        direction: Direction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn step_annotation(&mut self, direction: Direction, cx: &mut Context<Self>) {
         if let Some(annotation_id) = self.state.adjacent_annotation(direction) {
-            self.select_annotation(Some(annotation_id), window, cx);
+            self.select_annotation(Some(annotation_id), cx);
         }
     }
 
@@ -448,12 +434,7 @@ impl NotatusWindow {
     /// in the review queue on the same media, so a review pass is one key per
     /// shape. It stays on the media when none is left there, so moving on
     /// is a choice: N goes to the next draft on other media.
-    pub(super) fn review_selection(
-        &mut self,
-        review_state: ReviewState,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn review_selection(&mut self, review_state: ReviewState, cx: &mut Context<Self>) {
         let target = self
             .state
             .selected_annotation()
@@ -481,7 +462,7 @@ impl NotatusWindow {
             .then(|| self.state.next_draft_annotation(annotation_id))
             .flatten();
         if let Some(next) = next {
-            self.select_annotation(Some(next), window, cx);
+            self.select_annotation(Some(next), cx);
         }
         self.status_message = Some(match (review_state, next) {
             (ReviewState::Draft, _) | (_, Some(_)) => done.to_string(),
@@ -495,7 +476,7 @@ impl NotatusWindow {
         cx.notify();
     }
 
-    pub(super) fn delete_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn delete_selection(&mut self, cx: &mut Context<Self>) {
         if self.tools.draw_polygon.is_some() {
             self.tools.remove_last_polygon_point();
             cx.notify();
@@ -504,20 +485,18 @@ impl NotatusWindow {
         let Some(annotation_id) = self.state.selected_annotation() else {
             return;
         };
-        self.delete_annotation(annotation_id, window, cx);
+        self.delete_annotation(annotation_id, cx);
     }
 
     pub(super) fn delete_annotation(
         &mut self,
         annotation_id: AnnotationId,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match self.state.remove_annotation(annotation_id) {
             Ok(()) => {
                 self.hovered_annotation = None;
                 self.status_message = Some("Deleted annotation".to_string());
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -525,13 +504,13 @@ impl NotatusWindow {
     }
 
     /// Escape: abandon an in-progress shape first, then clear the selection.
-    fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn cancel(&mut self, cx: &mut Context<Self>) {
         if self.tools.draw_box.is_some() || self.tools.draw_polygon.is_some() {
             self.tools.cancel_drawing();
             self.status_message = Some("Cancelled drawing".to_string());
             cx.notify();
         } else if self.state.selected_annotation().is_some() {
-            self.select_annotation(None, window, cx);
+            self.select_annotation(None, cx);
         }
     }
 
@@ -551,17 +530,10 @@ impl NotatusWindow {
 
     /// Makes a label active and applies it to the selected annotation, so
     /// number keys relabel boxes as quickly as they pick the drawing label.
-    pub(super) fn choose_label(
-        &mut self,
-        label_id: LabelId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn choose_label(&mut self, label_id: LabelId, cx: &mut Context<Self>) {
         match self.state.selected_annotation() {
-            Some(annotation_id) => {
-                self.update_annotation_label(annotation_id, label_id, window, cx)
-            }
-            None => self.select_label(label_id, window, cx),
+            Some(annotation_id) => self.update_annotation_label(annotation_id, label_id, cx),
+            None => self.select_label(label_id, cx),
         }
     }
 

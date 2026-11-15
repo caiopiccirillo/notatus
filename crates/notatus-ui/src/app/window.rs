@@ -34,9 +34,7 @@ pub(super) struct NotatusWindow {
     pub(super) status_message: Option<String>,
     pub(super) project_location: ProjectLocation,
     pub(super) project_name_input: gpui::Entity<InputState>,
-    pub(super) syncing_project_input: bool,
     pub(super) label_name_input: gpui::Entity<InputState>,
-    pub(super) syncing_label_input: bool,
     pub(super) label_color_picker: gpui::Entity<ColorPickerState>,
     pub(super) label_color_target: Option<LabelId>,
     pub(super) tools: ToolInteractionState,
@@ -52,6 +50,8 @@ pub(super) struct NotatusWindow {
     pub(super) runner_settings: super::runner_settings::RunnerSettings,
     pub(super) label_picker: gpui::Entity<super::label_picker::LabelPickerState>,
     pub(super) label_picker_synced: Option<(u64, Option<LabelId>)>,
+    /// The revision and label the name fields last showed.
+    pub(super) name_inputs_synced: Option<(u64, Option<LabelId>)>,
     pub(super) media_list: gpui::Entity<super::left_dock::MediaListState>,
     /// The revision and media the list last showed.
     pub(super) media_list_synced: Option<(u64, Option<AssetId>)>,
@@ -96,7 +96,7 @@ impl NotatusWindow {
                 &project_name_input,
                 window,
                 |this, input, event: &InputEvent, _window, cx| {
-                    if matches!(event, InputEvent::Change) && !this.syncing_project_input {
+                    if matches!(event, InputEvent::Change) {
                         let value = input.read(cx).value().to_string();
                         match this.state.rename_project(value) {
                             Ok(()) => this.status_message = None,
@@ -111,7 +111,6 @@ impl NotatusWindow {
                 window,
                 |this, input, event: &InputEvent, _window, cx| {
                     if matches!(event, InputEvent::Change)
-                        && !this.syncing_label_input
                         && let Some(label_id) = this.state.selected_label()
                     {
                         let value = input.read(cx).value().to_string();
@@ -156,9 +155,7 @@ impl NotatusWindow {
             status_message: None,
             project_location: ProjectLocation::default(),
             project_name_input,
-            syncing_project_input: false,
             label_name_input,
-            syncing_label_input: false,
             label_color_picker,
             label_color_target: None,
             tools: ToolInteractionState::default(),
@@ -174,6 +171,7 @@ impl NotatusWindow {
             runner_settings: super::runner_settings::RunnerSettings::for_user(),
             label_picker,
             label_picker_synced: None,
+            name_inputs_synced: None,
             media_list,
             media_list_synced: None,
             view_options: Default::default(),
@@ -254,6 +252,7 @@ impl NotatusWindow {
 
 impl Render for NotatusWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_name_inputs(window, cx);
         self.sync_label_picker(window, cx);
         self.sync_media_list(window, cx);
         // gpui-component's Root mounts the dialog and notification layers itself.

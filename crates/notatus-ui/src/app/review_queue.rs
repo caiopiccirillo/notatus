@@ -6,7 +6,7 @@ use crate::app::helpers::{counted_section_title, plural};
 use crate::app::window::NotatusWindow;
 use crate::{Direction, ReviewFilter};
 use gpui::prelude::*;
-use gpui::{Context, Window, div};
+use gpui::{Context, div};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_component::{Disableable as _, Icon, IconName, Sizable as _};
@@ -18,12 +18,7 @@ const CONFIDENCE_THRESHOLDS: [f32; 4] = [0.9, 0.75, 0.5, 0.25];
 impl NotatusWindow {
     /// Selects the next or previous draft in the review queue, moving to its
     /// media when it is on another one.
-    pub(super) fn step_review_queue(
-        &mut self,
-        direction: Direction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn step_review_queue(&mut self, direction: Direction, cx: &mut Context<Self>) {
         let target = self
             .state
             .adjacent_review_draft(direction)
@@ -37,8 +32,8 @@ impl NotatusWindow {
             });
         match target {
             Some((annotation_id, asset_id)) => {
-                self.go_to_media(asset_id, window, cx);
-                self.select_annotation(Some(annotation_id), window, cx);
+                self.go_to_media(asset_id, cx);
+                self.select_annotation(Some(annotation_id), cx);
                 self.status_message = Some(self.review_queue_summary());
             }
             None if self.state.review_queue_len() == 0 => {

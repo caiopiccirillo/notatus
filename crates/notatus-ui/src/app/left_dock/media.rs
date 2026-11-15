@@ -236,11 +236,11 @@ impl NotatusWindow {
     ) -> (gpui::Entity<MediaListState>, Subscription) {
         let list =
             cx.new(|cx| ListState::new(MediaListDelegate::default(), window, cx).searchable(true));
-        let subscription = cx.subscribe_in(&list, window, |this, list, event, window, cx| {
+        let subscription = cx.subscribe_in(&list, window, |this, list, event, _, cx| {
             if let ListEvent::Confirm(ix) = event
                 && let Some(asset_id) = list.read(cx).delegate().asset_at(ix.row)
             {
-                this.go_to_media(asset_id, window, cx);
+                this.go_to_media(asset_id, cx);
             }
         });
         (list, subscription)

@@ -156,9 +156,9 @@ impl NotatusWindow {
                     row.bg(colors.list_hover)
                 }
             })
-            .on_click(move |_, window, cx| {
+            .on_click(move |_, _, cx| {
                 let _ = row_view.update(cx, |notatus, cx| {
-                    notatus.select_annotation(Some(annotation_id), window, cx);
+                    notatus.select_annotation(Some(annotation_id), cx);
                 });
             })
             .on_hover(move |hovered, _, cx| {
@@ -233,9 +233,9 @@ fn annotation_label_menu(
                 PopupMenuItem::new(label.name.clone())
                     .checked(current)
                     .disabled(current)
-                    .on_click(move |_, window, cx| {
+                    .on_click(move |_, _, cx| {
                         let _ = view.update(cx, |notatus, cx| {
-                            notatus.update_annotation_label(annotation_id, label_id, window, cx);
+                            notatus.update_annotation_label(annotation_id, label_id, cx);
                         });
                     }),
             )
@@ -261,12 +261,12 @@ fn review_buttons(
             .icon(Icon::new(icon))
             .selected(active)
             .tooltip(tooltip)
-            .on_click(move |_, window, cx| {
+            .on_click(move |_, _, cx| {
                 cx.stop_propagation();
                 let target = if active { ReviewState::Draft } else { state };
                 let _ = view.update(cx, |notatus, cx| {
-                    notatus.select_annotation(Some(annotation_id), window, cx);
-                    notatus.review_selection(target, window, cx);
+                    notatus.select_annotation(Some(annotation_id), cx);
+                    notatus.review_selection(target, cx);
                 });
             })
     };

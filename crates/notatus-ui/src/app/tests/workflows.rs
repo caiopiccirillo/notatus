@@ -679,3 +679,53 @@ fn the_review_filter_limits_where_n_goes(cx: &mut TestAppContext) {
         );
     });
 }
+
+#[gpui::test]
+fn name_fields_follow_undo_but_keep_a_rejected_edit(cx: &mut TestAppContext) {
+    let (window, view) = open_test_window(cx);
+    let label = view.update(cx, |notatus, cx| {
+        let label = notatus.state.add_label("Car");
+        notatus.state.select_label(label).unwrap();
+        cx.notify();
+        label
+    });
+    cx.run_until_parked();
+    let field = |cx: &mut TestAppContext| {
+        view.read_with(cx, |notatus, cx| {
+            notatus.label_name_input.read(cx).value().to_string()
+        })
+    };
+    assert_eq!(field(cx), "Car");
+
+    // Typing renames the label; undo puts the old name back in the field.
+    cx.update_window(window.into(), |_, window, cx| {
+        let input = view.read(cx).label_name_input.clone();
+        input.update(cx, |input, cx| input.replace_all("Truck", window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.read_with(cx, |notatus, _| {
+        assert_eq!(
+            notatus.state.dataset().label_by_id(label).unwrap().name,
+            "Truck"
+        );
+    });
+    cx.simulate_keystrokes(window.into(), "ctrl-z");
+    cx.run_until_parked();
+    assert_eq!(field(cx), "Car");
+
+    // An empty name is rejected, and stays in the field to be retyped.
+    cx.update_window(window.into(), |_, window, cx| {
+        let input = view.read(cx).label_name_input.clone();
+        input.update(cx, |input, cx| input.replace_all("", window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(field(cx), "");
+    view.read_with(cx, |notatus, _| {
+        assert_eq!(
+            notatus.state.dataset().label_by_id(label).unwrap().name,
+            "Car"
+        );
+    });
+}

@@ -32,9 +32,9 @@ pub(super) fn labels_actions(view: gpui::WeakEntity<NotatusWindow>) -> impl Into
             &crate::app::actions::NewLabel,
             Some(crate::app::actions::CONTEXT),
         )
-        .on_click(move |_, window, cx| {
+        .on_click(move |_, _, cx| {
             let _ = view.update(cx, |notatus, cx| {
-                notatus.create_label(window, cx);
+                notatus.create_label(cx);
             });
         })
 }
@@ -61,9 +61,9 @@ pub(super) fn labels_content(
                     .small()
                     .icon(Icon::new(IconName::Plus))
                     .label("Add label")
-                    .on_click(move |_, window, cx| {
+                    .on_click(move |_, _, cx| {
                         let _ = view.update(cx, |notatus, cx| {
-                            notatus.create_label(window, cx);
+                            notatus.create_label(cx);
                         });
                     }),
             )
@@ -141,9 +141,9 @@ fn label_row(
         .when(selected, |row| {
             row.bg(colors.list_active).font_weight(FontWeight::MEDIUM)
         })
-        .on_click(move |_, window, cx| {
+        .on_click(move |_, _, cx| {
             let _ = select_view.update(cx, |notatus, cx| {
-                notatus.select_label(label_id, window, cx);
+                notatus.select_label(label_id, cx);
             });
         })
         .child(
@@ -376,7 +376,7 @@ fn remove_label_or_confirm(
 ) {
     if annotation_count == 0 {
         let _ = view.update(cx, |notatus, cx| {
-            notatus.remove_label(label_id, window, cx);
+            notatus.remove_label(label_id, cx);
         });
         return;
     }
@@ -398,9 +398,9 @@ fn remove_label_or_confirm(
                     .ok_variant(ButtonVariant::Danger)
                     .cancel_text("Cancel"),
             )
-            .on_ok(move |_, window, cx| {
+            .on_ok(move |_, _, cx| {
                 let _ = remove_view.update(cx, |notatus, cx| {
-                    notatus.remove_label(label_id, window, cx);
+                    notatus.remove_label(label_id, cx);
                 });
                 true
             })

@@ -158,11 +158,9 @@ impl NotatusWindow {
                     }
                 };
                 match values.first() {
-                    Some(LabelChoice::Existing(label_id)) => {
-                        this.choose_label(*label_id, window, cx)
-                    }
+                    Some(LabelChoice::Existing(label_id)) => this.choose_label(*label_id, cx),
                     Some(LabelChoice::Create(name)) => {
-                        this.create_label_named(name.to_string(), window, cx)
+                        this.create_label_named(name.to_string(), cx)
                     }
                     None => {}
                 }
@@ -173,10 +171,10 @@ impl NotatusWindow {
 
     /// Creates a label from a typed name and makes it active, relabeling the
     /// selected annotation like choosing an existing label does.
-    fn create_label_named(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn create_label_named(&mut self, name: String, cx: &mut Context<Self>) {
         let label_id = commands::add_colored_label(&mut self.state, Some(name));
         self.status_message = Some("Created label".to_string());
-        self.choose_label(label_id, window, cx);
+        self.choose_label(label_id, cx);
     }
 
     /// Refreshes the picker's options and selection from the dataset. Runs

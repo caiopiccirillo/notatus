@@ -37,24 +37,17 @@ pub(super) fn drawing_label(state: &mut UiState) -> (LabelId, bool) {
 }
 
 impl NotatusWindow {
-    pub(super) fn create_label(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn create_label(&mut self, cx: &mut Context<Self>) {
         add_colored_label(&mut self.state, None);
         self.left_dock = LeftDock::Labels;
         self.status_message = Some("Created label".to_string());
-        self.sync_label_name_input(window, cx);
         cx.notify();
     }
 
-    pub(super) fn select_label(
-        &mut self,
-        label_id: LabelId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn select_label(&mut self, label_id: LabelId, cx: &mut Context<Self>) {
         match self.state.select_label(label_id) {
             Ok(()) => {
                 self.status_message = None;
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -111,17 +104,13 @@ impl NotatusWindow {
         cx: &mut Context<Self>,
     ) {
         if self.state.select_label(label_id).is_ok() {
-            self.sync_label_name_input(window, cx);
+            // The rename dialog opens on this frame, so fill its field now.
+            self.sync_name_inputs(window, cx);
             cx.notify();
         }
     }
 
-    pub(super) fn remove_label(
-        &mut self,
-        label_id: LabelId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn remove_label(&mut self, label_id: LabelId, cx: &mut Context<Self>) {
         match self.state.remove_label(label_id) {
             Ok(removed) => {
                 self.hovered_annotation = None;
@@ -132,7 +121,6 @@ impl NotatusWindow {
                     removed.classifications,
                     plural(removed.classifications),
                 ));
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -161,13 +149,11 @@ impl NotatusWindow {
         &mut self,
         annotation_id: AnnotationId,
         label_id: LabelId,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match self.state.update_annotation_label(annotation_id, label_id) {
             Ok(()) => {
                 self.status_message = Some("Updated annotation label".to_string());
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -208,13 +194,11 @@ impl NotatusWindow {
         &mut self,
         annotation_id: AnnotationId,
         bbox: BoundingBox,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match self.state.update_annotation_bbox(annotation_id, bbox) {
             Ok(()) => {
                 self.status_message = Some("Updated annotation".to_string());
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -224,13 +208,11 @@ impl NotatusWindow {
     pub(super) fn select_annotation(
         &mut self,
         annotation_id: Option<AnnotationId>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match self.state.select_annotation(annotation_id) {
             Ok(()) => {
                 self.status_message = annotation_id.map(|_| "Selected annotation".to_string());
-                self.sync_label_name_input(window, cx);
             }
             Err(error) => self.status_message = Some(error.to_string()),
         }
@@ -248,25 +230,33 @@ impl NotatusWindow {
         }
     }
 
-    pub(super) fn sync_label_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let name = self
+    /// Keeps the project and label name fields showing the names they edit,
+    /// after undo, opening a project, or choosing another label. Runs when
+    /// the dataset or the active label changed, and rewrites a field only when
+    /// it shows something else, so typing is never interrupted and a name
+    /// rejected mid-edit (an empty one) stays in the field.
+    pub(super) fn sync_name_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let key = (self.state.revision(), self.state.selected_label());
+        if self.name_inputs_synced == Some(key) {
+            return;
+        }
+        self.name_inputs_synced = Some(key);
+        let project = self.state.dataset().manifest.project.name.clone();
+        let label = self
             .selected_label()
             .map(|label| label.name.clone())
             .unwrap_or_default();
-        self.syncing_label_input = true;
-        self.label_name_input.update(cx, |input, cx| {
-            input.set_value(name, window, cx);
-        });
-        self.syncing_label_input = false;
-    }
-
-    pub(super) fn sync_project_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let name = self.state.dataset().manifest.project.name.clone();
-        self.syncing_project_input = true;
-        self.project_name_input.update(cx, |input, cx| {
-            input.set_value(name, window, cx);
-        });
-        self.syncing_project_input = false;
+        for (input, name) in [
+            (self.project_name_input.clone(), project),
+            (self.label_name_input.clone(), label),
+        ] {
+            input.update(cx, |input, cx| {
+                // set_value emits no change event, so this edits nothing.
+                if input.value() != name.as_str() {
+                    input.set_value(name, window, cx);
+                }
+            });
+        }
     }
 
     pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
