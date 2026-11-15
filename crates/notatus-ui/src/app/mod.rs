@@ -44,6 +44,7 @@ mod model_run;
 mod palette;
 mod project_commands;
 mod project_session;
+mod review_queue;
 mod right_dock;
 mod runner_settings;
 mod titlebar;

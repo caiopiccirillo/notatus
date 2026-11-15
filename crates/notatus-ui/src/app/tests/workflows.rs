@@ -2,6 +2,7 @@
 //! drawing, labels, and review.
 
 use super::support::open_test_window;
+use crate::ReviewFilter;
 use crate::app::*;
 use gpui::TestAppContext;
 use notatus_core::ReviewState;
@@ -567,6 +568,109 @@ fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
         assert_eq!(
             notatus.state.dataset().annotations[1].review_state,
             ReviewState::Draft
+        );
+    });
+}
+
+#[gpui::test]
+fn the_review_queue_crosses_media_only_when_asked(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let (assets, first, other_media) = view.update(cx, |notatus, _| {
+        let (label, assets) = seed_three_media(notatus);
+        let draw = |notatus: &mut NotatusWindow, asset, x: f64| {
+            let bbox = BoundingBox::from_xywh(x, 0.0, 10.0, 10.0).unwrap();
+            notatus
+                .state
+                .add_human_bbox(asset, label, bbox, None)
+                .unwrap()
+        };
+        let first = draw(notatus, assets[0], 0.0);
+        let other_media = draw(notatus, assets[2], 0.0);
+        notatus.state.select_asset(assets[0]).unwrap();
+        (assets, first, other_media)
+    });
+    cx.run_until_parked();
+
+    // Y reviews the only draft here and stays, pointing at N.
+    cx.simulate_keystrokes(window, "y");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_asset(), Some(assets[0]));
+        assert_eq!(notatus.state.selected_annotation(), Some(first));
+        let message = notatus.status_message.clone().unwrap();
+        assert!(
+            message.contains("press N for the next one (1 left)"),
+            "{message}"
+        );
+        assert_eq!(
+            notatus.progress_summary().as_deref(),
+            Some("1 of 3 · 0 done · 1 to review")
+        );
+    });
+
+    // N moves to the draft on the third media.
+    cx.simulate_keystrokes(window, "n");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_asset(), Some(assets[2]));
+        assert_eq!(notatus.state.selected_annotation(), Some(other_media));
+        assert_eq!(notatus.status_message.as_deref(), Some("1 draft to review"));
+    });
+
+    // Rejecting the last draft empties the queue.
+    cx.simulate_keystrokes(window, "x");
+    view.update(cx, |notatus, _| {
+        assert_eq!(
+            notatus.status_message.as_deref(),
+            Some("Rejected annotation. Nothing left to review")
+        );
+    });
+}
+
+#[gpui::test]
+fn the_review_filter_limits_where_n_goes(cx: &mut TestAppContext) {
+    let (window_handle, view) = open_test_window(cx);
+    let window: gpui::AnyWindowHandle = window_handle.into();
+    let (assets, car_draft) = view.update(cx, |notatus, cx| {
+        let (car, assets) = seed_three_media(notatus);
+        let person = notatus.state.dataset().labels[0].id;
+        let bbox = BoundingBox::from_xywh(0.0, 0.0, 10.0, 10.0).unwrap();
+        notatus
+            .state
+            .add_human_bbox(assets[1], person, bbox, None)
+            .unwrap();
+        let car_draft = notatus
+            .state
+            .add_human_bbox(assets[2], car, bbox, None)
+            .unwrap();
+        notatus.state.select_asset(assets[0]).unwrap();
+        notatus.set_review_filter(
+            ReviewFilter {
+                label: Some(car),
+                below_confidence: None,
+            },
+            cx,
+        );
+        assert_eq!(
+            notatus.status_message.as_deref(),
+            Some("1 draft to review matching the filter")
+        );
+        (assets, car_draft)
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(window, "n");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_asset(), Some(assets[2]));
+        assert_eq!(notatus.state.selected_annotation(), Some(car_draft));
+    });
+
+    // Shift+N wraps around to the same draft, so there is nowhere else to go.
+    cx.simulate_keystrokes(window, "shift-n");
+    view.update(cx, |notatus, _| {
+        assert_eq!(notatus.state.selected_annotation(), Some(car_draft));
+        assert_eq!(
+            notatus.status_message.as_deref(),
+            Some("No other draft to review")
         );
     });
 }

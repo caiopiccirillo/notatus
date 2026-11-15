@@ -183,6 +183,16 @@ impl NotatusWindow {
                 );
         }
 
+        if self.state.review_queue_len() > 0 {
+            annotate = annotate
+                .command("Next draft to review", IconName::ChevronRight, NextDraft)
+                .command(
+                    "Previous draft to review",
+                    IconName::ChevronLeft,
+                    PreviousDraft,
+                );
+        }
+
         let mut media = PaletteGroup::new("Media");
         if let Some(asset) = self.selected_asset() {
             let done = asset.status == notatus_core::AssetStatus::Done;

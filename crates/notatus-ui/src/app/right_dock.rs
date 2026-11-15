@@ -67,6 +67,7 @@ impl NotatusWindow {
                     "Media",
                     compact_text(&asset_display_name(asset), 28),
                 ))
+                .child(self.review_queue_section(&labels, view.clone()))
                 .child(
                     div()
                         .flex()

@@ -56,6 +56,10 @@ actions!(
         RejectAnnotation,
         /// Return the selected annotation to draft.
         ResetAnnotationReview,
+        /// Go to the next draft to review, on any media.
+        NextDraft,
+        /// Go to the previous draft to review, on any media.
+        PreviousDraft,
         /// Show every keyboard shortcut.
         ShowShortcuts,
         /// Run the project's model on the current media.
@@ -136,6 +140,8 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("y", AcceptAnnotation, canvas),
         KeyBinding::new("x", RejectAnnotation, canvas),
         KeyBinding::new("u", ResetAnnotationReview, canvas),
+        KeyBinding::new("n", NextDraft, canvas),
+        KeyBinding::new("shift-n", PreviousDraft, canvas),
     ]);
     cx.bind_keys((0..9).map(|slot| {
         const KEYS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -235,6 +241,12 @@ impl NotatusWindow {
             }))
             .on_action(cx.listener(|this, _: &ResetAnnotationReview, window, cx| {
                 this.review_selection(ReviewState::Draft, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NextDraft, window, cx| {
+                this.step_review_queue(Direction::Next, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PreviousDraft, window, cx| {
+                this.step_review_queue(Direction::Previous, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectTool, _, cx| {
                 this.set_canvas_tool(AnnotationTool::Select, cx);
@@ -428,8 +440,10 @@ impl NotatusWindow {
     }
 
     /// Reviews the selected annotation, or the first one on this media when
-    /// none is selected. Accepting or rejecting then selects the next
-    /// annotation still in draft, so a review pass is one key per shape.
+    /// none is selected. Accepting or rejecting then selects the next draft
+    /// in the review queue on the same media, so a review pass is one key per
+    /// shape. It stays on the media when none is left there, so moving on
+    /// is a choice: N goes to the next draft on other media.
     pub(super) fn review_selection(
         &mut self,
         review_state: ReviewState,
@@ -453,20 +467,27 @@ impl NotatusWindow {
             cx.notify();
             return;
         }
-        self.status_message = Some(
-            match review_state {
-                ReviewState::Accepted => "Accepted annotation",
-                ReviewState::Rejected => "Rejected annotation",
-                ReviewState::Reviewed => "Marked reviewed",
-                ReviewState::Draft => "Reset to draft",
-            }
-            .to_string(),
-        );
-        if review_state != ReviewState::Draft
-            && let Some(next) = self.state.next_draft_annotation(annotation_id)
-        {
+        let done = match review_state {
+            ReviewState::Accepted => "Accepted annotation",
+            ReviewState::Rejected => "Rejected annotation",
+            ReviewState::Reviewed => "Marked reviewed",
+            ReviewState::Draft => "Reset to draft",
+        };
+        let next = (review_state != ReviewState::Draft)
+            .then(|| self.state.next_draft_annotation(annotation_id))
+            .flatten();
+        if let Some(next) = next {
             self.select_annotation(Some(next), window, cx);
         }
+        self.status_message = Some(match (review_state, next) {
+            (ReviewState::Draft, _) | (_, Some(_)) => done.to_string(),
+            (_, None) => match self.state.review_queue_len() {
+                0 => format!("{done}. {}", self.review_queue_summary()),
+                left => format!(
+                    "{done}. No drafts left on this media; press N for the next one ({left} left)"
+                ),
+            },
+        });
         cx.notify();
     }
 
@@ -556,7 +577,12 @@ impl NotatusWindow {
             .and_then(|id| assets.iter().position(|asset| asset.id == id))
             .map(|index| format!("{} of {}", index + 1, assets.len()))
             .unwrap_or_else(|| format!("{} media", assets.len()));
-        Some(format!("{position} · {done} done"))
+        let to_review = self.state.review_queue_len();
+        Some(if to_review == 0 {
+            format!("{position} · {done} done")
+        } else {
+            format!("{position} · {done} done · {to_review} to review")
+        })
     }
 
     pub(super) fn current_annotation_summary(&self) -> Option<String> {

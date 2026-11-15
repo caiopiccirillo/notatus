@@ -50,6 +50,8 @@ fn shortcut_groups() -> Vec<ShortcutGroup> {
                 row("Accept and go to next", AcceptAnnotation),
                 row("Reject and go to next", RejectAnnotation),
                 row("Reset to draft", ResetAnnotationReview),
+                row("Next draft on any media", NextDraft),
+                row("Previous draft on any media", PreviousDraft),
                 row("Next annotation", NextAnnotation),
                 row("Previous annotation", PreviousAnnotation),
             ],
