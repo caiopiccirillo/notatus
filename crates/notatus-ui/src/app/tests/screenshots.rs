@@ -17,7 +17,7 @@ fn headless_cx() -> HeadlessAppContext {
     let cx = HeadlessAppContext::with_platform(
         text_system,
         Arc::new(crate::app::assets::AppAssets),
-        || gpui_platform::current_headless_renderer(),
+        gpui_platform::current_headless_renderer,
     );
     cx.allow_parking();
     cx
