@@ -1,7 +1,7 @@
 //! Saving, closing, and reopening projects through the window.
 
-use super::test_support::open_test_window;
-use super::*;
+use super::support::open_test_window;
+use crate::app::*;
 use gpui::{TestAppContext, VisualTestContext, WindowHandle};
 
 fn saved_label_count(dir: &Path) -> usize {
@@ -184,7 +184,7 @@ fn press_title_bar_close(
 ) {
     let view = view.downgrade();
     cx.update_window(window.into(), |_, window, cx| {
-        super::titlebar::close_from_title_bar(&view, window, cx)
+        crate::app::titlebar::close_from_title_bar(&view, window, cx)
     })
     .unwrap();
     cx.run_until_parked();

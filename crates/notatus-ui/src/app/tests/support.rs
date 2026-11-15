@@ -1,11 +1,11 @@
 //! Helpers shared by the window tests.
 
-use super::*;
+use crate::app::*;
 use gpui::{TestAppContext, WindowHandle, WindowOptions};
 
 /// Opens a Notatus window the way the app does and returns its handle and
 /// view, after the first layout.
-pub(super) fn open_test_window(
+pub(in crate::app) fn open_test_window(
     cx: &mut TestAppContext,
 ) -> (WindowHandle<Root>, gpui::Entity<NotatusWindow>) {
     let view_slot = Rc::new(RefCell::new(None));

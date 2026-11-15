@@ -153,8 +153,8 @@ fn label_slots_hint(muted: gpui::Hsla) -> impl IntoElement {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::open_test_window;
     use super::*;
+    use crate::app::tests::support::open_test_window;
     use gpui::TestAppContext;
 
     #[gpui::test]

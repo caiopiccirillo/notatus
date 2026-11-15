@@ -7,17 +7,18 @@
 //!     cargo test -p notatus-ui screenshots -- --ignored --nocapture
 //! ```
 
-use super::*;
+use crate::app::*;
 use gpui::{AnyWindowHandle, HeadlessAppContext};
 use gpui_component::ThemeMode;
 use std::sync::Arc;
 
 fn headless_cx() -> HeadlessAppContext {
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("Noto Sans"));
-    let cx =
-        HeadlessAppContext::with_platform(text_system, Arc::new(super::assets::AppAssets), || {
-            gpui_platform::current_headless_renderer()
-        });
+    let cx = HeadlessAppContext::with_platform(
+        text_system,
+        Arc::new(crate::app::assets::AppAssets),
+        || gpui_platform::current_headless_renderer(),
+    );
     cx.allow_parking();
     cx
 }

@@ -53,17 +53,10 @@ mod window;
 
 use view_options::ViewToggle;
 
-#[cfg(test)]
-mod gesture_tests;
-#[cfg(test)]
-mod gpui_tests;
-#[cfg(test)]
-mod save_tests;
-#[cfg(test)]
-mod screenshot_tests;
 mod shortcuts;
+
 #[cfg(test)]
-mod test_support;
+mod tests;
 
 use project_session::ProjectLocation;
 use tools::ToolInteractionState;

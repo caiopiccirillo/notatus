@@ -1,7 +1,7 @@
 //! Canvas gestures that end with the button released off the canvas.
 
-use super::test_support::open_test_window;
-use super::*;
+use super::support::open_test_window;
+use crate::app::*;
 use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext};
 
 struct Canvas {

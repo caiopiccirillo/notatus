@@ -1,29 +1,10 @@
-use super::*;
-use gpui::{TestAppContext, WindowHandle, WindowOptions};
+//! The main window driven end to end: export, keyboard, palette, autosave,
+//! drawing, labels, and review.
+
+use super::support::open_test_window;
+use crate::app::*;
+use gpui::TestAppContext;
 use notatus_core::ReviewState;
-
-fn open_test_window(cx: &mut TestAppContext) -> (WindowHandle<Root>, gpui::Entity<NotatusWindow>) {
-    let notatus_view = Rc::new(RefCell::new(None));
-    let view_slot = notatus_view.clone();
-
-    let window = cx.update(|cx| {
-        gpui_component::init(cx);
-        actions::bind_keys(cx);
-        cx.open_window(WindowOptions::default(), |window, cx| {
-            let view = cx.new(|cx| NotatusWindow::new(window, cx));
-            *view_slot.borrow_mut() = Some(view.clone());
-            cx.new(|cx| Root::new(view, window, cx))
-        })
-        .unwrap()
-    });
-
-    cx.run_until_parked();
-    let view = notatus_view
-        .borrow_mut()
-        .take()
-        .expect("test window should capture NotatusWindow view");
-    (window, view)
-}
 
 #[gpui::test]
 fn export_workflow_issue_tracks_required_steps(cx: &mut TestAppContext) {

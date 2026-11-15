@@ -314,8 +314,8 @@ fn runner_spec_for(path: PathBuf) -> ExternalModelSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::open_test_window;
     use super::*;
+    use crate::app::tests::support::open_test_window;
     use gpui::TestAppContext;
 
     #[test]
