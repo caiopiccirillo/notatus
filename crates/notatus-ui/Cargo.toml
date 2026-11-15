@@ -17,6 +17,7 @@ notatus-infer.workspace = true
 notatus-storage.workspace = true
 notatus-telemetry.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 # GPUI is published by the gpui-kit project as a `gpui-pre-*` snapshot family.
 # These versions must match the exact pin used by gpui-component.
