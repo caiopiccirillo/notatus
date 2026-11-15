@@ -97,6 +97,30 @@ fn capture(cx: &mut HeadlessAppContext, window: AnyWindowHandle, path: &Path) {
     eprintln!("wrote {}", path.display());
 }
 
+/// Clicks at a window position, as a person would.
+fn click(cx: &mut HeadlessAppContext, window: AnyWindowHandle, position: gpui::Point<Pixels>) {
+    cx.update_window(window, |_, window, cx| {
+        for event in [
+            gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                button: gpui::MouseButton::Left,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            }),
+            gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                button: gpui::MouseButton::Left,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+            }),
+        ] {
+            let _ = window.dispatch_event(event, cx);
+        }
+    })
+    .unwrap();
+}
+
 #[test]
 #[ignore = "needs a GPU adapter; run manually for visual review"]
 fn screenshots() {
@@ -108,8 +132,7 @@ fn screenshots() {
 
     let mut cx = headless_cx();
     cx.update(|cx| {
-        gpui_component::init(cx);
-        actions::bind_keys(cx);
+        crate::app::init(cx);
     });
 
     let mut view_slot = None;
@@ -132,6 +155,11 @@ fn screenshots() {
     }
 
     let view = view_slot.expect("window view");
+
+    // The File menu, opened from the title bar.
+    click(&mut cx, window, gpui::point(px(36.0), px(20.0)));
+    capture(&mut cx, window, &out_dir.join("menu-dark.png"));
+    click(&mut cx, window, gpui::point(px(36.0), px(20.0)));
 
     // The media list, with the first item marked done.
     cx.update_window(window, |_, _, cx| {
@@ -178,27 +206,7 @@ fn screenshots() {
     .unwrap();
     cx.update(|cx| Theme::change(ThemeMode::Light, None, cx));
     let _ = cx.capture_screenshot(window);
-    cx.update_window(window, |_, window, cx| {
-        let position = gpui::point(px(614.0), px(88.0));
-        for event in [
-            gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
-                button: gpui::MouseButton::Left,
-                position,
-                modifiers: Default::default(),
-                click_count: 1,
-                first_mouse: false,
-            }),
-            gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
-                button: gpui::MouseButton::Left,
-                position,
-                modifiers: Default::default(),
-                click_count: 1,
-            }),
-        ] {
-            let _ = window.dispatch_event(event, cx);
-        }
-    })
-    .unwrap();
+    click(&mut cx, window, gpui::point(px(614.0), px(88.0)));
     capture(&mut cx, window, &out_dir.join("view-options-light.png"));
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, _| {

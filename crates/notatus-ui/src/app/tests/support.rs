@@ -11,8 +11,7 @@ pub(in crate::app) fn open_test_window(
     let view_slot = Rc::new(RefCell::new(None));
     let slot = view_slot.clone();
     let window = cx.update(|cx| {
-        gpui_component::init(cx);
-        actions::bind_keys(cx);
+        crate::app::init(cx);
         cx.open_window(WindowOptions::default(), |window, cx| {
             let view = cx.new(|cx| NotatusWindow::new(window, cx));
             *slot.borrow_mut() = Some(view.clone());

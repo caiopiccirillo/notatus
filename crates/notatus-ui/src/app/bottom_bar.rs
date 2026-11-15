@@ -56,7 +56,6 @@ impl NotatusWindow {
                     .items_center()
                     .gap_1()
                     .flex_none()
-                    .child(div().mr_2().child(self.save_status()))
                     .child(self.bottom_right_dock_button(
                         "bottom-annotations",
                         gpui_kit_assets::IconName::ListTree,

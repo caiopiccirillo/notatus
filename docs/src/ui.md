@@ -62,6 +62,7 @@ modules under `src/app/` by feature:
 - `export_commands/`: the export dialog and writing exports
 - `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
 - `tools/`: tool definitions, in-progress drawing state, and the toolbar
+- `menus.rs`: the application menus
 - `left_dock/`, `right_dock.rs`, `bottom_bar.rs`, `titlebar.rs`,
   `label_picker.rs`, `view_options.rs`: the panels around the canvas
 - `assets.rs`: icons beyond the default set
@@ -69,8 +70,12 @@ modules under `src/app/` by feature:
 
 ## Window Chrome
 
-The shell uses `gpui-component::TitleBar`. It shows the application identity,
-the project name, and the save state. On Linux the window may draw its own
+The shell uses `gpui-component::TitleBar`. It holds the application menus
+(File, Edit, View, Annotate, Review, Model, Help) on the left, and the project
+name and save state on the right, the one place the save state is shown. The
+menus are gpui `Menu`s of actions: macOS shows them in its own menu bar, and
+Linux and Windows draw them with `gpui-component::menu::AppMenuBar`. Each item
+shows the key bound to its action. On Linux the window may draw its own
 title bar; its close button goes through the same check as a compositor close
 request: pending changes are saved first, and a project never saved to a
 folder asks before it is discarded.
@@ -108,7 +113,7 @@ are skipped and reported in the status message.
 
 ## Left Docks
 
-- Dataset: project identity, persistence and export buttons, and labels
+- Dataset: project identity and labels
 - Media: import and the media list
 
 Each media row starts with a green check when the media is done or a hollow

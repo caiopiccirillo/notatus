@@ -45,6 +45,8 @@ pub(super) struct NotatusWindow {
     pub(super) label_picker_synced: Option<(u64, Option<LabelId>)>,
     pub(super) view_options: super::view_options::CanvasViewOptions,
     pub(super) opacity_slider: gpui::Entity<gpui_component::slider::SliderState>,
+    /// The menus drawn in the title bar, where the platform has no menu bar.
+    pub(super) app_menu_bar: Option<gpui::Entity<gpui_component::menu::AppMenuBar>>,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -163,6 +165,8 @@ impl NotatusWindow {
             label_picker_synced: None,
             view_options: Default::default(),
             opacity_slider,
+            app_menu_bar: super::menus::IN_TITLE_BAR
+                .then(|| gpui_component::menu::AppMenuBar::new(cx)),
             _subscriptions,
         }
     }

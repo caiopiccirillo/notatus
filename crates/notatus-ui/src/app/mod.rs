@@ -40,6 +40,7 @@ mod helpers;
 mod label_picker;
 mod left_dock;
 mod media_import;
+mod menus;
 mod model_run;
 mod palette;
 mod project_commands;
@@ -77,12 +78,19 @@ struct CanvasImageLayout {
 
 type SharedImageLayout = Rc<RefCell<Option<CanvasImageLayout>>>;
 
+/// Registers the components, key bindings, and menus. The app and its tests
+/// both start here.
+fn init(cx: &mut App) {
+    gpui_component::init(cx);
+    actions::bind_keys(cx);
+    menus::install(cx);
+}
+
 pub fn launch_gpui() {
     gpui_platform::application()
         .with_assets(assets::AppAssets)
         .run(|cx: &mut App| {
-            gpui_component::init(cx);
-            actions::bind_keys(cx);
+            init(cx);
 
             cx.on_window_closed(|cx, _window_id| {
                 if cx.windows().is_empty() {
