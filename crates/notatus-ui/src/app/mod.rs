@@ -17,7 +17,6 @@ use gpui_component::{
     notification::Notification,
     resizable::{h_resizable, resizable_panel},
     scroll::ScrollableElement as _,
-    sidebar::{SidebarItem as _, SidebarMenu, SidebarMenuItem},
 };
 use notatus_core::{
     AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,

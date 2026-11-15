@@ -117,9 +117,14 @@ are skipped and reported in the status message.
 - Media, the default: the media list, with import buttons in the tab bar
 - Labels: the label list, with an add button in the tab bar
 
-Each media row starts with a green check when the media is done or a hollow
-circle when it is not, then its name, then its annotation count. Removing
-media, which also removes its annotations, is in the row's right-click menu.
+The media list is gpui-component's virtualized `List`, so only the rows on
+screen are built, however large the project. A search field above it matches
+names and folders, and the filter button narrows it to media not done, done,
+or with drafts to review. Each row starts with a green check when the media is
+done or a hollow circle when it is not, then its name, the number of drafts
+still to review, and its annotation count. The list marks the current media
+and scrolls to it when it changes. Removing media, which also removes its
+annotations, is in the row's right-click menu.
 
 Label rows show their color and annotation count; renaming, recoloring, and
 removing are in the row's options and right-click menus.
