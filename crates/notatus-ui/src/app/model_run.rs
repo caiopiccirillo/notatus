@@ -101,8 +101,7 @@ impl NotatusWindow {
         let runner = match self.model_runner_for(&spec) {
             Ok(runner) => runner,
             Err(error) => {
-                self.status_message = Some(format!("Model runner failed to start: {error}"));
-                return cx.notify();
+                return self.report_failure("The model runner didn't start", error.to_string(), cx);
             }
         };
         self.start_model_job(runner, requests, cx);
@@ -260,8 +259,7 @@ impl NotatusWindow {
                 // A runner that failed may be stuck or gone; start fresh next time.
                 self.model_run.runner = None;
                 self.model_run.job = None;
-                self.status_message = Some(format!("Model run failed: {error}"));
-                cx.notify();
+                self.report_failure("Model run failed", error.to_string(), cx);
                 return true;
             }
         };
@@ -461,7 +459,7 @@ done
 
             let message = notatus.status_message.clone().unwrap();
             assert!(
-                message.starts_with("Model runner failed to start"),
+                message.starts_with("The model runner didn't start"),
                 "{message}"
             );
             assert!(!notatus.model_run.is_running());

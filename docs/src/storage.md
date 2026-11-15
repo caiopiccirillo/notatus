@@ -91,7 +91,9 @@ mismatched records that can cause.
 In the desktop app, every save goes through one pipeline with at most one save
 in flight, so Ctrl+S never writes at the same time as an autosave. Closing the
 window waits for pending changes to reach disk, and asks before discarding a
-project that was never saved to a folder.
+project that was never saved to a folder. A failed save or autosave raises an
+error notification that stays until dismissed, as well as the status message,
+and is retried after the next edit.
 
 ## Load Flow
 

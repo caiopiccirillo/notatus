@@ -131,13 +131,17 @@ impl NotatusWindow {
         if let Err(error) = result {
             let announced = std::mem::take(&mut self.autosave.announce);
             self.autosave.save_requested = false;
-            self.status_message = Some(if announced {
-                format!("Save failed: {error}")
+            let title = if announced {
+                "Save failed"
             } else {
-                format!("Autosave failed: {error}")
-            });
+                "Autosave failed"
+            };
             if std::mem::take(&mut self.autosave.close_requested) {
+                // The close dialog says so already.
+                self.status_message = Some(format!("{title}: {error}"));
                 self.confirm_close_after_failed_save(error, cx);
+            } else {
+                self.report_failure(title, error, cx);
             }
             // Retry only after the next edit, not in a loop.
             cx.notify();

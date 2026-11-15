@@ -148,6 +148,7 @@ fn prompt_for_new_project(
                     result,
                     Some(path),
                     "Created project",
+                    "Couldn't create the project",
                     None,
                     window,
                 );
@@ -216,6 +217,7 @@ fn prompt_for_open_project(
                     result.map(|(dataset, _)| dataset),
                     Some(path),
                     "Opened project",
+                    "Couldn't open the project",
                     notice,
                     window,
                 );
@@ -277,8 +279,7 @@ async fn save_current_project_to_path(
     };
     if let Some(conflict) = conflict {
         let _ = view.update_in(window, |notatus, _, cx| {
-            notatus.status_message = Some(format!("Save failed: {conflict}"));
-            cx.notify();
+            notatus.report_failure("Save failed", conflict.to_string(), cx);
         });
         return;
     }
@@ -299,9 +300,7 @@ async fn save_current_project_to_path(
                 notatus.project_location = ProjectLocation::local(path);
                 notatus.status_message = Some("Saved project".to_string());
             }
-            Err(error) => {
-                notatus.status_message = Some(format!("Save failed: {error}"));
-            }
+            Err(error) => notatus.report_failure("Save failed", error, cx),
         }
         cx.notify();
     });
@@ -312,6 +311,7 @@ fn apply_project_load_result(
     result: Result<notatus_core::Dataset, String>,
     location: Option<PathBuf>,
     success_message: &'static str,
+    failure_title: &'static str,
     notice: Option<String>,
     window: &mut gpui::AsyncWindowContext,
 ) {
@@ -343,9 +343,7 @@ fn apply_project_load_result(
                 notatus.sync_project_name_input(window, cx);
                 notatus.sync_label_name_input(window, cx);
             }
-            Err(error) => {
-                notatus.status_message = Some(format!("{success_message} failed: {error}"));
-            }
+            Err(error) => notatus.report_failure(failure_title, error, cx),
         }
         cx.notify();
     });

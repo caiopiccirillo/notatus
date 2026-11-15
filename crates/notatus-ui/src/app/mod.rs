@@ -36,6 +36,7 @@ mod catalog;
 mod commands;
 mod dock;
 mod export_commands;
+mod failures;
 mod helpers;
 mod label_picker;
 mod left_dock;

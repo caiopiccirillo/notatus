@@ -54,6 +54,7 @@ modules under `src/app/` by feature:
 - `actions.rs`: actions, key bindings, and their handlers
 - `commands.rs`, `palette.rs`, `shortcuts.rs`: shared commands, the command
   palette, and the shortcut sheet
+- `failures.rs`: failures shown as notifications that stay until dismissed
 - `autosave.rs`, `project_commands.rs`, `project_session.rs`: saving, opening,
   and closing projects
 - `media_import.rs`: importing files and folders
