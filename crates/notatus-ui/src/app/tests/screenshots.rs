@@ -78,6 +78,7 @@ fn seed_project(notatus: &mut NotatusWindow, sample_image: Option<&str>) {
     let _ = notatus
         .state
         .apply_model_predictions(asset_id, vec![suggestion]);
+    let _ = notatus.state.toggle_image_classification(asset_id, person);
     let _ = notatus.state.select_annotation(Some(annotation));
 }
 

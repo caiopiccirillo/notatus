@@ -1,5 +1,9 @@
+//! The Annotations tab: the review queue, the current media's image labels,
+//! and its objects.
+
 use super::*;
 use crate::app::helpers::*;
+use gpui_component::tag::Tag;
 use notatus_core::ReviewState;
 
 impl NotatusWindow {
@@ -8,241 +12,140 @@ impl NotatusWindow {
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> gpui::AnyElement {
-        if let Some(asset) = self.selected_asset() {
-            let annotations = self.annotations_for_asset(asset);
-            let classifications = self.classifications_for_asset(asset);
-            let annotation_count = annotations.len();
-            let classification_count = classifications.len();
-            let labels = self.state.dataset().labels.clone();
-            let classified_label_ids: Vec<_> = classifications
-                .iter()
-                .map(|classification| classification.label_id)
-                .collect();
-            let classification_rows: Vec<_> = classifications
-                .into_iter()
-                .map(|classification| self.classification_row(classification, view.clone(), colors))
-                .map(IntoElement::into_any_element)
-                .collect();
-            let rows: Vec<_> = annotations
-                .into_iter()
-                .map(|annotation| {
-                    self.annotation_row(annotation, labels.clone(), view.clone(), colors)
-                })
-                .map(IntoElement::into_any_element)
-                .collect();
-
-            div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .p_4()
-                .overflow_hidden()
-                .child(self.review_queue_section(&labels, view.clone()))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(counted_section_title("Image labels", classification_count))
-                        .child(self.classification_label_menu(
-                            asset.id,
-                            labels.clone(),
-                            classified_label_ids,
-                            view.clone(),
-                        )),
-                )
-                .child(if classification_rows.is_empty() {
-                    div()
-                        .h(px(34.0))
-                        .flex()
-                        .items_center()
-                        .text_sm()
-                        .text_color(colors.muted_foreground)
-                        .child("No image labels")
-                        .into_any_element()
-                } else {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .children(classification_rows)
-                        .into_any_element()
-                })
-                .child(counted_section_title("Objects", annotation_count))
-                .child(if rows.is_empty() {
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_sm()
-                        .text_color(colors.muted_foreground)
-                        .child("No annotations")
-                        .into_any_element()
-                } else {
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scrollbar()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .children(rows)
-                        .into_any_element()
-                })
-                .into_any_element()
-        } else {
-            empty_panel("No media selected").into_any_element()
-        }
-    }
-
-    fn classification_row(
-        &self,
-        classification: &ClassificationRecord,
-        view: gpui::WeakEntity<NotatusWindow>,
-        colors: ThemeColor,
-    ) -> impl IntoElement {
-        let classification_id = classification.id;
-        let label = self.state.dataset().label_by_id(classification.label_id);
-        let label_name = label
-            .map(|label| label.name.as_str())
-            .unwrap_or("Unknown label")
-            .to_string();
-        let label_color = label
-            .and_then(|label| label.color.as_deref())
-            .unwrap_or(DEFAULT_LABEL_COLOR)
-            .to_string();
-        let (classification_key_high, classification_key_low) =
-            classification_element_key(classification_id);
-        let row_id = gpui::ElementId::from(("classification-row", classification_key_high));
-        let remove_view = view;
+        let Some(asset) = self.selected_asset() else {
+            return empty_panel("No media selected").into_any_element();
+        };
+        let labels = self.state.dataset().labels.clone();
+        let annotations = self.annotations_for_asset(asset);
+        let annotation_count = annotations.len();
+        let rows: Vec<_> = annotations
+            .into_iter()
+            .map(|annotation| self.annotation_row(annotation, &labels, view.clone(), colors))
+            .collect();
 
         div()
-            .id((row_id, classification_key_low.to_string()))
+            .size_full()
             .flex()
-            .items_center()
-            .gap_2()
-            .min_w_0()
-            .h(px(34.0))
-            .px_2()
-            .rounded_sm()
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.background)
-            .child(label_swatch(&label_color, false))
+            .flex_col()
+            .gap_4()
+            .p_3()
+            .overflow_hidden()
+            .child(self.review_queue_section(&labels, view.clone()))
+            .child(self.image_labels_section(asset, &labels, view.clone(), colors))
             .child(
                 div()
                     .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(label_name),
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(counted_section_title("Objects", annotation_count))
+                    .child(if rows.is_empty() {
+                        div()
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(colors.muted_foreground)
+                            .child("Draw a box or polygon on the image")
+                            .into_any_element()
+                    } else {
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scrollbar()
+                            .flex()
+                            .flex_col()
+                            .children(rows)
+                            .into_any_element()
+                    }),
             )
-            .child(
-                Button::new((
-                    gpui::ElementId::from(("remove-classification", classification_key_high)),
-                    classification_key_low.to_string(),
-                ))
-                .small()
-                .icon(Icon::new(IconName::Delete))
-                .tooltip("Remove image label")
-                .on_click(move |_, _, cx| {
-                    let _ = remove_view.update(cx, |notatus, cx| {
-                        notatus.remove_classification(classification_id, cx);
-                    });
-                }),
-            )
+            .into_any_element()
     }
 
-    fn classification_label_menu(
+    /// Whole-image labels as removable tags, with a menu to add more.
+    fn image_labels_section(
         &self,
-        asset_id: AssetId,
-        labels: Vec<Label>,
-        classified_label_ids: Vec<LabelId>,
+        asset: &AssetRecord,
+        labels: &[Label],
         view: gpui::WeakEntity<NotatusWindow>,
+        colors: ThemeColor,
     ) -> impl IntoElement {
-        Button::new("classification-label-menu")
-            .small()
-            .icon(Icon::new(IconName::Plus))
-            .tooltip("Add image label")
-            .dropdown_menu(move |menu, _, _| {
-                if labels.is_empty() {
-                    return menu
-                        .item(PopupMenuItem::new("Create labels in Dataset").disabled(true));
-                }
+        let classifications = self.classifications_for_asset(asset);
+        let classified: Vec<_> = classifications.iter().map(|c| c.label_id).collect();
+        let tags: Vec<_> = classifications
+            .iter()
+            .map(|classification| {
+                let label = self.state.dataset().label_by_id(classification.label_id);
+                let name = label.map_or("Unknown label", |label| label.name.as_str());
+                let color = label
+                    .and_then(|label| label.color.as_deref())
+                    .unwrap_or(DEFAULT_LABEL_COLOR);
+                image_label_tag(classification.id, name, color, view.clone(), colors)
+            })
+            .collect();
 
-                let mut menu = menu;
-                for label in labels.clone() {
-                    let label_id = label.id;
-                    let label_name = label.name.clone();
-                    let selected = classified_label_ids.contains(&label_id);
-                    let view = view.clone();
-                    menu = menu.item(PopupMenuItem::new(label_name).checked(selected).on_click(
-                        move |_, _, cx| {
-                            let _ = view.update(cx, |notatus, cx| {
-                                notatus.toggle_image_classification(asset_id, label_id, cx);
-                            });
-                        },
-                    ));
-                }
-                menu
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(counted_section_title("Image labels", tags.len()))
+                    .child(classification_label_menu(
+                        asset.id,
+                        labels.to_vec(),
+                        classified,
+                        view,
+                    )),
+            )
+            .when(!tags.is_empty(), |section| {
+                section.child(div().flex().flex_wrap().gap_1().children(tags))
             })
     }
 
     fn annotation_row(
         &self,
         annotation: &AnnotationRecord,
-        labels: Vec<Label>,
+        labels: &[Label],
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
-    ) -> impl IntoElement {
+    ) -> gpui::AnyElement {
         let annotation_id = annotation.id;
         let label = self.state.dataset().label_by_id(annotation.label_id);
-        let label_name = label
-            .map(|label| label.name.as_str())
-            .unwrap_or("Unknown label")
-            .to_string();
+        let label_name = label.map_or("Unknown label", |label| label.name.as_str());
         let label_color = label
             .and_then(|label| label.color.as_deref())
-            .unwrap_or(DEFAULT_LABEL_COLOR)
-            .to_string();
+            .unwrap_or(DEFAULT_LABEL_COLOR);
         let selected = self.state.selected_annotation() == Some(annotation_id);
         let hovered = self.hovered_annotation == Some(annotation_id);
-        let (annotation_key_high, annotation_key_low) = annotation_element_key(annotation_id);
-        let row_id = gpui::ElementId::from(("annotation-row", annotation_key_high));
+        let uuid = annotation_id.as_uuid().as_u128();
         let row_view = view.clone();
         let hover_view = view.clone();
 
         div()
-            .id((row_id, annotation_key_low.to_string()))
+            .id(record_element_id("annotation-row", uuid))
             .flex()
             .items_center()
             .gap_2()
             .min_w_0()
             .h(px(44.0))
             .px_2()
-            .rounded_sm()
-            .border_1()
-            .border_color(if selected {
-                colors.list_active_border
-            } else if hovered {
-                colors.input
-            } else {
-                colors.border
+            .rounded_md()
+            .when(selected, |row| row.bg(colors.list_active))
+            .when(hovered && !selected, |row| row.bg(colors.list_hover))
+            .hover(move |row| {
+                if selected {
+                    row
+                } else {
+                    row.bg(colors.list_hover)
+                }
             })
-            .bg(if selected {
-                colors.list_active
-            } else if hovered {
-                colors.list_hover
-            } else {
-                colors.background
-            })
-            .hover(move |row| row.bg(colors.list_hover))
             .on_click(move |_, window, cx| {
                 let _ = row_view.update(cx, |notatus, cx| {
                     notatus.select_annotation(Some(annotation_id), window, cx);
@@ -253,23 +156,23 @@ impl NotatusWindow {
                     notatus.hover_annotation(if *hovered { Some(annotation_id) } else { None }, cx);
                 });
             })
-            .child(label_swatch(&label_color, false))
+            .child(label_swatch(label_color, false))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .gap(px(1.0))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(label_name),
-                    )
+                    // The menu button sizes to the name and lines up with
+                    // the details under it.
+                    .items_start()
+                    .child(annotation_label_menu(
+                        annotation_id,
+                        annotation.label_id,
+                        label_name,
+                        labels.to_vec(),
+                        view.clone(),
+                    ))
                     .child(
                         div()
                             .min_w_0()
@@ -287,108 +190,156 @@ impl NotatusWindow {
                             .child(review_tag(annotation.review_state)),
                     ),
             )
-            .child(self.annotation_review_buttons(annotation, view.clone()))
-            .child(self.annotation_label_menu(
-                annotation_id,
-                annotation.label_id,
-                labels,
-                view.clone(),
-            ))
+            .child(review_buttons(annotation, view))
+            .into_any_element()
     }
+}
 
-    /// Accept and reject toggles. Pressing the active one returns the
-    /// annotation to draft.
-    fn annotation_review_buttons(
-        &self,
-        annotation: &AnnotationRecord,
-        view: gpui::WeakEntity<NotatusWindow>,
-    ) -> impl IntoElement {
-        let annotation_id = annotation.id;
-        let current = annotation.review_state;
-        let (key_high, key_low) = annotation_element_key(annotation_id);
-        let button =
-            |kind: &'static str, state: ReviewState, icon: IconName, tooltip: &'static str| {
-                let view = view.clone();
-                let active = current == state;
-                Button::new((gpui::ElementId::from((kind, key_high)), key_low.to_string()))
+/// The label's name, opening a menu to change it.
+fn annotation_label_menu(
+    annotation_id: AnnotationId,
+    current_label_id: LabelId,
+    label_name: &str,
+    labels: Vec<Label>,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    Button::new(record_element_id(
+        "annotation-label-menu",
+        annotation_id.as_uuid().as_u128(),
+    ))
+    .xsmall()
+    .ghost()
+    .compact()
+    .label(label_name.to_string())
+    .dropdown_caret(true)
+    .tooltip("Change label")
+    .ml(px(-6.0))
+    .dropdown_menu(move |menu, _, _| {
+        labels.iter().fold(menu, |menu, label| {
+            let label_id = label.id;
+            let current = label_id == current_label_id;
+            let view = view.clone();
+            menu.item(
+                PopupMenuItem::new(label.name.clone())
+                    .checked(current)
+                    .disabled(current)
+                    .on_click(move |_, window, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.update_annotation_label(annotation_id, label_id, window, cx);
+                        });
+                    }),
+            )
+        })
+    })
+}
+
+/// Accept and reject toggles. Pressing the active one returns the annotation
+/// to draft.
+fn review_buttons(
+    annotation: &AnnotationRecord,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    let annotation_id = annotation.id;
+    let current = annotation.review_state;
+    let uuid = annotation_id.as_uuid().as_u128();
+    let button = |kind: &'static str, state: ReviewState, icon: IconName, tooltip: &'static str| {
+        let view = view.clone();
+        let active = current == state;
+        Button::new(record_element_id(kind, uuid))
+            .xsmall()
+            .ghost()
+            .icon(Icon::new(icon))
+            .selected(active)
+            .tooltip(tooltip)
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                let target = if active { ReviewState::Draft } else { state };
+                let _ = view.update(cx, |notatus, cx| {
+                    notatus.select_annotation(Some(annotation_id), window, cx);
+                    notatus.review_selection(target, window, cx);
+                });
+            })
+    };
+    div()
+        .flex()
+        .gap(px(2.0))
+        .child(button(
+            "annotation-accept",
+            ReviewState::Accepted,
+            IconName::Check,
+            "Accept (Y)",
+        ))
+        .child(button(
+            "annotation-reject",
+            ReviewState::Rejected,
+            IconName::Close,
+            "Reject (X)",
+        ))
+}
+
+/// An image label as a tag in its label's color, with a button to remove it.
+fn image_label_tag(
+    classification_id: ClassificationId,
+    name: &str,
+    color: &str,
+    view: gpui::WeakEntity<NotatusWindow>,
+    colors: ThemeColor,
+) -> impl IntoElement {
+    let color = hex_color(color);
+    Tag::custom(color.opacity(0.15), colors.foreground, color.opacity(0.6))
+        .small()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(name.to_string())
+                .child(
+                    Button::new(record_element_id(
+                        "remove-classification",
+                        classification_id.as_uuid().as_u128(),
+                    ))
                     .xsmall()
                     .ghost()
-                    .icon(Icon::new(icon))
-                    .selected(active)
-                    .tooltip(tooltip)
-                    .on_click(move |_, window, cx| {
-                        cx.stop_propagation();
-                        let target = if active { ReviewState::Draft } else { state };
+                    .compact()
+                    .icon(Icon::new(IconName::Close))
+                    .tooltip("Remove image label")
+                    .on_click(move |_, _, cx| {
                         let _ = view.update(cx, |notatus, cx| {
-                            notatus.select_annotation(Some(annotation_id), window, cx);
-                            notatus.review_selection(target, window, cx);
+                            notatus.remove_classification(classification_id, cx);
                         });
-                    })
-            };
-        div()
-            .flex()
-            .gap(px(2.0))
-            .child(button(
-                "annotation-accept",
-                ReviewState::Accepted,
-                IconName::Check,
-                "Accept (Y)",
-            ))
-            .child(button(
-                "annotation-reject",
-                ReviewState::Rejected,
-                IconName::Close,
-                "Reject (X)",
-            ))
-    }
+                    }),
+                ),
+        )
+}
 
-    fn annotation_label_menu(
-        &self,
-        annotation_id: AnnotationId,
-        current_label_id: LabelId,
-        labels: Vec<Label>,
-        view: gpui::WeakEntity<NotatusWindow>,
-    ) -> impl IntoElement {
-        let (annotation_key_high, annotation_key_low) = annotation_element_key(annotation_id);
-        let menu_id = gpui::ElementId::from(("annotation-label-menu", annotation_key_high));
-        Button::new((menu_id, annotation_key_low.to_string()))
-            .small()
-            .icon(Icon::new(IconName::Palette))
-            .tooltip("Change label")
-            .dropdown_menu(move |menu, _, _| {
-                let mut menu = menu;
-                for label in labels.clone() {
-                    let label_id = label.id;
-                    let label_name = label.name.clone();
-                    let selected = label_id == current_label_id;
-                    let view = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(label_name)
-                            .checked(selected)
-                            .disabled(selected)
-                            .on_click(move |_, window, cx| {
-                                let _ = view.update(cx, |notatus, cx| {
-                                    notatus.update_annotation_label(
-                                        annotation_id,
-                                        label_id,
-                                        window,
-                                        cx,
-                                    );
-                                });
-                            }),
-                    );
-                }
-                menu
+fn classification_label_menu(
+    asset_id: AssetId,
+    labels: Vec<Label>,
+    classified: Vec<LabelId>,
+    view: gpui::WeakEntity<NotatusWindow>,
+) -> impl IntoElement {
+    Button::new("classification-label-menu")
+        .xsmall()
+        .ghost()
+        .icon(Icon::new(IconName::Plus))
+        .tooltip("Add image label")
+        .dropdown_menu(move |menu, _, _| {
+            if labels.is_empty() {
+                return menu.item(PopupMenuItem::new("Create labels first").disabled(true));
+            }
+            labels.iter().fold(menu, |menu, label| {
+                let label_id = label.id;
+                let view = view.clone();
+                menu.item(
+                    PopupMenuItem::new(label.name.clone())
+                        .checked(classified.contains(&label_id))
+                        .on_click(move |_, _, cx| {
+                            let _ = view.update(cx, |notatus, cx| {
+                                notatus.toggle_image_classification(asset_id, label_id, cx);
+                            });
+                        }),
+                )
             })
-    }
-}
-
-fn annotation_element_key(annotation_id: AnnotationId) -> (u64, u64) {
-    let value = annotation_id.as_uuid().as_u128();
-    ((value >> 64) as u64, value as u64)
-}
-
-fn classification_element_key(classification_id: ClassificationId) -> (u64, u64) {
-    let value = classification_id.as_uuid().as_u128();
-    ((value >> 64) as u64, value as u64)
+        })
 }

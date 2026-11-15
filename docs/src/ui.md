@@ -182,10 +182,11 @@ count too.
 ## Right Docks
 
 - Annotations, the default: the review queue, then the selected media's image
-  labels and objects. Each
-  object row shows its review state, accept and reject toggles, and a label
-  menu. Y accepts, X rejects, and U resets the selected annotation; accepting
-  or rejecting moves to the next draft on the same media.
+  labels, shown as tags in their label's color that can be removed, and its
+  objects. Each object row shows its label, which opens a menu to change it,
+  its shape and review state, and accept and reject toggles. Y accepts, X
+  rejects, and U resets the selected annotation; accepting or rejecting moves
+  to the next draft on the same media.
 - Details: the project's name, location, and creation date, the dataset's
   totals, and the selected media's metadata.
 

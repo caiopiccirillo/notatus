@@ -34,6 +34,14 @@ where
     }
 }
 
+/// A stable element id for a row or button that belongs to one record,
+/// from the record's UUID as a `u128`.
+pub(super) fn record_element_id(prefix: &'static str, uuid: u128) -> gpui::ElementId {
+    let high = (uuid >> 64) as u64;
+    let low = uuid as u64;
+    (gpui::ElementId::from((prefix, high)), low.to_string()).into()
+}
+
 pub(super) fn plural(count: usize) -> &'static str {
     if count == 1 { "" } else { "s" }
 }

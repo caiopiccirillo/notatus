@@ -115,7 +115,7 @@ fn label_row(
     let action_view = view;
 
     div()
-        .id(label_element_id("label-row", label_id))
+        .id(record_element_id("label-row", label_id.as_uuid().as_u128()))
         .w_full()
         .h(px(36.0))
         .flex()
@@ -179,7 +179,10 @@ fn label_actions(
     let menu_label_color = label_color.clone();
 
     div()
-        .id(label_element_id("label-actions", label_id))
+        .id(record_element_id(
+            "label-actions",
+            label_id.as_uuid().as_u128(),
+        ))
         .flex_none()
         .flex()
         .items_center()
@@ -187,25 +190,28 @@ fn label_actions(
         .on_click(|_, _, cx| cx.stop_propagation())
         .child(label_asset_meta(color, annotation_count))
         .child(
-            Button::new(label_element_id("label-menu", label_id))
-                .xsmall()
-                .ghost()
-                .icon(Icon::new(IconName::Ellipsis))
-                .tooltip("Label options")
-                .dropdown_menu(move |menu, window, cx| {
-                    label_menu(
-                        menu,
-                        LabelMenuContext {
-                            label_id,
-                            label_name: menu_label_name.clone(),
-                            label_color: menu_label_color.clone(),
-                            annotation_count,
-                            view: menu_view.clone(),
-                        },
-                        window,
-                        cx,
-                    )
-                }),
+            Button::new(record_element_id(
+                "label-menu",
+                label_id.as_uuid().as_u128(),
+            ))
+            .xsmall()
+            .ghost()
+            .icon(Icon::new(IconName::Ellipsis))
+            .tooltip("Label options")
+            .dropdown_menu(move |menu, window, cx| {
+                label_menu(
+                    menu,
+                    LabelMenuContext {
+                        label_id,
+                        label_name: menu_label_name.clone(),
+                        label_color: menu_label_color.clone(),
+                        annotation_count,
+                        view: menu_view.clone(),
+                    },
+                    window,
+                    cx,
+                )
+            }),
         )
 }
 
@@ -388,11 +394,4 @@ fn remove_label_or_confirm(
                 true
             })
     });
-}
-
-fn label_element_id(prefix: &'static str, label_id: LabelId) -> gpui::ElementId {
-    let value = label_id.as_uuid().as_u128();
-    let high = (value >> 64) as u64;
-    let low = (value as u64).to_string();
-    (gpui::ElementId::from((prefix, high)), low).into()
 }
