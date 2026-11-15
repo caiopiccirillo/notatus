@@ -3,14 +3,14 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LeftDock {
-    Dataset,
     Media,
+    Labels,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RightDock {
     Annotations,
-    Info,
+    Details,
 }
 
 pub(super) struct NotatusWindow {
@@ -135,7 +135,7 @@ impl NotatusWindow {
 
         Self {
             state,
-            left_dock: LeftDock::Dataset,
+            left_dock: LeftDock::Media,
             // The current media's annotations are what annotating needs;
             // project details stay one click away.
             right_dock: RightDock::Annotations,

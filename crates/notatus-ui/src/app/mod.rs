@@ -35,6 +35,7 @@ mod autosave;
 mod bottom_bar;
 mod canvas;
 mod commands;
+mod dock;
 mod export_commands;
 mod helpers;
 mod label_picker;

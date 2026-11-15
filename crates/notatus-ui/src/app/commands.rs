@@ -35,7 +35,7 @@ pub(super) fn drawing_label(state: &mut UiState) -> (LabelId, bool) {
 impl NotatusWindow {
     pub(super) fn create_label(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         add_colored_label(&mut self.state, None);
-        self.left_dock = LeftDock::Dataset;
+        self.left_dock = LeftDock::Labels;
         self.status_message = Some("Created label".to_string());
         self.sync_label_name_input(window, cx);
         cx.notify();

@@ -90,8 +90,12 @@ fn capture(cx: &mut HeadlessAppContext, window: AnyWindowHandle, path: &Path) {
     }
     // The headless clock is simulated, so advance it past entrance
     // animations (dialogs, dropdowns) and draw once to start them.
-    let _ = cx.capture_screenshot(window);
-    cx.advance_clock(std::time::Duration::from_secs(1));
+    // Animations step once per drawn frame, so draw a few.
+    for _ in 0..6 {
+        let _ = cx.capture_screenshot(window);
+        cx.advance_clock(std::time::Duration::from_millis(400));
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
     let image = cx.capture_screenshot(window).expect("capture screenshot");
     image.save(path).expect("write screenshot");
     eprintln!("wrote {}", path.display());
@@ -133,6 +137,8 @@ fn screenshots() {
     let mut cx = headless_cx();
     cx.update(|cx| {
         crate::app::init(cx);
+        // Transitions finish at once, so each capture shows the end state.
+        cx.set_reduce_motion(true);
     });
 
     let mut view_slot = None;
@@ -161,7 +167,7 @@ fn screenshots() {
     capture(&mut cx, window, &out_dir.join("menu-dark.png"));
     click(&mut cx, window, gpui::point(px(36.0), px(20.0)));
 
-    // The media list, with the first item marked done.
+    // Labels and details, with the first media marked done.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
             if let Some(first) = notatus.state.dataset().assets.first().map(|a| a.id) {
@@ -169,12 +175,13 @@ fn screenshots() {
                     .state
                     .set_asset_status(first, notatus_core::AssetStatus::Done);
             }
-            notatus.left_dock = LeftDock::Media;
+            notatus.left_dock = LeftDock::Labels;
+            notatus.right_dock = RightDock::Details;
             cx.notify();
         });
     })
     .unwrap();
-    capture(&mut cx, window, &out_dir.join("media-dark.png"));
+    capture(&mut cx, window, &out_dir.join("labels-details-dark.png"));
 
     // The shortcut sheet, opened before any popover or dialog.
     cx.update_window(window, |_, window, cx| {
@@ -186,7 +193,8 @@ fn screenshots() {
         .unwrap();
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
-            notatus.left_dock = LeftDock::Dataset;
+            notatus.left_dock = LeftDock::Media;
+            notatus.right_dock = RightDock::Annotations;
             cx.notify();
         });
     })

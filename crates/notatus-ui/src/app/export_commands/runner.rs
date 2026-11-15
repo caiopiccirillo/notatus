@@ -13,7 +13,6 @@ pub(in crate::app) fn export_annotations(
             if let Some(issue) = issue {
                 notatus.apply_export_workflow_issue(issue, cx);
             } else {
-                notatus.left_dock = LeftDock::Dataset;
                 notatus.status_message = Some("Choose an export folder".to_string());
                 cx.notify();
             }

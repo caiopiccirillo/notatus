@@ -18,59 +18,21 @@ impl NotatusWindow {
             .bg(cx.theme().status_bar)
             .text_xs()
             .text_color(muted)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .flex_none()
-                    .child(self.bottom_left_dock_button(
-                        "bottom-dataset",
-                        IconName::LayoutDashboard,
-                        "Dataset",
-                        LeftDock::Dataset,
-                        cx,
-                    ))
-                    .child(self.bottom_left_dock_button(
-                        "bottom-media",
-                        IconName::GalleryVerticalEnd,
-                        "Media",
-                        LeftDock::Media,
-                        cx,
-                    ))
-                    .when_some(self.status_message.clone(), |bar, message| {
-                        bar.child(
-                            div()
-                                .id("status-message")
-                                .ml_2()
-                                .max_w(px(360.0))
-                                .truncate()
-                                .child(message),
-                        )
-                    }),
-            )
+            .child(div().flex().items_center().gap_1().flex_none().when_some(
+                self.status_message.clone(),
+                |bar, message| {
+                    bar.child(
+                        div()
+                            .id("status-message")
+                            .ml_2()
+                            .max_w(px(360.0))
+                            .truncate()
+                            .child(message),
+                    )
+                },
+            ))
             .child(self.review_controls())
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .flex_none()
-                    .child(self.bottom_right_dock_button(
-                        "bottom-annotations",
-                        gpui_kit_assets::IconName::ListTree,
-                        "Annotations",
-                        RightDock::Annotations,
-                        cx,
-                    ))
-                    .child(self.bottom_right_dock_button(
-                        "bottom-info",
-                        IconName::Info,
-                        "Info",
-                        RightDock::Info,
-                        cx,
-                    )),
-            )
+            .child(div().flex().items_center().gap_1().flex_none())
     }
 
     /// Previous/next media, progress, and the done toggle, centered in the bar.
@@ -136,50 +98,6 @@ impl NotatusWindow {
                 )
             })
             .into_any_element()
-    }
-
-    fn bottom_left_dock_button(
-        &self,
-        id: &'static str,
-        icon: impl Into<Icon>,
-        tooltip: &'static str,
-        dock: LeftDock,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let view = cx.weak_entity();
-        Button::new(id)
-            .small()
-            .icon(Icon::new(icon))
-            .tooltip(tooltip)
-            .selected(self.left_dock == dock)
-            .on_click(move |_, _, cx| {
-                let _ = view.update(cx, |notatus, cx| {
-                    notatus.left_dock = dock;
-                    cx.notify();
-                });
-            })
-    }
-
-    fn bottom_right_dock_button(
-        &self,
-        id: &'static str,
-        icon: impl Into<Icon>,
-        tooltip: &'static str,
-        dock: RightDock,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let view = cx.weak_entity();
-        Button::new(id)
-            .small()
-            .icon(Icon::new(icon))
-            .tooltip(tooltip)
-            .selected(self.right_dock == dock)
-            .on_click(move |_, _, cx| {
-                let _ = view.update(cx, |notatus, cx| {
-                    notatus.right_dock = dock;
-                    cx.notify();
-                });
-            })
     }
 }
 

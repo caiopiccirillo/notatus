@@ -63,7 +63,7 @@ modules under `src/app/` by feature:
 - `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
 - `tools/`: tool definitions, in-progress drawing state, and the toolbar
 - `menus.rs`: the application menus
-- `left_dock/`, `right_dock.rs`, `bottom_bar.rs`, `titlebar.rs`,
+- `dock.rs`, `left_dock/`, `right_dock/`, `bottom_bar.rs`, `titlebar.rs`,
   `label_picker.rs`, `view_options.rs`: the panels around the canvas
 - `assets.rs`: icons beyond the default set
 - `tests/`: tests that open the real window in GPUI's test platform
@@ -82,8 +82,9 @@ folder asks before it is discarded.
 
 ## Workflow Navigation
 
-The bottom bar switches the left dock between Dataset and Media, and the right
-dock between Annotations and Info. Nothing has to happen in a fixed order:
+Each dock has a tab bar naming its views, with the current view's buttons at
+its end: the left dock switches between Media and Labels, and the right dock
+between Annotations and Details. Nothing has to happen in a fixed order:
 media can be imported before labels exist, and drawing without a label creates
 one.
 
@@ -113,8 +114,8 @@ are skipped and reported in the status message.
 
 ## Left Docks
 
-- Dataset: project identity and labels
-- Media: import and the media list
+- Media, the default: the media list, with import buttons in the tab bar
+- Labels: the label list, with an add button in the tab bar
 
 Each media row starts with a green check when the media is done or a hollow
 circle when it is not, then its name, then its annotation count. Removing
@@ -172,7 +173,8 @@ count too.
   object row shows its review state, accept and reject toggles, and a label
   menu. Y accepts, X rejects, and U resets the selected annotation; accepting
   or rejecting moves to the next draft on the same media.
-- Info: active tool, zoom, counts, media still to review, and media metadata.
+- Details: the project's name, location, and creation date, the dataset's
+  totals, and the selected media's metadata.
 
 ## Layout
 
@@ -181,7 +183,7 @@ The main workspace uses `gpui-component` resizable panels:
 - left dock panel
 - center canvas
 - right dock panel
-- bottom dock switcher
+- status bar
 
 The panel group stores its state by element ID, so resizing is handled by the
 component library.

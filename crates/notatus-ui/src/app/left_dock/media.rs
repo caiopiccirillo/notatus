@@ -5,69 +5,48 @@ use gpui::StyleRefinement;
 use std::collections::HashMap;
 
 impl NotatusWindow {
-    pub(super) fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let view = cx.weak_entity();
-        let import_view = cx.weak_entity();
-        let colors = cx.theme().colors;
-
+    /// Import buttons, at the end of the dock's tab bar.
+    pub(super) fn media_actions(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+        let folder_view = view.clone();
         div()
-            .size_full()
             .flex()
-            .flex_col()
-            .overflow_hidden()
+            .gap_1()
             .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(colors.border)
-                    .child(section_title("Media"))
-                    .child(
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(
-                                Button::new("media-import")
-                                    .small()
-                                    .icon(Icon::new(IconName::Plus))
-                                    .tooltip("Import images (Ctrl+I)")
-                                    .on_click({
-                                        let view = import_view.clone();
-                                        move |_, window, cx| {
-                                            open_media_picker(view.clone(), window, cx);
-                                        }
-                                    }),
-                            )
-                            .child(
-                                Button::new("media-import-folder")
-                                    .small()
-                                    .icon(Icon::new(IconName::FolderOpen))
-                                    .tooltip("Import folder (Ctrl+Shift+I)")
-                                    .on_click(move |_, window, cx| {
-                                        open_folder_picker(import_view.clone(), window, cx);
-                                    }),
-                            ),
-                    ),
+                Button::new("media-import")
+                    .xsmall()
+                    .ghost()
+                    .icon(Icon::new(IconName::Plus))
+                    .tooltip_with_action(
+                        "Import images",
+                        &crate::app::actions::ImportMedia,
+                        Some(crate::app::actions::CONTEXT),
+                    )
+                    .on_click(move |_, window, cx| {
+                        open_media_picker(view.clone(), window, cx);
+                    }),
             )
             .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .p_2()
-                    .child(self.media_content(view, colors)),
+                Button::new("media-import-folder")
+                    .xsmall()
+                    .ghost()
+                    .icon(Icon::new(IconName::FolderOpen))
+                    .tooltip_with_action(
+                        "Import folder",
+                        &crate::app::actions::ImportFolder,
+                        Some(crate::app::actions::CONTEXT),
+                    )
+                    .on_click(move |_, window, cx| {
+                        open_folder_picker(folder_view.clone(), window, cx);
+                    }),
             )
     }
 
-    fn media_content(
+    pub(super) fn media_content(
         &self,
         view: gpui::WeakEntity<NotatusWindow>,
-        colors: ThemeColor,
+        cx: &App,
     ) -> impl IntoElement {
+        let colors = cx.theme().colors;
         if self.state.dataset().assets.is_empty() {
             let import_view = view.clone();
             div()
@@ -109,7 +88,12 @@ impl NotatusWindow {
                 )
                 .into_any_element()
         } else {
-            SidebarMenuElement(SidebarMenu::new().children(self.asset_items(view, colors)))
+            div()
+                .size_full()
+                .p_2()
+                .child(SidebarMenuElement(
+                    SidebarMenu::new().children(self.asset_items(view, colors)),
+                ))
                 .into_any_element()
         }
     }

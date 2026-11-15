@@ -133,7 +133,7 @@ fn empty_project_export_pushes_notification_without_panicking(cx: &mut TestAppCo
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.left_dock, LeftDock::Dataset);
+        assert_eq!(notatus.left_dock, LeftDock::Labels);
         assert_eq!(
             notatus.status_message.as_deref(),
             Some("Create a label before exporting")

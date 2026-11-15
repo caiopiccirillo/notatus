@@ -190,10 +190,6 @@ pub(super) fn label_count_label(count: usize) -> String {
     format!("{count} label{}", plural(count))
 }
 
-pub(super) fn dataset_created_label(dataset: &notatus_core::Dataset) -> String {
-    format!("Created {}", dataset.manifest.project.created_at.date())
-}
-
 pub(super) fn asset_kind_label(kind: &AssetKind) -> &'static str {
     match kind {
         AssetKind::Image => "Image",

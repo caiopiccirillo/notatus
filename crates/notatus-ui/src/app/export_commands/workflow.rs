@@ -11,11 +11,12 @@ pub(in crate::app) enum ExportWorkflowIssue {
 }
 
 impl ExportWorkflowIssue {
-    fn target_dock(self) -> LeftDock {
+    /// The dock that fixes the issue, when one does.
+    fn target_dock(self) -> Option<LeftDock> {
         match self {
-            Self::Labels => LeftDock::Dataset,
-            Self::Media | Self::FinishedMedia => LeftDock::Media,
-            Self::Annotations | Self::Format => LeftDock::Dataset,
+            Self::Labels => Some(LeftDock::Labels),
+            Self::Media | Self::FinishedMedia | Self::Annotations => Some(LeftDock::Media),
+            Self::Format => None,
         }
     }
 
@@ -84,7 +85,9 @@ impl NotatusWindow {
         issue: ExportWorkflowIssue,
         cx: &mut Context<Self>,
     ) {
-        self.left_dock = issue.target_dock();
+        if let Some(dock) = issue.target_dock() {
+            self.left_dock = dock;
+        }
         self.status_message = Some(issue.status().to_string());
         cx.notify();
     }

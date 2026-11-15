@@ -10,72 +10,63 @@ struct LabelMenuContext {
     view: gpui::WeakEntity<NotatusWindow>,
 }
 
-pub(super) fn labels_section(
+/// The add button, at the end of the dock's tab bar.
+pub(super) fn labels_actions(view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
+    Button::new("labels-add")
+        .xsmall()
+        .ghost()
+        .icon(Icon::new(IconName::Plus))
+        .tooltip_with_action(
+            "New label",
+            &crate::app::actions::NewLabel,
+            Some(crate::app::actions::CONTEXT),
+        )
+        .on_click(move |_, window, cx| {
+            let _ = view.update(cx, |notatus, cx| {
+                notatus.create_label(window, cx);
+            });
+        })
+}
+
+pub(super) fn labels_content(
     window: &NotatusWindow,
     view: gpui::WeakEntity<NotatusWindow>,
     colors: ThemeColor,
 ) -> impl IntoElement {
-    let add_label_view = view.clone();
-    let empty_label_view = view.clone();
-    let label_rows = label_rows(window, view.clone(), colors);
-
+    if window.state.dataset().labels.is_empty() {
+        return div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .p_4()
+            .text_sm()
+            .text_color(colors.muted_foreground)
+            .child("Add labels now, or draw a box to create one")
+            .child(
+                Button::new("labels-empty-add")
+                    .small()
+                    .icon(Icon::new(IconName::Plus))
+                    .label("Add label")
+                    .on_click(move |_, window, cx| {
+                        let _ = view.update(cx, |notatus, cx| {
+                            notatus.create_label(window, cx);
+                        });
+                    }),
+            )
+            .into_any_element();
+    }
     div()
+        .size_full()
+        .overflow_y_scrollbar()
+        .p_2()
         .flex()
         .flex_col()
-        .gap_2()
-        .border_t_1()
-        .border_color(colors.border)
-        .pt_4()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(section_title("Labels"))
-                .child(
-                    Button::new("labels-add")
-                        .small()
-                        .icon(Icon::new(IconName::Plus))
-                        .tooltip("Add label")
-                        .on_click(move |_, window, cx| {
-                            let _ = add_label_view.update(cx, |notatus, cx| {
-                                notatus.create_label(window, cx);
-                            });
-                        }),
-                ),
-        )
-        .child(if window.state.dataset().labels.is_empty() {
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap_3()
-                .py_6()
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("Add labels now, or draw a box to create one")
-                .child(
-                    Button::new("labels-empty-add")
-                        .small()
-                        .icon(Icon::new(IconName::Plus))
-                        .label("Add label")
-                        .on_click(move |_, window, cx| {
-                            let _ = empty_label_view.update(cx, |notatus, cx| {
-                                notatus.create_label(window, cx);
-                            });
-                        }),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .children(label_rows)
-                .into_any_element()
-        })
+        .gap_1()
+        .children(label_rows(window, view, colors))
+        .into_any_element()
 }
 
 fn label_rows(
@@ -83,47 +74,29 @@ fn label_rows(
     view: gpui::WeakEntity<NotatusWindow>,
     colors: ThemeColor,
 ) -> Vec<gpui::AnyElement> {
-    if window.state.dataset().labels.is_empty() {
-        vec![
-            div()
-                .px_2()
-                .py_3()
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("No labels yet")
-                .into_any_element(),
-        ]
-    } else {
-        window
-            .state
-            .dataset()
-            .labels
-            .iter()
-            .map(|label| {
-                let label_id = label.id;
-                let annotation_count = window
-                    .state
-                    .dataset()
-                    .annotations
-                    .iter()
-                    .filter(|annotation| annotation.label_id == label_id)
-                    .count();
-                let label_name = label.name.clone();
-                let label_color = label.color.clone();
-                let selected = window.state.selected_label() == Some(label_id);
-                label_row(
-                    label_id,
-                    label_name,
-                    label_color,
-                    annotation_count,
-                    selected,
-                    view.clone(),
-                    colors,
-                )
-                .into_any_element()
-            })
-            .collect()
+    // Counted in one pass rather than once per label.
+    let mut counts: std::collections::HashMap<LabelId, usize> = Default::default();
+    for annotation in &window.state.dataset().annotations {
+        *counts.entry(annotation.label_id).or_default() += 1;
     }
+    window
+        .state
+        .dataset()
+        .labels
+        .iter()
+        .map(|label| {
+            label_row(
+                label.id,
+                label.name.clone(),
+                label.color.clone(),
+                counts.get(&label.id).copied().unwrap_or(0),
+                window.state.selected_label() == Some(label.id),
+                view.clone(),
+                colors,
+            )
+            .into_any_element()
+        })
+        .collect()
 }
 
 fn label_row(
