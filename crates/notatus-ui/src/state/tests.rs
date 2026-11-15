@@ -29,7 +29,7 @@ fn adds_bbox_through_ui_state() {
     );
     assert_eq!(state.selected_annotation, None);
     assert_eq!(state.selected_label, Some(label_id));
-    assert!(state.dirty);
+    assert!(state.is_dirty());
     assert!(state.dataset.validate().is_ok());
 }
 
@@ -61,7 +61,7 @@ fn adds_polygon_through_ui_state() {
     assert_eq!(annotation.geometry, AnnotationGeometry::Polygon(polygon));
     assert_eq!(state.selected_annotation, None);
     assert_eq!(state.selected_label, Some(label_id));
-    assert!(state.dirty);
+    assert!(state.is_dirty());
     assert!(state.dataset.validate().is_ok());
 }
 
@@ -105,7 +105,7 @@ fn setting_tool_does_not_dirty_dataset() {
     state.set_tool(AnnotationTool::DrawBox);
 
     assert_eq!(state.active_tool, AnnotationTool::DrawBox);
-    assert!(!state.dirty);
+    assert!(!state.is_dirty());
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn renames_project_and_marks_dirty() {
 
     assert_eq!(state.dataset.manifest.project.name, "renamed");
     assert!(state.dataset.manifest.project.updated_at >= old_updated_at);
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn selects_annotation_without_dirtying_dataset() {
     assert_eq!(state.selected_asset, Some(asset_id));
     assert_eq!(state.selected_label, Some(label_id));
     assert_eq!(state.selected_annotation, Some(annotation_id));
-    assert!(!state.dirty);
+    assert!(!state.is_dirty());
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn customizes_selected_label() {
     assert_eq!(state.selected_label, Some(label_id));
     assert_eq!(label.name, "car");
     assert_eq!(label.color.as_deref(), Some("#dc2626"));
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn updates_annotation_label_and_marks_dirty() {
     assert_eq!(state.selected_asset, Some(asset_id));
     assert_eq!(state.selected_annotation, Some(annotation_id));
     assert_eq!(state.selected_label, Some(new_label));
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn updates_annotation_bbox_and_marks_dirty() {
     assert_eq!(state.selected_asset, Some(asset_id));
     assert_eq!(state.selected_annotation, Some(annotation_id));
     assert_eq!(state.selected_label, Some(label_id));
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 }
 
 #[test]
@@ -398,7 +398,7 @@ fn removes_label_and_its_annotations() {
             .iter()
             .any(|classification| classification.label_id == remaining_label)
     );
-    assert!(state.dirty);
+    assert!(state.is_dirty());
     assert!(state.dataset.validate().is_ok());
 }
 
@@ -473,7 +473,7 @@ fn removes_asset_and_its_annotations() {
             .iter()
             .any(|classification| classification.asset_id == remaining_asset)
     );
-    assert!(state.dirty);
+    assert!(state.is_dirty());
     assert!(state.dataset.validate().is_ok());
 }
 
@@ -519,13 +519,13 @@ fn undo_back_to_saved_revision_clears_dirty() {
     state.mark_saved();
 
     state.remove_annotation(annotation_id).unwrap();
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 
     state.undo();
-    assert!(!state.dirty);
+    assert!(!state.is_dirty());
 
     state.redo();
-    assert!(state.dirty);
+    assert!(state.is_dirty());
 }
 
 #[test]
@@ -555,7 +555,7 @@ fn unchanged_edits_do_not_dirty_or_record_history() {
         .update_annotation_label(annotation_id, label_id)
         .unwrap();
 
-    assert!(!state.dirty);
+    assert!(!state.is_dirty());
     assert_eq!(state.undo_description(), Some("Draw box"));
 }
 

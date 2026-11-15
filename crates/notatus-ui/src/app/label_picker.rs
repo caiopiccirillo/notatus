@@ -179,13 +179,13 @@ impl NotatusWindow {
     /// Refreshes the picker's options and selection from the dataset. Runs
     /// after changes, not every frame, since it resets the search text.
     pub(super) fn sync_label_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let key = (self.state.revision(), self.state.selected_label);
+        let key = (self.state.revision(), self.state.selected_label());
         if self.label_picker_synced == Some(key) {
             return;
         }
         self.label_picker_synced = Some(key);
-        let options = LabelOptions::new(&self.state.dataset.labels);
-        let selected = self.state.selected_label.map(LabelChoice::Existing);
+        let options = LabelOptions::new(&self.state.dataset().labels);
+        let selected = self.state.selected_label().map(LabelChoice::Existing);
         self.label_picker.update(cx, |picker, cx| {
             picker.set_items(options, window, cx);
             match selected {

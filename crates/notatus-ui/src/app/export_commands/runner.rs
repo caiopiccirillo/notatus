@@ -40,7 +40,7 @@ pub(in crate::app) fn export_annotations(
                     return;
                 };
                 let export_request = view.update_in(window, |notatus, _, _| ExportRequest {
-                    dataset: notatus.state.dataset.clone(),
+                    dataset: notatus.state.dataset().clone(),
                     yolo: notatus.export_yolo,
                     coco: notatus.export_coco,
                     classifications: notatus.export_classifications,

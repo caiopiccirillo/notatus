@@ -102,7 +102,7 @@ impl NotatusWindow {
                 compact_text(&self.project_location.display_name(), 34),
             ))
             .child(themed({
-                let created = dataset_created_label(&self.state.dataset);
+                let created = dataset_created_label(self.state.dataset());
                 move |theme| {
                     div()
                         .text_xs()

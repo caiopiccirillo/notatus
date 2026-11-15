@@ -28,11 +28,11 @@ impl NotatusWindow {
             .iter()
             .filter(|_| !options.hide_annotations)
             .map(|ann| {
-                let label = self.state.dataset.label_by_id(ann.label_id);
+                let label = self.state.dataset().label_by_id(ann.label_id);
                 let color = label
                     .and_then(|l| l.color.as_deref())
                     .unwrap_or(DEFAULT_LABEL_COLOR);
-                let selected = self.state.selected_annotation == Some(ann.id);
+                let selected = self.state.selected_annotation() == Some(ann.id);
                 AnnotationOverlay {
                     id: ann.id,
                     geometry: ann.geometry.clone(),
@@ -44,16 +44,16 @@ impl NotatusWindow {
                         .then(|| label.map(|l| annotation_tag(&l.name, ann)))
                         .flatten(),
                     dimmed: options.focus_selected
-                        && self.state.selected_annotation.is_some()
+                        && self.state.selected_annotation().is_some()
                         && !selected,
                     rejected: ann.review_state == notatus_core::ReviewState::Rejected,
                 }
             })
             .collect();
-        let active_tool = self.state.active_tool;
+        let active_tool = self.state.active_tool();
         let viewport = self.tools.viewport;
         let canvas_cursor = self.canvas_cursor;
-        let has_media = !self.state.dataset.assets.is_empty();
+        let has_media = !self.state.dataset().assets.is_empty();
         let preview_color = self
             .selected_label()
             .and_then(|l| l.color.as_deref())

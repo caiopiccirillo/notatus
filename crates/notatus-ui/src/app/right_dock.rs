@@ -37,7 +37,7 @@ impl NotatusWindow {
             let classifications = self.classifications_for_asset(asset);
             let annotation_count = annotations.len();
             let classification_count = classifications.len();
-            let labels = self.state.dataset.labels.clone();
+            let labels = self.state.dataset().labels.clone();
             let classified_label_ids: Vec<_> = classifications
                 .iter()
                 .map(|classification| classification.label_id)
@@ -134,7 +134,7 @@ impl NotatusWindow {
         colors: ThemeColor,
     ) -> impl IntoElement {
         let classification_id = classification.id;
-        let label = self.state.dataset.label_by_id(classification.label_id);
+        let label = self.state.dataset().label_by_id(classification.label_id);
         let label_name = label
             .map(|label| label.name.as_str())
             .unwrap_or("Unknown label")
@@ -230,7 +230,7 @@ impl NotatusWindow {
         colors: ThemeColor,
     ) -> impl IntoElement {
         let annotation_id = annotation.id;
-        let label = self.state.dataset.label_by_id(annotation.label_id);
+        let label = self.state.dataset().label_by_id(annotation.label_id);
         let label_name = label
             .map(|label| label.name.as_str())
             .unwrap_or("Unknown label")
@@ -239,7 +239,7 @@ impl NotatusWindow {
             .and_then(|label| label.color.as_deref())
             .unwrap_or(DEFAULT_LABEL_COLOR)
             .to_string();
-        let selected = self.state.selected_annotation == Some(annotation_id);
+        let selected = self.state.selected_annotation() == Some(annotation_id);
         let hovered = self.hovered_annotation == Some(annotation_id);
         let (annotation_key_high, annotation_key_low) = annotation_element_key(annotation_id);
         let row_id = gpui::ElementId::from(("annotation-row", annotation_key_high));
@@ -417,7 +417,7 @@ impl NotatusWindow {
             .unwrap_or_else(|| "None".to_string());
         let review_queue = self
             .state
-            .dataset
+            .dataset()
             .annotations
             .iter()
             .filter(|annotation| annotation.review_state == notatus_core::ReviewState::Draft)
@@ -433,7 +433,7 @@ impl NotatusWindow {
             .child(section_title("Info"))
             .child(metric(
                 "Active tool",
-                self.state.active_tool.display_name().to_string(),
+                self.state.active_tool().display_name().to_string(),
             ))
             .child(metric(
                 "Zoom",
@@ -442,15 +442,15 @@ impl NotatusWindow {
             .child(metric("Active label", active_label))
             .child(metric(
                 "Media",
-                media_count_label(self.state.dataset.assets.len()),
+                media_count_label(self.state.dataset().assets.len()),
             ))
             .child(metric(
                 "Annotations",
-                annotation_count_label(self.state.dataset.annotations.len()),
+                annotation_count_label(self.state.dataset().annotations.len()),
             ))
             .child(metric(
                 "Labels",
-                label_count_label(self.state.dataset.labels.len()),
+                label_count_label(self.state.dataset().labels.len()),
             ))
             // Short enough for the metric label column.
             .child(metric("To review", review_queue.to_string()))

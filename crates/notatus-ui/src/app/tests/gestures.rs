@@ -67,7 +67,7 @@ impl Canvas {
         self.view.update(&mut self.cx, |notatus, _| {
             notatus
                 .state
-                .dataset
+                .dataset()
                 .annotations
                 .iter()
                 .filter_map(|annotation| annotation.geometry.as_bbox())

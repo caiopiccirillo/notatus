@@ -47,11 +47,11 @@ impl NotatusWindow {
             self.status_message = Some("A model run is already in progress".to_string());
             return cx.notify();
         }
-        let project = self.state.dataset.manifest.project.id;
+        let project = self.state.dataset().manifest.project.id;
         let Some(spec) = self.runner_settings.get(project).cloned() else {
             return self.choose_model_runner(Some(scope), cx);
         };
-        if self.state.dataset.labels.is_empty() {
+        if self.state.dataset().labels.is_empty() {
             self.status_message =
                 Some("Create the labels the model should predict first".to_string());
             return cx.notify();
@@ -117,7 +117,7 @@ impl NotatusWindow {
                     .cloned()
                     .unwrap_or_else(|| spec.program.to_string_lossy().into_owned());
                 this.status_message = Some(format!("Model runner set to {shown}"));
-                let project = this.state.dataset.manifest.project.id;
+                let project = this.state.dataset().manifest.project.id;
                 if let Err(error) = this.runner_settings.set(project, spec) {
                     // Still used for this session.
                     this.status_message =
@@ -134,13 +134,13 @@ impl NotatusWindow {
 
     /// One request per media item in `scope` that is stored locally.
     fn model_requests(&self, scope: ModelScope) -> Vec<InferenceRequest> {
-        let labels = self.state.dataset.labels.clone();
+        let labels = self.state.dataset().labels.clone();
         self.state
-            .dataset
+            .dataset()
             .assets
             .iter()
             .filter(|asset| match scope {
-                ModelScope::CurrentMedia => self.state.selected_asset == Some(asset.id),
+                ModelScope::CurrentMedia => self.state.selected_asset() == Some(asset.id),
                 ModelScope::UnfinishedMedia => asset.status == notatus_core::AssetStatus::Pending,
             })
             .filter_map(|asset| {
@@ -374,7 +374,7 @@ done
                 .state
                 .set_asset_status(done, notatus_core::AssetStatus::Done)
                 .unwrap();
-            let project = notatus.state.dataset.manifest.project.id;
+            let project = notatus.state.dataset().manifest.project.id;
             notatus
                 .runner_settings
                 .set(project, shell_runner(dir.path()))
@@ -391,7 +391,7 @@ done
             let suggested = |asset| {
                 notatus
                     .state
-                    .dataset
+                    .dataset()
                     .annotations
                     .iter()
                     .filter(|annotation| annotation.asset_id == asset)
@@ -415,7 +415,7 @@ done
         });
         cx.run_until_parked();
         view.update(cx, |notatus, _| {
-            assert_eq!(notatus.state.dataset.annotations.len(), 2);
+            assert_eq!(notatus.state.dataset().annotations.len(), 2);
         });
     }
 
@@ -428,7 +428,7 @@ done
                 .state
                 .add_local_image_asset("/tmp/a.png", 100, 100)
                 .unwrap();
-            let project = notatus.state.dataset.manifest.project.id;
+            let project = notatus.state.dataset().manifest.project.id;
             let missing = ExternalModelSpec {
                 program: PathBuf::from("/nonexistent/runner"),
                 args: Vec::new(),

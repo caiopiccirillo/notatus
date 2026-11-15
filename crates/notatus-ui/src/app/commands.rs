@@ -6,7 +6,7 @@ pub(super) const FALLBACK_LABEL_NAME: &str = "Object";
 
 /// Adds a label with the next palette color, as one undo step.
 pub(super) fn add_colored_label(state: &mut UiState, name: Option<String>) -> LabelId {
-    let label_number = state.dataset.labels.len() + 1;
+    let label_number = state.dataset().labels.len() + 1;
     let name = name.unwrap_or_else(|| format!("Label {label_number}"));
     let color = LABEL_COLORS[(label_number - 1) % LABEL_COLORS.len()].to_string();
     state.batch("Create label", |state| {
@@ -19,11 +19,11 @@ pub(super) fn add_colored_label(state: &mut UiState, name: Option<String>) -> La
 /// The label new shapes get, creating one when the project has none so
 /// drawing never stops to ask for setup first. Returns whether it was created.
 pub(super) fn drawing_label(state: &mut UiState) -> (LabelId, bool) {
-    if let Some(label_id) = state.selected_label {
+    if let Some(label_id) = state.selected_label() {
         return (label_id, false);
     }
-    if let Some(label_id) = state.dataset.labels.first().map(|label| label.id) {
-        state.selected_label = Some(label_id);
+    if let Some(label_id) = state.dataset().labels.first().map(|label| label.id) {
+        let _ = state.select_label(label_id);
         return (label_id, false);
     }
     (
@@ -79,7 +79,7 @@ impl NotatusWindow {
         self.label_color_target = Some(label_id);
         let (label_name, color) = self
             .state
-            .dataset
+            .dataset()
             .label_by_id(label_id)
             .map(|label| {
                 (
@@ -257,7 +257,7 @@ impl NotatusWindow {
     }
 
     pub(super) fn sync_project_name_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let name = self.state.dataset.manifest.project.name.clone();
+        let name = self.state.dataset().manifest.project.name.clone();
         self.syncing_project_input = true;
         self.project_name_input.update(cx, |input, cx| {
             input.set_value(name, window, cx);

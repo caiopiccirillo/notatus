@@ -62,7 +62,7 @@ impl NotatusWindow {
                 "{} ({}): {}",
                 definition.label, definition.key, definition.tooltip
             ))
-            .selected(self.state.active_tool == tool)
+            .selected(self.state.active_tool() == tool)
             .on_click(move |_, _, cx| {
                 let _ = view.update(cx, |notatus, cx| {
                     notatus.set_canvas_tool(tool, cx);

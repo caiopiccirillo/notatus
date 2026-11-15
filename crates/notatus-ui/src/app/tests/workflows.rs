@@ -168,24 +168,24 @@ fn keyboard_shortcuts_drive_the_annotation_loop(cx: &mut TestAppContext) {
 
     cx.simulate_keystrokes(window, "d");
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.selected_asset, Some(assets[1]));
+        assert_eq!(notatus.state.selected_asset(), Some(assets[1]));
     });
 
     cx.simulate_keystrokes(window, "2");
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.selected_label, Some(car));
+        assert_eq!(notatus.state.selected_label(), Some(car));
     });
 
     cx.simulate_keystrokes(window, "v");
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.active_tool, AnnotationTool::Select);
+        assert_eq!(notatus.state.active_tool(), AnnotationTool::Select);
     });
 
     cx.simulate_keystrokes(window, "ctrl-enter");
     view.update(cx, |notatus, _| {
-        let asset = notatus.state.dataset.asset_by_id(assets[1]).unwrap();
+        let asset = notatus.state.dataset().asset_by_id(assets[1]).unwrap();
         assert_eq!(asset.status, notatus_core::AssetStatus::Done);
-        assert_eq!(notatus.state.selected_asset, Some(assets[2]));
+        assert_eq!(notatus.state.selected_asset(), Some(assets[2]));
         assert_eq!(
             notatus.progress_summary().as_deref(),
             Some("3 of 3 · 1 done")
@@ -194,7 +194,7 @@ fn keyboard_shortcuts_drive_the_annotation_loop(cx: &mut TestAppContext) {
 
     cx.simulate_keystrokes(window, "ctrl-z");
     view.update(cx, |notatus, _| {
-        let asset = notatus.state.dataset.asset_by_id(assets[1]).unwrap();
+        let asset = notatus.state.dataset().asset_by_id(assets[1]).unwrap();
         assert_eq!(asset.status, notatus_core::AssetStatus::Pending);
     });
 }
@@ -217,18 +217,18 @@ fn delete_key_removes_selected_annotation_and_undo_restores_it(cx: &mut TestAppC
 
     cx.simulate_keystrokes(window, "delete");
     view.update(cx, |notatus, _| {
-        assert!(notatus.state.dataset.annotations.is_empty());
+        assert!(notatus.state.dataset().annotations.is_empty());
     });
 
     cx.simulate_keystrokes(window, "ctrl-z");
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.selected_annotation, Some(annotation_id));
-        assert_eq!(notatus.state.dataset.annotations.len(), 1);
+        assert_eq!(notatus.state.selected_annotation(), Some(annotation_id));
+        assert_eq!(notatus.state.dataset().annotations.len(), 1);
     });
 
     cx.simulate_keystrokes(window, "ctrl-shift-z");
     view.update(cx, |notatus, _| {
-        assert!(notatus.state.dataset.annotations.is_empty());
+        assert!(notatus.state.dataset().annotations.is_empty());
     });
 }
 
@@ -247,7 +247,7 @@ fn bare_key_shortcuts_are_ignored_while_typing(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "d");
 
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.selected_asset, Some(assets[0]));
+        assert_eq!(notatus.state.selected_asset(), Some(assets[0]));
     });
 }
 
@@ -271,7 +271,7 @@ fn command_palette_runs_the_confirmed_command(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.active_tool, AnnotationTool::DrawPolygon);
+        assert_eq!(notatus.state.active_tool(), AnnotationTool::DrawPolygon);
     });
     let open = cx
         .update_window(window, |_, window, cx| window.has_active_dialog(cx))
@@ -281,7 +281,7 @@ fn command_palette_runs_the_confirmed_command(cx: &mut TestAppContext) {
     // Focus returns to the window, so bare-key shortcuts work again.
     cx.simulate_keystrokes(window, "v");
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.active_tool, AnnotationTool::Select);
+        assert_eq!(notatus.state.active_tool(), AnnotationTool::Select);
     });
 }
 
@@ -297,7 +297,7 @@ fn autosave_writes_local_projects_after_a_pause(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     view.update(cx, |notatus, _| {
-        assert!(notatus.state.dirty);
+        assert!(notatus.state.is_dirty());
         assert_eq!(notatus.save_status(), "Edited");
     });
     assert!(!dir.path().join(MANIFEST_FILE).exists());
@@ -306,7 +306,7 @@ fn autosave_writes_local_projects_after_a_pause(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        assert!(!notatus.state.dirty);
+        assert!(!notatus.state.is_dirty());
         assert_eq!(notatus.save_status(), "Saved");
     });
     let saved = LocalProjectStore::new(dir.path()).load_dataset().unwrap();
@@ -323,7 +323,7 @@ fn autosave_skips_projects_without_a_location(cx: &mut TestAppContext) {
     cx.executor().advance_clock(autosave::AUTOSAVE_DELAY);
     cx.run_until_parked();
     view.update(cx, |notatus, _| {
-        assert!(notatus.state.dirty);
+        assert!(notatus.state.is_dirty());
         assert_eq!(notatus.save_status(), "Not saved to disk");
     });
 }
@@ -343,12 +343,15 @@ fn drawing_without_labels_creates_one_and_undoes_together() {
     });
 
     assert!(created);
-    assert_eq!(state.dataset.labels.len(), 1);
-    assert_eq!(state.dataset.labels[0].name, commands::FALLBACK_LABEL_NAME);
-    assert!(state.dataset.labels[0].color.is_some());
+    assert_eq!(state.dataset().labels.len(), 1);
+    assert_eq!(
+        state.dataset().labels[0].name,
+        commands::FALLBACK_LABEL_NAME
+    );
+    assert!(state.dataset().labels[0].color.is_some());
     assert_eq!(state.undo(), Some("Draw box"));
-    assert!(state.dataset.labels.is_empty());
-    assert!(state.dataset.annotations.is_empty());
+    assert!(state.dataset().labels.is_empty());
+    assert!(state.dataset().annotations.is_empty());
 }
 
 #[test]
@@ -356,10 +359,10 @@ fn drawing_reuses_the_first_label_when_none_is_selected() {
     let mut state = UiState::new_project("demo");
     let first = state.add_label("Person");
     state.add_label("Car");
-    state.selected_label = None;
+    state.clear_selected_label();
 
     assert_eq!(commands::drawing_label(&mut state), (first, false));
-    assert_eq!(state.selected_label, Some(first));
+    assert_eq!(state.selected_label(), Some(first));
 }
 
 #[gpui::test]
@@ -368,13 +371,13 @@ fn label_picker_creates_a_typed_label_and_relabels_the_selection(cx: &mut TestAp
     let window: gpui::AnyWindowHandle = window_handle.into();
     let annotation_id = view.update(cx, |notatus, _| {
         let (_, assets) = seed_three_media(notatus);
-        let label_id = notatus.state.dataset.labels[0].id;
+        let label_id = notatus.state.dataset().labels[0].id;
         let bbox = BoundingBox::from_xywh(1.0, 1.0, 5.0, 5.0).unwrap();
         let id = notatus
             .state
             .add_human_bbox(assets[0], label_id, bbox, None)
             .unwrap();
-        notatus.state.selected_annotation = Some(id);
+        notatus.state.select_annotation(Some(id)).unwrap();
         id
     });
     cx.run_until_parked();
@@ -387,13 +390,13 @@ fn label_picker_creates_a_typed_label_and_relabels_the_selection(cx: &mut TestAp
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        let label = notatus.state.dataset.labels.last().unwrap();
+        let label = notatus.state.dataset().labels.last().unwrap();
         assert_eq!(label.name, "Bicycle");
         assert!(label.color.is_some());
-        assert_eq!(notatus.state.selected_label, Some(label.id));
+        assert_eq!(notatus.state.selected_label(), Some(label.id));
         let annotation = notatus
             .state
-            .dataset
+            .dataset()
             .annotations
             .iter()
             .find(|annotation| annotation.id == annotation_id)
@@ -460,16 +463,16 @@ fn box_tool_draws_on_empty_space_and_moves_existing_boxes(cx: &mut TestAppContex
 
     canvas.drag((10.0, 10.0), (40.0, 40.0), none);
     let drawn = view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.dataset.annotations.len(), 1);
-        notatus.state.dataset.annotations[0].id
+        assert_eq!(notatus.state.dataset().annotations.len(), 1);
+        notatus.state.dataset().annotations[0].id
     });
 
     // Dragging the box body moves it instead of drawing a second box.
     canvas.drag((25.0, 25.0), (55.0, 35.0), none);
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.dataset.annotations.len(), 1);
-        assert_eq!(notatus.state.selected_annotation, Some(drawn));
-        let bbox = notatus.state.dataset.annotations[0]
+        assert_eq!(notatus.state.dataset().annotations.len(), 1);
+        assert_eq!(notatus.state.selected_annotation(), Some(drawn));
+        let bbox = notatus.state.dataset().annotations[0]
             .geometry
             .as_bbox()
             .unwrap();
@@ -480,14 +483,14 @@ fn box_tool_draws_on_empty_space_and_moves_existing_boxes(cx: &mut TestAppContex
     // Alt forces drawing, even when starting inside a box.
     canvas.drag((50.0, 25.0), (60.0, 45.0), gpui::Modifiers::alt());
     view.update(cx, |notatus, _| {
-        assert_eq!(notatus.state.dataset.annotations.len(), 2);
+        assert_eq!(notatus.state.dataset().annotations.len(), 2);
     });
 
     // A move is one undo step.
     view.update(cx, |notatus, _| {
         notatus.state.undo();
         notatus.state.undo();
-        let bbox = notatus.state.dataset.annotations[0]
+        let bbox = notatus.state.dataset().annotations[0]
             .geometry
             .as_bbox()
             .unwrap();
@@ -533,7 +536,7 @@ fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
                     .unwrap()
             })
             .collect::<Vec<_>>();
-        notatus.state.selected_annotation = None;
+        notatus.state.select_annotation(None).unwrap();
         ids
     });
     cx.run_until_parked();
@@ -543,7 +546,7 @@ fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
     view.update(cx, |notatus, _| {
         let states: Vec<_> = notatus
             .state
-            .dataset
+            .dataset()
             .annotations
             .iter()
             .map(|annotation| annotation.review_state)
@@ -556,13 +559,13 @@ fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
                 ReviewState::Draft
             ]
         );
-        assert_eq!(notatus.state.selected_annotation, Some(ids[2]));
+        assert_eq!(notatus.state.selected_annotation(), Some(ids[2]));
     });
 
     cx.simulate_keystrokes(window, "ctrl-z");
     view.update(cx, |notatus, _| {
         assert_eq!(
-            notatus.state.dataset.annotations[1].review_state,
+            notatus.state.dataset().annotations[1].review_state,
             ReviewState::Draft
         );
     });

@@ -55,18 +55,18 @@ impl ExportWorkflowIssue {
 
 impl NotatusWindow {
     pub(in crate::app) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
-        if self.state.dataset.labels.is_empty() {
+        if self.state.dataset().labels.is_empty() {
             Some(ExportWorkflowIssue::Labels)
-        } else if self.state.dataset.assets.is_empty() {
+        } else if self.state.dataset().assets.is_empty() {
             Some(ExportWorkflowIssue::Media)
-        } else if exportable_annotation_count(&self.state.dataset) == 0
-            && exportable_classification_count(&self.state.dataset) == 0
+        } else if exportable_annotation_count(self.state.dataset()) == 0
+            && exportable_classification_count(self.state.dataset()) == 0
         {
             Some(ExportWorkflowIssue::Annotations)
         } else if self.export_finished_only
             && !self
                 .state
-                .dataset
+                .dataset()
                 .assets
                 .iter()
                 .any(|asset| asset.status == notatus_core::AssetStatus::Done)

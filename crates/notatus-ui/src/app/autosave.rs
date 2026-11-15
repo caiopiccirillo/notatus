@@ -61,7 +61,7 @@ impl NotatusWindow {
     /// Call after every update that may have mutated state.
     pub(super) fn schedule_autosave(&mut self, cx: &mut Context<Self>) {
         if !self.autosave.enabled
-            || !self.state.dirty
+            || !self.state.is_dirty()
             || self.project_location.path().is_none()
             || self.autosave.scheduled_revision == Some(self.state.revision())
         {
@@ -80,7 +80,7 @@ impl NotatusWindow {
             // The running save reschedules once it finishes.
             return;
         }
-        if self.state.dirty {
+        if self.state.is_dirty() {
             self.start_save(cx);
         }
     }
@@ -108,7 +108,7 @@ impl NotatusWindow {
 
         let revision = self.state.revision();
         let generation = self.autosave.generation;
-        let dataset = self.state.dataset.clone();
+        let dataset = self.state.dataset().clone();
         self.autosave.saving = true;
         cx.notify();
 
@@ -149,7 +149,7 @@ impl NotatusWindow {
         if std::mem::take(&mut self.autosave.save_requested) {
             self.start_save(cx);
         } else if self.autosave.close_requested {
-            if self.state.dirty {
+            if self.state.is_dirty() {
                 self.start_save(cx);
             } else {
                 self.close_window(cx);
@@ -169,7 +169,7 @@ impl NotatusWindow {
     /// closes once they are on disk. A project that was never saved to a
     /// folder asks before its changes are discarded.
     pub(super) fn should_close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if self.autosave.close_confirmed || (!self.state.dirty && !self.autosave.saving) {
+        if self.autosave.close_confirmed || (!self.state.is_dirty() && !self.autosave.saving) {
             return true;
         }
 
@@ -254,7 +254,7 @@ impl NotatusWindow {
         if self.autosave.saving {
             return "Saving…";
         }
-        match (&self.project_location, self.state.dirty) {
+        match (&self.project_location, self.state.is_dirty()) {
             (ProjectLocation::Unsaved, _) => "Not saved to disk",
             (_, false) => "Saved",
             (ProjectLocation::Local(_), true) if self.autosave.enabled => "Edited",

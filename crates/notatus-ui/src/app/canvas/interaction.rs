@@ -101,7 +101,7 @@ fn attach_draw_box_interactions(
                                 cx,
                             ),
                             None => {
-                                if notatus.state.selected_annotation.is_some() {
+                                if notatus.state.selected_annotation().is_some() {
                                     notatus.select_annotation(None, window, cx);
                                 }
                                 notatus.tools.begin_draw_box(image_pos);
@@ -194,7 +194,7 @@ fn finish_box_gesture(
     }
     if let Some(completion) = notatus.tools.finish_draw_box(min_box_extent(notatus))
         && let Some(bbox) = completion.bbox
-        && let Some(asset_id) = notatus.state.selected_asset
+        && let Some(asset_id) = notatus.state.selected_asset()
     {
         let result = notatus.state.batch("Draw box", |state| {
             let (label_id, created) = super::super::commands::drawing_label(state);

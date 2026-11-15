@@ -44,15 +44,17 @@ pub struct RemovalSummary {
     pub classifications: usize,
 }
 
+/// The fields are private so that every change goes through a method that
+/// records undo history and tracks unsaved changes; read them through the
+/// accessors.
 #[derive(Clone, Debug)]
 pub struct UiState {
-    pub dataset: Dataset,
-    pub active_tool: AnnotationTool,
-    pub selected_asset: Option<AssetId>,
-    pub selected_annotation: Option<AnnotationId>,
-    pub selected_label: Option<LabelId>,
-    /// True when the dataset differs from the last saved revision.
-    pub dirty: bool,
+    dataset: Dataset,
+    active_tool: AnnotationTool,
+    selected_asset: Option<AssetId>,
+    selected_annotation: Option<AnnotationId>,
+    /// The label new shapes get, and the selected annotation's label.
+    selected_label: Option<LabelId>,
     revision: u64,
     saved_revision: u64,
     next_revision: u64,
@@ -75,13 +77,44 @@ impl UiState {
             selected_asset: None,
             selected_annotation: None,
             selected_label: None,
-            dirty: false,
             revision: 0,
             saved_revision: 0,
             next_revision: 1,
             history: History::default(),
             batch_depth: 0,
         }
+    }
+
+    pub fn dataset(&self) -> &Dataset {
+        &self.dataset
+    }
+
+    pub fn active_tool(&self) -> AnnotationTool {
+        self.active_tool
+    }
+
+    pub fn selected_asset(&self) -> Option<AssetId> {
+        self.selected_asset
+    }
+
+    pub fn selected_annotation(&self) -> Option<AnnotationId> {
+        self.selected_annotation
+    }
+
+    pub fn selected_label(&self) -> Option<LabelId> {
+        self.selected_label
+    }
+
+    /// True when the dataset differs from the last saved revision.
+    pub fn is_dirty(&self) -> bool {
+        self.revision != self.saved_revision
+    }
+
+    /// Clears the active label. The app keeps one active while labels exist;
+    /// only tests need a project in the state between.
+    #[cfg(test)]
+    pub(crate) fn clear_selected_label(&mut self) {
+        self.selected_label = None;
     }
 
     /// Monotonic identifier of the current dataset contents. Undo restores
@@ -99,7 +132,6 @@ impl UiState {
         }
         self.revision = self.next_revision;
         self.next_revision += 1;
-        self.dirty = true;
     }
 
     /// Runs several mutations as one undo step.
@@ -162,7 +194,6 @@ impl UiState {
         self.selected_annotation = snapshot.selection.annotation;
         self.selected_label = snapshot.selection.label;
         self.revision = snapshot.revision;
-        self.dirty = self.revision != self.saved_revision;
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]
@@ -196,14 +227,12 @@ impl UiState {
     pub fn mark_saved(&mut self) {
         tracing::trace!("marking dataset as saved");
         self.saved_revision = self.revision;
-        self.dirty = false;
     }
 
     /// Marks a specific revision as saved, for saves that finish after more
     /// edits were made.
     pub fn mark_revision_saved(&mut self, revision: u64) {
         self.saved_revision = revision;
-        self.dirty = self.revision != self.saved_revision;
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(name = tracing::field::Empty))]

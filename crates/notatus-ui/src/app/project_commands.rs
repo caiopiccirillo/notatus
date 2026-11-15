@@ -50,7 +50,7 @@ pub(super) fn save_project_as(
 ) {
     let suggested_name = view
         .update(cx, |notatus, _| {
-            suggested_project_folder(&notatus.state.dataset.manifest.project.name)
+            suggested_project_folder(&notatus.state.dataset().manifest.project.name)
         })
         .unwrap_or_else(|_| "notatus-project".to_string());
     let directory = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -88,7 +88,7 @@ fn run_or_confirm_discard(
     action: ProjectPickerAction,
 ) {
     let dirty = view
-        .update(cx, |notatus, _| notatus.state.dirty)
+        .update(cx, |notatus, _| notatus.state.is_dirty())
         .unwrap_or(false);
 
     if !dirty {
@@ -268,7 +268,7 @@ async fn save_current_project_to_path(
 ) {
     let Ok((dataset, revision, conflict)) = view.update_in(window, |notatus, _, _| {
         (
-            notatus.state.dataset.clone(),
+            notatus.state.dataset().clone(),
             notatus.state.revision(),
             save_as_conflict(&path, notatus.project_location.path()),
         )

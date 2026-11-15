@@ -167,7 +167,7 @@ impl NotatusWindow {
             .command("Polygon tool", Lucide::Pentagon, PolygonTool)
             .command(undo, IconName::Undo2, Undo)
             .command(redo, IconName::Redo2, Redo);
-        if self.state.selected_annotation.is_some() {
+        if self.state.selected_annotation().is_some() {
             annotate = annotate
                 .command(
                     "Delete selected annotation",
@@ -211,13 +211,13 @@ impl NotatusWindow {
         media = media
             .command("Import images", Lucide::ImagePlus, ImportMedia)
             .command("Import folder", Lucide::FolderOpen, ImportFolder);
-        for asset in self.state.dataset.assets.iter().take(MAX_MEDIA_ITEMS) {
+        for asset in self.state.dataset().assets.iter().take(MAX_MEDIA_ITEMS) {
             let name = asset_display_name(asset);
             media = media.push(
                 format!("Go to {}", compact_text(&name, 48)),
                 vec![name, asset.location.display_path().into_owned()],
                 IconName::GalleryVerticalEnd,
-                self.state.selected_asset == Some(asset.id),
+                self.state.selected_asset() == Some(asset.id),
                 GoToMedia(asset.id),
             );
         }
@@ -225,15 +225,15 @@ impl NotatusWindow {
         let mut labels = PaletteGroup::new("Labels")
             .command("Find or create label", IconName::Search, PickLabel)
             .command("New label", IconName::Plus, NewLabel);
-        let verb = if self.state.selected_annotation.is_some() {
+        let verb = if self.state.selected_annotation().is_some() {
             "Relabel as"
         } else {
             "Use label"
         };
-        for (slot, label) in self.state.dataset.labels.iter().enumerate() {
+        for (slot, label) in self.state.dataset().labels.iter().enumerate() {
             let title = format!("{verb} {}", label.name);
             let keywords = vec![label.name.clone()];
-            let checked = self.state.selected_label == Some(label.id);
+            let checked = self.state.selected_label() == Some(label.id);
             // The first nine labels have number keys; show those in the row.
             labels = if slot < 9 {
                 labels.push(

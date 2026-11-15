@@ -34,7 +34,7 @@ fn save_requested_during_a_save_writes_the_newest_state(cx: &mut TestAppContext)
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        assert!(!notatus.state.dirty);
+        assert!(!notatus.state.is_dirty());
         assert_eq!(notatus.save_status(), "Saved");
         assert_eq!(notatus.status_message.as_deref(), Some("Saved project"));
     });
@@ -105,7 +105,7 @@ fn failed_save_on_close_keeps_the_window_open(cx: &mut TestAppContext) {
     assert_eq!(cx.windows().len(), 1);
     assert!(has_dialog(window, cx));
     view.update(cx, |notatus, _| {
-        assert!(notatus.state.dirty);
+        assert!(notatus.state.is_dirty());
         assert!(
             notatus
                 .status_message
@@ -131,7 +131,7 @@ fn late_save_for_a_replaced_project_is_ignored(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     view.update(cx, |notatus, _| {
-        assert!(!notatus.state.dirty);
+        assert!(!notatus.state.is_dirty());
         assert_eq!(notatus.save_status(), "Not saved to disk");
         assert_ne!(notatus.status_message.as_deref(), Some("Saved project"));
     });
@@ -153,7 +153,7 @@ fn ctrl_s_saves_without_panicking(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     assert_eq!(saved_label_count(dir.path()), 1);
-    view.update(cx, |notatus, _| assert!(!notatus.state.dirty));
+    view.update(cx, |notatus, _| assert!(!notatus.state.is_dirty()));
 }
 
 #[gpui::test]

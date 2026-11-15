@@ -45,7 +45,7 @@ pub(super) fn labels_section(
                         }),
                 ),
         )
-        .child(if window.state.dataset.labels.is_empty() {
+        .child(if window.state.dataset().labels.is_empty() {
             div()
                 .flex()
                 .flex_col()
@@ -83,7 +83,7 @@ fn label_rows(
     view: gpui::WeakEntity<NotatusWindow>,
     colors: ThemeColor,
 ) -> Vec<gpui::AnyElement> {
-    if window.state.dataset.labels.is_empty() {
+    if window.state.dataset().labels.is_empty() {
         vec![
             div()
                 .px_2()
@@ -96,21 +96,21 @@ fn label_rows(
     } else {
         window
             .state
-            .dataset
+            .dataset()
             .labels
             .iter()
             .map(|label| {
                 let label_id = label.id;
                 let annotation_count = window
                     .state
-                    .dataset
+                    .dataset()
                     .annotations
                     .iter()
                     .filter(|annotation| annotation.label_id == label_id)
                     .count();
                 let label_name = label.name.clone();
                 let label_color = label.color.clone();
-                let selected = window.state.selected_label == Some(label_id);
+                let selected = window.state.selected_label() == Some(label_id);
                 label_row(
                     label_id,
                     label_name,

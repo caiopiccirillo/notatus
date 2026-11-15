@@ -136,7 +136,7 @@ fn screenshots() {
     // The media list, with the first item marked done.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
-            if let Some(first) = notatus.state.dataset.assets.first().map(|a| a.id) {
+            if let Some(first) = notatus.state.dataset().assets.first().map(|a| a.id) {
                 let _ = notatus
                     .state
                     .set_asset_status(first, notatus_core::AssetStatus::Done);
@@ -167,8 +167,8 @@ fn screenshots() {
     // View popover, opened by clicking its toolbar button.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, cx| {
-            let first = notatus.state.dataset.annotations.first().map(|a| a.id);
-            notatus.state.selected_annotation = first;
+            let first = notatus.state.dataset().annotations.first().map(|a| a.id);
+            notatus.state.select_annotation(first).unwrap();
             notatus.view_options.crosshair = true;
             notatus.view_options.focus_selected = true;
             notatus.tools.pointer_image_pos = Some((700.0, 300.0));

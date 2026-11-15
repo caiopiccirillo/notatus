@@ -82,7 +82,7 @@ impl NotatusWindow {
         let done = self
             .selected_asset()
             .is_some_and(|asset| asset.status == notatus_core::AssetStatus::Done);
-        let has_asset = self.state.selected_asset.is_some();
+        let has_asset = self.state.selected_asset().is_some();
 
         div()
             .flex()

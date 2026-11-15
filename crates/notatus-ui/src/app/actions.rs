@@ -287,7 +287,7 @@ impl NotatusWindow {
                 window.refresh();
             }))
             .on_action(cx.listener(|this, action: &SelectLabelSlot, window, cx| {
-                if let Some(label_id) = this.state.dataset.labels.get(action.0).map(|l| l.id) {
+                if let Some(label_id) = this.state.dataset().labels.get(action.0).map(|l| l.id) {
                     this.choose_label(label_id, window, cx);
                 }
             }))
@@ -331,7 +331,7 @@ impl NotatusWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.state.selected_asset == Some(asset_id) {
+        if self.state.selected_asset() == Some(asset_id) {
             return;
         }
         match self.state.select_asset(asset_id) {
@@ -356,7 +356,7 @@ impl NotatusWindow {
     ) {
         match self
             .state
-            .adjacent_asset(self.state.selected_asset, direction, pending_only)
+            .adjacent_asset(self.state.selected_asset(), direction, pending_only)
         {
             Some(asset_id) => self.go_to_media(asset_id, window, cx),
             None => {
@@ -395,7 +395,7 @@ impl NotatusWindow {
 
     /// Marks the current media done and moves on to the next pending one.
     pub(super) fn done_and_next(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(asset_id) = self.state.selected_asset else {
+        let Some(asset_id) = self.state.selected_asset() else {
             return;
         };
         if let Err(error) = self.state.set_asset_status(asset_id, AssetStatus::Done) {
@@ -438,7 +438,7 @@ impl NotatusWindow {
     ) {
         let target = self
             .state
-            .selected_annotation
+            .selected_annotation()
             .or_else(|| self.state.adjacent_annotation(Direction::Next));
         let Some(annotation_id) = target else {
             self.status_message = Some("No annotation to review".to_string());
@@ -476,7 +476,7 @@ impl NotatusWindow {
             cx.notify();
             return;
         }
-        let Some(annotation_id) = self.state.selected_annotation else {
+        let Some(annotation_id) = self.state.selected_annotation() else {
             return;
         };
         self.delete_annotation(annotation_id, window, cx);
@@ -505,7 +505,7 @@ impl NotatusWindow {
             self.tools.cancel_drawing();
             self.status_message = Some("Cancelled drawing".to_string());
             cx.notify();
-        } else if self.state.selected_annotation.is_some() {
+        } else if self.state.selected_annotation().is_some() {
             self.select_annotation(None, window, cx);
         }
     }
@@ -532,7 +532,7 @@ impl NotatusWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match self.state.selected_annotation {
+        match self.state.selected_annotation() {
             Some(annotation_id) => {
                 self.update_annotation_label(annotation_id, label_id, window, cx)
             }
@@ -542,7 +542,7 @@ impl NotatusWindow {
 
     /// One-line summary of review progress for the status bar.
     pub(super) fn progress_summary(&self) -> Option<String> {
-        let assets = &self.state.dataset.assets;
+        let assets = &self.state.dataset().assets;
         if assets.is_empty() {
             return None;
         }
@@ -552,7 +552,7 @@ impl NotatusWindow {
             .count();
         let position = self
             .state
-            .selected_asset
+            .selected_asset()
             .and_then(|id| assets.iter().position(|asset| asset.id == id))
             .map(|index| format!("{} of {}", index + 1, assets.len()))
             .unwrap_or_else(|| format!("{} media", assets.len()));

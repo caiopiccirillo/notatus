@@ -5,12 +5,12 @@ use std::collections::HashSet;
 impl NotatusWindow {
     fn apply_media_import(&mut self, imported: MediaImport) {
         let mut failed = imported.failures;
-        let first_new = self.state.dataset.assets.len();
+        let first_new = self.state.dataset().assets.len();
         // Collected once, so a large import does not rescan every asset for
         // every file.
         let mut known_paths: HashSet<String> = self
             .state
-            .dataset
+            .dataset()
             .assets
             .iter()
             .filter_map(|asset| match &asset.location {
@@ -38,7 +38,9 @@ impl NotatusWindow {
 
         if added > 0 {
             // Start on the first imported item rather than the last.
-            self.state.selected_asset = self.state.dataset.assets.get(first_new).map(|a| a.id);
+            if let Some(first) = self.state.dataset().assets.get(first_new).map(|a| a.id) {
+                let _ = self.state.select_asset(first);
+            }
             self.tools.fit_canvas_to_view();
             self.canvas_image_layout.borrow_mut().take();
             self.left_dock = LeftDock::Media;
@@ -335,8 +337,8 @@ mod tests {
                 wide.clone(),
                 text.clone(),
             ]));
-            assert_eq!(notatus.state.dataset.assets.len(), 1);
-            let asset = &notatus.state.dataset.assets[0];
+            assert_eq!(notatus.state.dataset().assets.len(), 1);
+            let asset = &notatus.state.dataset().assets[0];
             assert_eq!((asset.dimensions.width, asset.dimensions.height), (6, 2));
             assert_eq!(
                 notatus.status_message.as_deref(),
@@ -344,7 +346,7 @@ mod tests {
             );
 
             notatus.apply_media_import(inspect_media_paths(vec![wide.clone(), tall.clone()]));
-            assert_eq!(notatus.state.dataset.assets.len(), 2);
+            assert_eq!(notatus.state.dataset().assets.len(), 2);
             assert_eq!(
                 notatus.status_message.as_deref(),
                 Some("Imported 1 media item; skipped 1")

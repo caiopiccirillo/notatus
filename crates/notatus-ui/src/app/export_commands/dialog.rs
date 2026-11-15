@@ -42,19 +42,19 @@ fn export_dialog_snapshot(
     cx: &mut App,
 ) -> Option<ExportDialogSnapshot> {
     view.update(cx, |notatus, _| ExportDialogSnapshot {
-        media_count: notatus.state.dataset.assets.len(),
+        media_count: notatus.state.dataset().assets.len(),
         done_count: notatus
             .state
-            .dataset
+            .dataset()
             .assets
             .iter()
             .filter(|asset| asset.status == notatus_core::AssetStatus::Done)
             .count(),
         finished_only: notatus.export_finished_only,
-        label_count: notatus.state.dataset.labels.len(),
-        annotation_count: notatus.state.dataset.annotations.len(),
-        classification_count: notatus.state.dataset.classifications.len(),
-        exportable_count: exportable_annotation_count(&notatus.state.dataset),
+        label_count: notatus.state.dataset().labels.len(),
+        annotation_count: notatus.state.dataset().annotations.len(),
+        classification_count: notatus.state.dataset().classifications.len(),
+        exportable_count: exportable_annotation_count(notatus.state.dataset()),
         yolo: notatus.export_yolo,
         coco: notatus.export_coco,
         classifications: notatus.export_classifications,

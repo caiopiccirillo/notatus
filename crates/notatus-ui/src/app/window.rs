@@ -63,7 +63,7 @@ impl NotatusWindow {
         let (label_picker, label_picker_subscription) = Self::new_label_picker(window, cx);
         let (opacity_slider, opacity_subscription) = Self::new_opacity_slider(window, cx);
         project_name_input.update(cx, |input, cx| {
-            input.set_value(state.dataset.manifest.project.name.clone(), window, cx);
+            input.set_value(state.dataset().manifest.project.name.clone(), window, cx);
         });
         let close_view = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
@@ -96,7 +96,7 @@ impl NotatusWindow {
                 |this, input, event: &InputEvent, _window, cx| {
                     if matches!(event, InputEvent::Change)
                         && !this.syncing_label_input
-                        && let Some(label_id) = this.state.selected_label
+                        && let Some(label_id) = this.state.selected_label()
                     {
                         let value = input.read(cx).value().to_string();
                         match this.state.update_label_name(label_id, value) {
@@ -169,19 +169,19 @@ impl NotatusWindow {
 
     pub(super) fn selected_asset(&self) -> Option<&AssetRecord> {
         self.state
-            .selected_asset
-            .and_then(|asset_id| self.state.dataset.asset_by_id(asset_id))
+            .selected_asset()
+            .and_then(|asset_id| self.state.dataset().asset_by_id(asset_id))
     }
 
     pub(super) fn selected_label(&self) -> Option<&notatus_core::Label> {
         self.state
-            .selected_label
-            .and_then(|label_id| self.state.dataset.label_by_id(label_id))
+            .selected_label()
+            .and_then(|label_id| self.state.dataset().label_by_id(label_id))
     }
 
     pub(super) fn annotations_for_asset(&self, asset: &AssetRecord) -> Vec<&AnnotationRecord> {
         self.state
-            .dataset
+            .dataset()
             .annotations
             .iter()
             .filter(|annotation| annotation.asset_id == asset.id)
@@ -193,7 +193,7 @@ impl NotatusWindow {
         asset: &AssetRecord,
     ) -> Vec<&ClassificationRecord> {
         self.state
-            .dataset
+            .dataset()
             .classifications
             .iter()
             .filter(|classification| classification.asset_id == asset.id)

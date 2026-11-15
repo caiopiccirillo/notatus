@@ -68,7 +68,7 @@ impl NotatusWindow {
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> impl IntoElement {
-        if self.state.dataset.assets.is_empty() {
+        if self.state.dataset().assets.is_empty() {
             let import_view = view.clone();
             div()
                 .size_full()
@@ -119,19 +119,19 @@ impl NotatusWindow {
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> Vec<SidebarMenuItem> {
-        if self.state.dataset.assets.is_empty() {
+        if self.state.dataset().assets.is_empty() {
             return vec![SidebarMenuItem::new("No media yet").disable(true)];
         }
 
         // Counted in one pass, so rendering the list does not rescan every
         // annotation once per media item.
         let mut annotation_counts: HashMap<AssetId, usize> = HashMap::new();
-        for annotation in &self.state.dataset.annotations {
+        for annotation in &self.state.dataset().annotations {
             *annotation_counts.entry(annotation.asset_id).or_default() += 1;
         }
 
         self.state
-            .dataset
+            .dataset()
             .assets
             .iter()
             .map(|asset| {
@@ -151,7 +151,7 @@ impl NotatusWindow {
                     .icon(status_icon)
                     .label_style(StyleRefinement::default().truncate())
                     .suffix(move |_, _| sidebar_count(annotation_count.to_string()))
-                    .active(self.state.selected_asset == Some(asset_id))
+                    .active(self.state.selected_asset() == Some(asset_id))
                     .on_click(move |_, window, cx| {
                         let _ = select_view.update(cx, |notatus, cx| {
                             notatus.go_to_media(asset_id, window, cx);
