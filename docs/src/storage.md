@@ -65,6 +65,11 @@ Stores one annotation record per line.
 
 This is the file expected to grow the fastest in real annotation projects.
 
+### `classifications.jsonl`
+
+Stores one image classification record per line. Projects saved before
+classifications existed have no such file and load with none.
+
 ## Save Flow
 
 `LocalProjectStore::save_dataset()` never writes over a project file in place:

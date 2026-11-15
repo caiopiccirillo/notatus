@@ -145,8 +145,22 @@ coco/
   annotations.json
 ```
 
-The desktop Dataset dock export section writes YOLO and COCO outputs into
-sibling subfolders under the user-selected output folder.
+## Classification Export
+
+`write_classification_export` writes the image classifications the filter
+accepts as both `classifications.json` and `classifications.csv`, one row per
+image label with its media path, label name, review state, and confidence.
+
+```text
+classification/
+  classifications.json
+  classifications.csv
+```
+
+## Export From the App
+
+The export dialog writes each chosen format into its own subfolder of the
+selected output folder: `yolo/`, `coco/`, and `classification/`.
 
 ## Error Handling
 

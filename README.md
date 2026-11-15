@@ -15,7 +15,8 @@ This repository is a Rust workspace split by responsibility:
   state, and validation.
 - `notatus-storage`: local project folder persistence using deterministic
   JSON/JSONL files.
-- `notatus-export`: YOLO detection import/export and COCO detection export.
+- `notatus-export`: YOLO detection import/export, COCO detection export, and
+  image classification export.
 - `notatus-infer`: JSON-lines protocol for external pre-annotation model
   runners.
 - `notatus-telemetry`: OpenTelemetry tracing and metrics init with OTLP/HTTP
@@ -35,6 +36,8 @@ A local project folder contains:
   optional content hash.
 - `annotations.jsonl`: annotation records with geometry, provenance, confidence,
   review state, timestamps, and metadata.
+- `classifications.jsonl`: whole-image labels, with the same provenance and
+  review state.
 
 Geometry is stored in original image pixel coordinates. Exporters convert to
 format-specific coordinates, such as YOLO normalized center coordinates.
