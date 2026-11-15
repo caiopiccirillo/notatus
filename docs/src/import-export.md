@@ -27,8 +27,8 @@ the records on them. Every exported image without annotations tells a model
 there is nothing in it, so exporting unfinished media teaches it to miss
 objects. Labels are kept whole so class indices match a full export.
 
-The desktop export dialog applies it through the "Finished media only" toggle,
-which is on by default.
+The desktop export dialog applies it through its "Only media marked done"
+switch, which is on by default.
 
 ## YOLO Detection Export
 
@@ -159,8 +159,11 @@ classification/
 
 ## Export From the App
 
-The export dialog writes each chosen format into its own subfolder of the
-selected output folder: `yolo/`, `coco/`, and `classification/`.
+File → Export annotations (Ctrl+E) opens a dialog with a checkbox per format,
+the finished-media switch, and a summary of what will be written, which
+follows the choices as they change. At least one format stays checked. It then
+asks for a folder and writes each chosen format into its own subfolder:
+`yolo/`, `coco/`, and `classification/`. The choices last for the session.
 
 ## Error Handling
 

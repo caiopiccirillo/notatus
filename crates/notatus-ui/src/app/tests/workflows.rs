@@ -48,9 +48,9 @@ fn export_workflow_issue_tracks_required_steps(cx: &mut TestAppContext) {
             .unwrap();
         assert_eq!(notatus.export_workflow_issue(), None);
 
-        notatus.export_yolo = false;
-        notatus.export_coco = false;
-        notatus.export_classifications = false;
+        notatus.export.yolo = false;
+        notatus.export.coco = false;
+        notatus.export.classifications = false;
         assert_eq!(
             notatus.export_workflow_issue(),
             Some(export_commands::ExportWorkflowIssue::Format)
@@ -77,9 +77,9 @@ fn classification_only_project_can_export(cx: &mut TestAppContext) {
             .set_asset_status(asset_id, notatus_core::AssetStatus::Done)
             .unwrap();
 
-        notatus.export_yolo = false;
-        notatus.export_coco = false;
-        notatus.export_classifications = true;
+        notatus.export.yolo = false;
+        notatus.export.coco = false;
+        notatus.export.classifications = true;
 
         assert_eq!(notatus.export_workflow_issue(), None);
     });
@@ -90,34 +90,34 @@ fn export_format_toggles_keep_at_least_one_format(cx: &mut TestAppContext) {
     let (_, view) = open_test_window(cx);
 
     view.update(cx, |notatus, cx| {
-        assert!(notatus.export_yolo);
-        assert!(notatus.export_coco);
-        assert!(notatus.export_classifications);
+        assert!(notatus.export.yolo);
+        assert!(notatus.export.coco);
+        assert!(notatus.export.classifications);
 
-        notatus.toggle_export_yolo(cx);
-        assert!(!notatus.export_yolo);
-        assert!(notatus.export_coco);
-        assert!(notatus.export_classifications);
+        notatus.toggle_export_format(export_commands::ExportFormat::Yolo, cx);
+        assert!(!notatus.export.yolo);
+        assert!(notatus.export.coco);
+        assert!(notatus.export.classifications);
 
-        notatus.toggle_export_coco(cx);
-        assert!(!notatus.export_yolo);
-        assert!(!notatus.export_coco);
-        assert!(notatus.export_classifications);
+        notatus.toggle_export_format(export_commands::ExportFormat::Coco, cx);
+        assert!(!notatus.export.yolo);
+        assert!(!notatus.export.coco);
+        assert!(notatus.export.classifications);
         assert_eq!(notatus.status_message, None);
 
-        notatus.toggle_export_classifications(cx);
-        assert!(!notatus.export_yolo);
-        assert!(!notatus.export_coco);
-        assert!(notatus.export_classifications);
+        notatus.toggle_export_format(export_commands::ExportFormat::Classification, cx);
+        assert!(!notatus.export.yolo);
+        assert!(!notatus.export.coco);
+        assert!(notatus.export.classifications);
         assert_eq!(
             notatus.status_message.as_deref(),
             Some("Select an export format")
         );
 
-        notatus.toggle_export_yolo(cx);
-        assert!(notatus.export_yolo);
-        assert!(!notatus.export_coco);
-        assert!(notatus.export_classifications);
+        notatus.toggle_export_format(export_commands::ExportFormat::Yolo, cx);
+        assert!(notatus.export.yolo);
+        assert!(!notatus.export.coco);
+        assert!(notatus.export.classifications);
         assert_eq!(notatus.status_message, None);
     });
 }

@@ -219,6 +219,8 @@ fn screenshots() {
     let _ = cx.capture_screenshot(window);
     click(&mut cx, window, gpui::point(px(614.0), px(88.0)));
     capture(&mut cx, window, &out_dir.join("view-options-light.png"));
+    // Close the popover again, so later scenes do not show it.
+    click(&mut cx, window, gpui::point(px(614.0), px(88.0)));
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |notatus, _| {
             notatus.view_options = Default::default();
@@ -234,6 +236,13 @@ fn screenshots() {
     })
     .unwrap();
     capture(&mut cx, window, &out_dir.join("palette-dark.png"));
+
+    cx.update_window(window, |_, window, cx| {
+        window.close_all_dialogs(cx);
+        export_commands::open_export_dialog(view.downgrade(), window, cx);
+    })
+    .unwrap();
+    capture(&mut cx, window, &out_dir.join("export-dark.png"));
 
     cx.update_window(window, |_, window, cx| {
         window.close_all_dialogs(cx);

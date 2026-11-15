@@ -1,3 +1,4 @@
+use super::options::ExportFormat;
 use super::*;
 use crate::app::helpers::exportable_annotation_count;
 
@@ -64,7 +65,7 @@ impl NotatusWindow {
             && exportable_classification_count(self.state.dataset()) == 0
         {
             Some(ExportWorkflowIssue::Annotations)
-        } else if self.export_finished_only
+        } else if self.export.finished_only
             && !self
                 .state
                 .dataset()
@@ -73,7 +74,7 @@ impl NotatusWindow {
                 .any(|asset| asset.status == notatus_core::AssetStatus::Done)
         {
             Some(ExportWorkflowIssue::FinishedMedia)
-        } else if !self.export_yolo && !self.export_coco && !self.export_classifications {
+        } else if !self.export.has_format() {
             Some(ExportWorkflowIssue::Format)
         } else {
             None
@@ -92,42 +93,22 @@ impl NotatusWindow {
         cx.notify();
     }
 
-    pub(in crate::app) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
-        self.export_yolo = !self.export_yolo;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_yolo = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
+    pub(in crate::app) fn toggle_export_format(
+        &mut self,
+        format: ExportFormat,
+        cx: &mut Context<Self>,
+    ) {
+        self.status_message = if self.export.toggle(format) {
+            None
         } else {
-            self.status_message = None;
-        }
-        cx.notify();
-    }
-
-    pub(in crate::app) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
-        self.export_coco = !self.export_coco;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_coco = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
-        } else {
-            self.status_message = None;
-        }
+            Some(ExportWorkflowIssue::Format.status().to_string())
+        };
         cx.notify();
     }
 
     pub(in crate::app) fn toggle_export_finished_only(&mut self, cx: &mut Context<Self>) {
-        self.export_finished_only = !self.export_finished_only;
+        self.export.finished_only = !self.export.finished_only;
         self.status_message = None;
-        cx.notify();
-    }
-
-    pub(in crate::app) fn toggle_export_classifications(&mut self, cx: &mut Context<Self>) {
-        self.export_classifications = !self.export_classifications;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_classifications = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
-        } else {
-            self.status_message = None;
-        }
         cx.notify();
     }
 }
