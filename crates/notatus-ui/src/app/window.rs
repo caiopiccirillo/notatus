@@ -1,4 +1,5 @@
 use crate::app::autosave::AutosaveState;
+use crate::app::catalog::CommandStatus;
 use crate::app::export_commands::ExportOptions;
 use crate::app::helpers::hex_color;
 use crate::app::label_picker::LabelPickerState;
@@ -71,6 +72,8 @@ pub(super) struct NotatusWindow {
     pub(super) media_list_synced: Option<(u64, Option<AssetId>)>,
     pub(super) view_options: CanvasViewOptions,
     pub(super) opacity_slider: Entity<SliderState>,
+    /// Each command's state when the menus were last built.
+    pub(super) menus_synced: Option<Vec<CommandStatus>>,
     /// The menus drawn in the title bar, where the platform has no menu bar.
     pub(super) app_menu_bar: Option<Entity<AppMenuBar>>,
     pub(super) _subscriptions: Vec<Subscription>,
@@ -190,6 +193,7 @@ impl NotatusWindow {
             media_list_synced: None,
             view_options: Default::default(),
             opacity_slider,
+            menus_synced: None,
             app_menu_bar: menus::IN_TITLE_BAR.then(|| AppMenuBar::new(cx)),
             _subscriptions,
         }
@@ -297,6 +301,7 @@ impl Render for NotatusWindow {
         self.sync_name_inputs(window, cx);
         self.sync_label_picker(window, cx);
         self.sync_media_list(window, cx);
+        self.sync_menus(cx);
         // gpui-component's Root mounts the dialog and notification layers itself.
         let root = div()
             .id("notatus-window")

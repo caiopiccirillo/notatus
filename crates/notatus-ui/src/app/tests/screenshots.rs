@@ -169,10 +169,10 @@ fn screenshots() {
 
     let view = view_slot.expect("window view");
 
-    // The File menu, opened from the title bar.
-    click(&mut cx, window, gpui::point(px(36.0), px(20.0)));
+    // The View menu, opened from the title bar: its toggles ticked.
+    click(&mut cx, window, gpui::point(px(114.0), px(20.0)));
     capture(&mut cx, window, &out_dir.join("menu-dark.png"));
-    click(&mut cx, window, gpui::point(px(36.0), px(20.0)));
+    click(&mut cx, window, gpui::point(px(114.0), px(20.0)));
 
     // Labels and details, with the first media marked done.
     cx.update_window(window, |_, _, cx| {

@@ -3,7 +3,6 @@
 use crate::app::actions::{self, *};
 use crate::app::catalog::{Command as CatalogCommand, GROUPS, Lucide};
 use crate::app::helpers::{asset_display_name, compact_text};
-use crate::app::view_options::ViewToggle;
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{Action, App, Context, IntoElement, SharedString, Window, div, px};
@@ -98,7 +97,7 @@ impl NotatusWindow {
         let state = self.command_state.clone();
         state.update(cx, |state, cx| state.set_query("", window, cx));
         let (groups, actions): (Vec<_>, Vec<_>) = self
-            .palette_groups()
+            .palette_groups(cx)
             .into_iter()
             .map(|group| (group.group, group.actions))
             .unzip();
@@ -141,9 +140,9 @@ impl NotatusWindow {
         });
     }
 
-    /// The catalog's commands that apply right now, then a row per label
-    /// and per media.
-    fn palette_groups(&self) -> Vec<PaletteGroup> {
+    /// The catalog's commands that can run now, toggles checked when on,
+    /// then a row per label and per media.
+    fn palette_groups(&self, cx: &App) -> Vec<PaletteGroup> {
         // The annotation loop first; project chores last.
         const ORDER: [&str; 7] = [
             "Annotate", "Review", "Edit", "View", "Model", "File", "Help",
@@ -154,16 +153,27 @@ impl NotatusWindow {
             .map(|group| {
                 group
                     .commands()
-                    .filter(|command| self.palette_offers(command.action))
-                    .fold(PaletteGroup::new(group.title), |palette, command| {
-                        palette.push(
-                            self.palette_title(command),
-                            Vec::new(),
-                            command.icon,
-                            false,
-                            command.action.boxed_clone(),
-                        )
+                    // Escape cancels in place, and the palette is already open.
+                    .filter(|command| {
+                        let action = command.action.as_any();
+                        !action.is::<Cancel>() && !action.is::<CommandPalette>()
                     })
+                    .filter_map(|command| {
+                        let status = self.command_status(command, cx);
+                        status.enabled.then_some((command, status.checked))
+                    })
+                    .fold(
+                        PaletteGroup::new(group.title),
+                        |palette, (command, checked)| {
+                            palette.push(
+                                self.palette_title(command),
+                                Vec::new(),
+                                command.icon,
+                                checked,
+                                command.action.boxed_clone(),
+                            )
+                        },
+                    )
             })
             .collect();
 
@@ -206,80 +216,18 @@ impl NotatusWindow {
         groups
     }
 
-    /// Whether the palette lists `action` now: commands on a selection or
-    /// the current media only while there is one.
-    fn palette_offers(&self, action: &dyn Action) -> bool {
-        let action = action.as_any();
-        let has_annotation = self.state.selected_annotation().is_some();
-        let has_media = self.state.selected_asset().is_some();
-        if action.is::<DeleteSelection>()
-            || action.is::<AcceptAnnotation>()
-            || action.is::<RejectAnnotation>()
-            || action.is::<ResetAnnotationReview>()
-        {
-            has_annotation
-        } else if action.is::<NextDraft>() || action.is::<PreviousDraft>() {
-            self.state.review_queue_len() > 0
-        } else if action.is::<NextMedia>()
-            || action.is::<PreviousMedia>()
-            || action.is::<NextPendingMedia>()
-            || action.is::<ToggleMediaDone>()
-            || action.is::<DoneAndNext>()
-            || action.is::<NextAnnotation>()
-            || action.is::<PreviousAnnotation>()
-            || action.is::<FitCanvas>()
-            || action.is::<ZoomIn>()
-            || action.is::<ZoomOut>()
-        {
-            has_media
-        } else if action.is::<StopModelRun>() {
-            self.model_run.is_running()
-        } else {
-            // Escape cancels a drawing in place; the palette is already open.
-            !action.is::<Cancel>() && !action.is::<CommandPalette>()
-        }
-    }
-
-    /// The catalog title, or one that says what the command will do now.
+    /// The catalog title, or for Undo and Redo, what they would undo or redo.
     fn palette_title(&self, command: &CatalogCommand) -> String {
         let action = command.action.as_any();
-        let with_description = |verb: &str, description: Option<&str>| match description {
-            Some(description) => format!("{verb} {}", description.to_lowercase()),
-            None => verb.to_string(),
-        };
-        if action.is::<Undo>() {
-            return with_description("Undo", self.state.undo_description());
-        }
-        if action.is::<Redo>() {
-            return with_description("Redo", self.state.redo_description());
-        }
-        if action.is::<ToggleMediaDone>()
-            && self
-                .selected_asset()
-                .is_some_and(|asset| asset.status == notatus_core::AssetStatus::Done)
-        {
-            return "Mark media not done".to_string();
-        }
-        let toggle = if action.is::<ToggleHideAnnotations>() {
-            Some(ViewToggle::HideAnnotations)
-        } else if action.is::<ToggleLabelNames>() {
-            Some(ViewToggle::Labels)
-        } else if action.is::<ToggleCrosshair>() {
-            Some(ViewToggle::Crosshair)
-        } else if action.is::<ToggleFocusSelected>() {
-            Some(ViewToggle::FocusSelected)
+        let description = if action.is::<Undo>() {
+            self.state.undo_description()
+        } else if action.is::<Redo>() {
+            self.state.redo_description()
         } else {
             None
         };
-        match toggle {
-            Some(toggle) => {
-                let verb = if toggle.get(&self.view_options) {
-                    "Turn off"
-                } else {
-                    "Turn on"
-                };
-                format!("{verb} {}", toggle.title().to_lowercase())
-            }
+        match description {
+            Some(description) => format!("{} {}", command.title, description.to_lowercase()),
             None => command.title.to_string(),
         }
     }

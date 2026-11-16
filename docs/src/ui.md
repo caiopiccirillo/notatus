@@ -83,7 +83,11 @@ The shell uses `gpui-component::TitleBar`. It holds the application menus
 name and save state on the right, the one place the save state is shown. The
 menus are gpui `Menu`s of actions: macOS shows them in its own menu bar, and
 Linux and Windows draw them with `gpui-component::menu::AppMenuBar`. Each item
-shows the key bound to its action. On Linux the window may draw its own
+shows the key bound to its action. The catalog says what each command needs (a
+current media, a selection, drafts to review, a running model, a step to undo)
+and which toggle it shows; the window rebuilds the menus whenever that changes,
+so items that cannot run are greyed out and toggles that are on are ticked. On
+Linux the window may draw its own
 title bar; its close button goes through the same check as a compositor close
 request: pending changes are saved first, and a project never saved to a
 folder asks before it is discarded.
@@ -116,9 +120,9 @@ are built from that list, and each shows the key bound to the command's action
 in `actions.rs`, so none of them can drift from the others or from the
 bindings. `?` opens the sheet, grouped like the menus and listing the commands
 that have a key. Ctrl+K opens the palette, which leads with the annotation
-commands, offers commands on a selection or the current media only while there
-is one, says what Undo and the view toggles will do, and adds a row per label
-and per media.
+commands, lists only the commands that can run now, ticks toggles that are on,
+says what Undo and Redo will undo or redo, and adds a row per label and per
+media.
 
 Modifier shortcuts are bound with gpui's `secondary` modifier, which is Cmd on
 macOS and Ctrl elsewhere; these docs write them with Ctrl.
