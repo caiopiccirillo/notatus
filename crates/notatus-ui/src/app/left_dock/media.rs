@@ -3,7 +3,7 @@
 
 use crate::UiState;
 use crate::app::actions::{self, ImportFolder, ImportMedia};
-use crate::app::helpers::asset_display_name;
+use crate::app::helpers::{asset_display_name, plural, record_element_id};
 use crate::app::media_import::{open_folder_picker, open_media_picker};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
@@ -11,6 +11,7 @@ use gpui::{App, Context, IntoElement, SharedString, Subscription, Task, Window, 
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::list::{List, ListDelegate, ListEvent, ListItem, ListState};
 use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem};
+use gpui_component::tooltip::Tooltip;
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, IndexPath, Selectable as _, Sizable as _, ThemeColor,
 };
@@ -127,6 +128,31 @@ impl MediaListDelegate {
     }
 }
 
+/// The row's annotation count, after a dot while drafts wait for review,
+/// with the details on hover.
+fn media_row_count(row: &MediaRow, colors: ThemeColor) -> impl IntoElement {
+    let annotations = format!("{} annotation{}", row.annotations, plural(row.annotations));
+    let tooltip: SharedString = match row.drafts {
+        0 => annotations.into(),
+        drafts => format!("{annotations}, {drafts} to review").into(),
+    };
+    div()
+        .id(record_element_id("media-count", row.id.as_uuid().as_u128()))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap_1()
+        .min_w(px(28.0))
+        .text_xs()
+        .text_color(colors.muted_foreground)
+        .when(row.drafts > 0, |count| {
+            count.child(div().size(px(6.0)).rounded_full().bg(colors.warning))
+        })
+        .child(row.annotations.to_string())
+        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+}
+
 impl ListDelegate for MediaListDelegate {
     type Item = ListItem;
 
@@ -172,24 +198,7 @@ impl ListDelegate for MediaListDelegate {
                     .text_sm()
                     .child(status.small())
                     .child(div().flex_1().min_w_0().truncate().child(row.name.clone()))
-                    .when(row.drafts > 0, |line| {
-                        line.child(
-                            gpui_component::tag::Tag::warning()
-                                .xsmall()
-                                .outline()
-                                .flex_none()
-                                .child(row.drafts.to_string()),
-                        )
-                    })
-                    .child(
-                        div()
-                            .flex_none()
-                            .min_w(px(20.0))
-                            .text_xs()
-                            .text_right()
-                            .text_color(colors.muted_foreground)
-                            .child(row.annotations.to_string()),
-                    ),
+                    .child(media_row_count(row, colors)),
             ),
         )
     }

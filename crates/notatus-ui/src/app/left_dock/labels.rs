@@ -1,5 +1,5 @@
 use crate::app::helpers::{
-    compact_text, hex_color, label_asset_meta, label_color_button, plural, record_element_id,
+    hex_color, label_color_button, label_swatch, plural, record_element_id, sidebar_count,
 };
 use crate::app::window::NotatusWindow;
 use crate::app::{DEFAULT_LABEL_COLOR, LABEL_COLORS};
@@ -95,12 +95,14 @@ fn label_rows(
         .iter()
         .map(|label| {
             label_row(
-                label.id,
-                label.name.clone(),
-                label.color.clone(),
-                index.label_annotation_count(label.id),
+                LabelMenuContext {
+                    label_id: label.id,
+                    label_name: label.name.clone(),
+                    label_color: label.color.clone(),
+                    annotation_count: index.label_annotation_count(label.id),
+                    view: view.clone(),
+                },
                 window.state.selected_label() == Some(label.id),
-                view.clone(),
                 colors,
             )
             .into_any_element()
@@ -108,28 +110,21 @@ fn label_rows(
         .collect()
 }
 
-fn label_row(
-    label_id: LabelId,
-    label_name: String,
-    label_color: Option<String>,
-    annotation_count: usize,
-    selected: bool,
-    view: gpui::WeakEntity<NotatusWindow>,
-    colors: ThemeColor,
-) -> impl IntoElement {
-    let row_label_name = label_name.clone();
-    let row_label_color = label_color.clone();
-    let menu_view = view.clone();
-    let select_view = view.clone();
-    let action_view = view;
+/// Swatch, name, and count, like the other label lists; the menu at the
+/// end and on right click.
+fn label_row(label: LabelMenuContext, selected: bool, colors: ThemeColor) -> impl IntoElement {
+    let label_id = label.label_id;
+    let uuid = label_id.as_uuid().as_u128();
+    let select_view = label.view.clone();
+    let row_menu = label.clone();
+    let button_menu = label.clone();
 
     div()
-        .id(record_element_id("label-row", label_id.as_uuid().as_u128()))
+        .id(record_element_id("label-row", uuid))
         .w_full()
         .h(px(36.0))
         .flex()
         .items_center()
-        .justify_between()
         .gap_2()
         .rounded_md()
         .px_2()
@@ -144,84 +139,30 @@ fn label_row(
                 notatus.select_label(label_id, cx);
             });
         })
+        .child(label_swatch(
+            label.label_color.as_deref().unwrap_or(DEFAULT_LABEL_COLOR),
+            false,
+        ))
         .child(
             div()
                 .flex_1()
                 .min_w_0()
-                .overflow_hidden()
-                .child(compact_text(&label_name, 24)),
+                .truncate()
+                .child(label.label_name.clone()),
         )
-        .child(label_actions(
-            label_color.as_deref(),
-            annotation_count,
-            label_id,
-            row_label_name.clone(),
-            row_label_color.clone(),
-            action_view.clone(),
-        ))
-        .context_menu(move |menu, window, cx| {
-            label_menu(
-                menu,
-                LabelMenuContext {
-                    label_id,
-                    label_name: row_label_name.clone(),
-                    label_color: row_label_color.clone(),
-                    annotation_count,
-                    view: menu_view.clone(),
-                },
-                window,
-                cx,
-            )
-        })
-}
-
-fn label_actions(
-    color: Option<&str>,
-    annotation_count: usize,
-    label_id: LabelId,
-    label_name: String,
-    label_color: Option<String>,
-    view: gpui::WeakEntity<NotatusWindow>,
-) -> impl IntoElement {
-    let menu_view = view.clone();
-    let menu_label_name = label_name.clone();
-    let menu_label_color = label_color.clone();
-
-    div()
-        .id(record_element_id(
-            "label-actions",
-            label_id.as_uuid().as_u128(),
-        ))
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap_1()
-        .on_click(|_, _, cx| cx.stop_propagation())
-        .child(label_asset_meta(color, annotation_count))
+        .child(sidebar_count(label.annotation_count.to_string()))
         .child(
-            Button::new(record_element_id(
-                "label-menu",
-                label_id.as_uuid().as_u128(),
-            ))
-            .xsmall()
-            .ghost()
-            .icon(Icon::new(IconName::Ellipsis))
-            .tooltip("Label options")
-            .dropdown_menu(move |menu, window, cx| {
-                label_menu(
-                    menu,
-                    LabelMenuContext {
-                        label_id,
-                        label_name: menu_label_name.clone(),
-                        label_color: menu_label_color.clone(),
-                        annotation_count,
-                        view: menu_view.clone(),
-                    },
-                    window,
-                    cx,
-                )
-            }),
+            Button::new(record_element_id("label-menu", uuid))
+                .xsmall()
+                .ghost()
+                .icon(Icon::new(IconName::Ellipsis))
+                .tooltip("Label options")
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .dropdown_menu(move |menu, window, cx| {
+                    label_menu(menu, button_menu.clone(), window, cx)
+                }),
         )
+        .context_menu(move |menu, window, cx| label_menu(menu, row_menu.clone(), window, cx))
 }
 
 fn label_menu(

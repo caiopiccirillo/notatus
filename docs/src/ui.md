@@ -110,7 +110,8 @@ in memory or backed by a local folder.
 ## Status Bar
 
 The status bar keeps the media navigation centered under the canvas: previous
-and next, progress through the project, and marking the media done. Its left
+and next, the media's position and how many are done, and marking the media
+done. Annotation and review counts stay in the Annotations tab. Its left
 side shows the last command's feedback; its right side shows a running model's
 progress, with a stop button, and the zoom level, which fits the image when
 clicked.
@@ -152,12 +153,14 @@ The media list is gpui-component's virtualized `List`, so only the rows on
 screen are built, however large the project. A search field above it matches
 names and folders, and the filter button narrows it to media not done, done,
 or with drafts to review. Each row starts with a green check when the media is
-done or a hollow circle when it is not, then its name, the number of drafts
-still to review, and its annotation count. The list marks the current media
+done or a hollow circle when it is not, then its name and annotation count,
+after an amber dot while drafts wait for review; hovering the count gives both
+numbers. The list marks the current media
 and scrolls to it when it changes. Removing media, which also removes its
 annotations, is in the row's right-click menu.
 
-Label rows show their color and annotation count; renaming, recoloring, and
+Label rows show their color swatch first, like the other label lists, then the
+name and annotation count; renaming, recoloring, and
 removing are in the row's options and right-click menus.
 
 ## Canvas Area
@@ -202,8 +205,7 @@ The "To review" section of the Annotations dock shows how many drafts are left,
 with previous and next buttons and two filters: one label, and model
 suggestions below a confidence (90%, 75%, 50%, or 25%), which leaves out shapes
 a person drew. The filter also limits which draft Y and X move to. It lasts for
-the session and resets when another project opens. The status bar shows the
-count too.
+the session and resets when another project opens.
 
 ## Right Docks
 

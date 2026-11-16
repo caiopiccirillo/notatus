@@ -65,6 +65,7 @@ impl NotatusWindow {
                     ),
                 )
             })
+            .text_sm()
             .text_color(cx.theme().foreground)
     }
 }

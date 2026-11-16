@@ -54,13 +54,13 @@ impl NotatusWindow {
                 .items_center()
                 .gap_3()
                 .child(left)
-                .child(div().flex_none().child(self.review_controls()))
+                .child(div().flex_none().child(self.media_controls()))
                 .child(right),
         )
     }
 
     /// Previous/next media, progress, and the done toggle, centered in the bar.
-    fn review_controls(&self) -> impl IntoElement {
+    fn media_controls(&self) -> impl IntoElement {
         // The empty canvas guides a project without media.
         let Some(progress) = self.progress_summary() else {
             return div().into_any_element();
@@ -88,9 +88,6 @@ impl NotatusWindow {
                 "Next media",
                 NextMedia,
             ))
-            .when_some(self.current_annotation_summary(), |row, summary| {
-                row.child(div().px_1().child(summary))
-            })
             .when(has_asset, |row| {
                 row.child(
                     Button::new("status-done")
@@ -125,7 +122,8 @@ impl NotatusWindow {
             .into_any_element()
     }
 
-    /// One-line summary of review progress for the status bar.
+    /// Where the current media sits and how many are done. The annotation
+    /// and review counts are in the Annotations tab.
     pub(super) fn progress_summary(&self) -> Option<String> {
         let assets = &self.state.dataset().assets;
         if assets.is_empty() {
@@ -138,18 +136,7 @@ impl NotatusWindow {
             .and_then(|id| assets.iter().position(|asset| asset.id == id))
             .map(|index| format!("{} of {}", index + 1, assets.len()))
             .unwrap_or_else(|| format!("{} media", assets.len()));
-        let to_review = self.state.review_queue_len();
-        Some(if to_review == 0 {
-            format!("{position} · {done} done")
-        } else {
-            format!("{position} · {done} done · {to_review} to review")
-        })
-    }
-
-    pub(super) fn current_annotation_summary(&self) -> Option<String> {
-        let asset_id = self.state.selected_asset()?;
-        let count = self.state.index().annotation_count(asset_id);
-        Some(format!("{count} annotation{}", plural(count)))
+        Some(format!("{position} · {done} done"))
     }
 }
 

@@ -607,9 +607,10 @@ fn the_review_queue_crosses_media_only_when_asked(cx: &mut TestAppContext) {
             message.contains("press N for the next one (1 left)"),
             "{message}"
         );
+        assert_eq!(notatus.state.review_queue_len(), 1);
         assert_eq!(
             notatus.progress_summary().as_deref(),
-            Some("1 of 3 · 0 done · 1 to review")
+            Some("1 of 3 · 0 done")
         );
     });
 

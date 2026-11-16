@@ -1,4 +1,3 @@
-use crate::app::DEFAULT_LABEL_COLOR;
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{App, FontWeight, IntoElement, Window, div, px, rgb};
@@ -96,16 +95,6 @@ pub(super) fn sidebar_count(value: impl Into<String>) -> impl IntoElement {
             .bg(theme.muted)
             .child(value)
     })
-}
-
-pub(super) fn label_asset_meta(color: Option<&str>, annotation_count: usize) -> impl IntoElement {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(label_swatch(color.unwrap_or(DEFAULT_LABEL_COLOR), false))
-        .child(sidebar_count(annotation_count.to_string()))
 }
 
 pub(super) fn label_color_button(
