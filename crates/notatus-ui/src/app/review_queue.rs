@@ -3,6 +3,7 @@
 
 use crate::app::actions::{self, NextDraft, PreviousDraft};
 use crate::app::helpers::{counted_section_title, plural};
+use crate::app::right_dock::Labels;
 use crate::app::window::NotatusWindow;
 use crate::{Direction, ReviewFilter};
 use gpui::prelude::*;
@@ -10,7 +11,7 @@ use gpui::{Context, div};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_component::{Disableable as _, Icon, IconName, Sizable as _};
-use notatus_core::{Label, LabelId, ReviewState};
+use notatus_core::{LabelId, ReviewState};
 
 /// Confidences the filter offers, from 0 to 1.
 const CONFIDENCE_THRESHOLDS: [f32; 4] = [0.9, 0.75, 0.5, 0.25];
@@ -67,7 +68,7 @@ impl NotatusWindow {
     /// The queue's count, its previous and next buttons, and its filter.
     pub(super) fn review_queue_section(
         &self,
-        labels: &[Label],
+        labels: &Labels,
         view: gpui::WeakEntity<NotatusWindow>,
     ) -> impl IntoElement {
         let filter = self.state.review_filter();
@@ -116,7 +117,7 @@ impl NotatusWindow {
                     .gap_1()
                     .child(label_filter_menu(
                         label_name,
-                        labels.to_vec(),
+                        labels.clone(),
                         filter.label,
                         view.clone(),
                     ))
@@ -174,7 +175,7 @@ impl NotatusWindow {
 
 fn label_filter_menu(
     button_label: String,
-    labels: Vec<Label>,
+    labels: Labels,
     current: Option<LabelId>,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement {

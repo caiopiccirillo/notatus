@@ -7,6 +7,8 @@ use gpui_component::ActiveTheme as _;
 mod annotations;
 mod details;
 
+pub(super) use annotations::Labels;
+
 impl NotatusWindow {
     pub(super) fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();

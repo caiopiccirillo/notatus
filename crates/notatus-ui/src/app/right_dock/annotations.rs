@@ -18,6 +18,10 @@ use notatus_core::{
     AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationId, Label, LabelId,
     ReviewState,
 };
+use std::rc::Rc;
+
+/// The project's labels, shared by the menus built for each row.
+pub(in crate::app) type Labels = Rc<[Label]>;
 
 impl NotatusWindow {
     pub(super) fn annotations_panel_content(
@@ -28,7 +32,8 @@ impl NotatusWindow {
         let Some(asset) = self.selected_asset() else {
             return empty_panel("No media selected").into_any_element();
         };
-        let labels = self.state.dataset().labels.clone();
+        // One copy of the labels, shared by every row's menu.
+        let labels: Labels = self.state.dataset().labels.clone().into();
         let annotations = self.state.annotations_on(asset.id);
         let annotation_count = annotations.len();
         let rows: Vec<_> = annotations
@@ -81,7 +86,7 @@ impl NotatusWindow {
     fn image_labels_section(
         &self,
         asset: &AssetRecord,
-        labels: &[Label],
+        labels: &Labels,
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> impl IntoElement {
@@ -112,7 +117,7 @@ impl NotatusWindow {
                     .child(counted_section_title("Image labels", tags.len()))
                     .child(classification_label_menu(
                         asset.id,
-                        labels.to_vec(),
+                        labels.clone(),
                         classified,
                         view,
                     )),
@@ -125,7 +130,7 @@ impl NotatusWindow {
     fn annotation_row(
         &self,
         annotation: &AnnotationRecord,
-        labels: &[Label],
+        labels: &Labels,
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> gpui::AnyElement {
@@ -183,7 +188,7 @@ impl NotatusWindow {
                         annotation_id,
                         annotation.label_id,
                         label_name,
-                        labels.to_vec(),
+                        labels.clone(),
                         view.clone(),
                     ))
                     .child(
@@ -213,7 +218,7 @@ fn annotation_label_menu(
     annotation_id: AnnotationId,
     current_label_id: LabelId,
     label_name: &str,
-    labels: Vec<Label>,
+    labels: Labels,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement {
     Button::new(record_element_id(
@@ -328,7 +333,7 @@ fn image_label_tag(
 
 fn classification_label_menu(
     asset_id: AssetId,
-    labels: Vec<Label>,
+    labels: Labels,
     classified: Vec<LabelId>,
     view: gpui::WeakEntity<NotatusWindow>,
 ) -> impl IntoElement {
