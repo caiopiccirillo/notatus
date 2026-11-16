@@ -10,6 +10,7 @@ use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::progress::Progress;
 use gpui_component::status_bar::StatusBar;
 use gpui_component::{Icon, IconName, Selectable as _, Sizable as _};
+use notatus_core::AssetStatus;
 
 impl NotatusWindow {
     /// Feedback on the left, media navigation in the middle, and the model
@@ -67,7 +68,7 @@ impl NotatusWindow {
         };
         let done = self
             .selected_asset()
-            .is_some_and(|asset| asset.status == notatus_core::AssetStatus::Done);
+            .is_some_and(|asset| asset.status == AssetStatus::Done);
         let has_asset = self.state.selected_asset().is_some();
 
         div()

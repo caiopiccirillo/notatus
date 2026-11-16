@@ -2,7 +2,10 @@ use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{App, FontWeight, IntoElement, Window, div, px, rgb};
 use gpui_component::{ActiveTheme as _, Sizable as _};
-use notatus_core::{AnnotationGeometry, AnnotationRecord, AssetKind, AssetRecord, LabelId};
+use notatus_core::{
+    AnnotationGeometry, AnnotationRecord, AnnotationSource, AssetKind, AssetRecord, Dataset,
+    DatasetSplit, LabelId, ReviewState,
+};
 use std::path::Path;
 
 /// Defers building an element until render time so free helper functions can
@@ -131,9 +134,7 @@ pub(super) fn label_color_button(
 /// for annotations a person drew or imported, and for suggestions a person
 /// has since edited.
 pub(super) fn model_confidence_label(annotation: &AnnotationRecord) -> Option<String> {
-    if annotation.human_edited
-        || !matches!(annotation.source, notatus_core::AnnotationSource::Model(_))
-    {
+    if annotation.human_edited || !matches!(annotation.source, AnnotationSource::Model(_)) {
         return None;
     }
     Some(match annotation.confidence {
@@ -143,7 +144,7 @@ pub(super) fn model_confidence_label(annotation: &AnnotationRecord) -> Option<St
 }
 
 /// A small colored tag naming an annotation's review state.
-pub(super) fn review_tag(state: notatus_core::ReviewState) -> impl IntoElement {
+pub(super) fn review_tag(state: ReviewState) -> impl IntoElement {
     use gpui_component::tag::Tag;
     use notatus_core::ReviewState;
 
@@ -180,7 +181,7 @@ pub(super) fn annotation_count_label(count: usize) -> String {
     format!("{count} annotation{}", plural(count))
 }
 
-pub(super) fn exportable_annotation_count(dataset: &notatus_core::Dataset) -> usize {
+pub(super) fn exportable_annotation_count(dataset: &Dataset) -> usize {
     let filter = notatus_export::AnnotationFilter::ready_for_training();
     dataset
         .annotations
@@ -200,12 +201,12 @@ pub(super) fn asset_kind_label(kind: &AssetKind) -> &'static str {
     }
 }
 
-pub(super) fn dataset_split_label(split: &notatus_core::DatasetSplit) -> &'static str {
+pub(super) fn dataset_split_label(split: &DatasetSplit) -> &'static str {
     match split {
-        notatus_core::DatasetSplit::Train => "Train",
-        notatus_core::DatasetSplit::Validation => "Validation",
-        notatus_core::DatasetSplit::Test => "Test",
-        notatus_core::DatasetSplit::Unassigned => "Unassigned",
+        DatasetSplit::Train => "Train",
+        DatasetSplit::Validation => "Validation",
+        DatasetSplit::Test => "Test",
+        DatasetSplit::Unassigned => "Unassigned",
     }
 }
 

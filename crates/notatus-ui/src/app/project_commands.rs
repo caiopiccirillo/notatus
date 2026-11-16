@@ -7,6 +7,7 @@ use gpui::{App, PathPromptOptions, SharedString, Window};
 use gpui_component::WindowExt as _;
 use gpui_component::dialog::DialogButtonProps;
 use gpui_component::notification::Notification;
+use notatus_core::Dataset;
 use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore as _};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -256,7 +257,7 @@ fn prompt_for_open_project(
         .detach();
 }
 
-fn initialize_project_at(path: &Path) -> Result<notatus_core::Dataset, String> {
+fn initialize_project_at(path: &Path) -> Result<Dataset, String> {
     if path.join(MANIFEST_FILE).exists() {
         return Err(format!(
             "{} already contains a Notatus project; use Open project",
@@ -319,7 +320,7 @@ async fn save_current_project_to_path(
 
 fn apply_project_load_result(
     view: gpui::WeakEntity<NotatusWindow>,
-    result: Result<notatus_core::Dataset, String>,
+    result: Result<Dataset, String>,
     location: Option<PathBuf>,
     success_message: &'static str,
     failure_title: &'static str,

@@ -8,7 +8,7 @@
 use crate::app::helpers::plural;
 use crate::app::window::NotatusWindow;
 use gpui::{Context, PathPromptOptions, SharedString};
-use notatus_core::AssetLocation;
+use notatus_core::{AssetLocation, AssetStatus};
 use notatus_infer::{ExternalModelSpec, InferenceRequest, ModelRunner};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -173,7 +173,7 @@ impl NotatusWindow {
             .iter()
             .filter(|asset| match scope {
                 ModelScope::CurrentMedia => self.state.selected_asset() == Some(asset.id),
-                ModelScope::UnfinishedMedia => asset.status == notatus_core::AssetStatus::Pending,
+                ModelScope::UnfinishedMedia => asset.status == AssetStatus::Pending,
             })
             .filter_map(|asset| {
                 let AssetLocation::LocalPath { path } = &asset.location else {

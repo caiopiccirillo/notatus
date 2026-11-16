@@ -67,11 +67,7 @@ impl ExportSummary {
         Self {
             options: notatus.export,
             media: dataset.assets.len(),
-            done: dataset
-                .assets
-                .iter()
-                .filter(|asset| asset.status == notatus_core::AssetStatus::Done)
-                .count(),
+            done: notatus.state.index().done_media,
             exportable_objects: exportable_annotation_count(dataset),
             image_labels: dataset.classifications.len(),
             labels: dataset.labels.len(),

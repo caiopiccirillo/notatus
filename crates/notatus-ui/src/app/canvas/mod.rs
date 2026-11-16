@@ -6,7 +6,7 @@ use gpui::prelude::*;
 use gpui::{Context, IntoElement, ObjectFit, SharedString, div, img};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _};
-use notatus_core::{AnnotationRecord, AssetLocation, AssetRecord};
+use notatus_core::{AnnotationRecord, AssetLocation, AssetRecord, ReviewState};
 use std::path::PathBuf;
 
 mod color;
@@ -56,7 +56,7 @@ impl NotatusWindow {
                     dimmed: options.focus_selected
                         && self.state.selected_annotation().is_some()
                         && !selected,
-                    rejected: ann.review_state == notatus_core::ReviewState::Rejected,
+                    rejected: ann.review_state == ReviewState::Rejected,
                 }
             })
             .collect();
@@ -74,51 +74,47 @@ impl NotatusWindow {
 
         // The image fills the whole center panel, with the toolbar floating
         // over its corner.
-        div().size_full().child(
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(colors.muted)
-                .overflow_hidden()
-                .relative()
-                .when_some(selected_asset, |canvas, asset| {
-                    canvas.child(interactive_image_canvas(InteractiveImageCanvas {
-                        asset,
-                        view,
-                        drawing,
-                        polygon_drawing,
-                        shared_image_layout: canvas_image_layout,
-                        annotations: &state_labels,
-                        active_tool,
-                        viewport,
-                        canvas_cursor,
-                        preview_color: preview_color.clone(),
-                        options,
-                        crosshair: (options.crosshair
-                            && matches!(
-                                active_tool,
-                                AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
-                            ))
-                        .then_some(self.tools.pointer_image_pos)
-                        .flatten(),
-                    }))
-                })
-                .when(selected_asset.is_none(), |canvas| {
-                    canvas.child(canvas_empty_state(has_media))
-                })
-                .child(self.canvas_toolbar(cx)),
-        )
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(colors.muted)
+            .overflow_hidden()
+            .relative()
+            .when_some(selected_asset, |canvas, asset| {
+                canvas.child(interactive_image_canvas(InteractiveImageCanvas {
+                    asset,
+                    view,
+                    drawing,
+                    polygon_drawing,
+                    shared_image_layout: canvas_image_layout,
+                    annotations: &state_labels,
+                    active_tool,
+                    viewport,
+                    canvas_cursor,
+                    preview_color: preview_color.clone(),
+                    options,
+                    crosshair: (options.crosshair
+                        && matches!(
+                            active_tool,
+                            AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
+                        ))
+                    .then_some(self.tools.pointer_image_pos)
+                    .flatten(),
+                }))
+            })
+            .when(selected_asset.is_none(), |canvas| {
+                canvas.child(canvas_empty_state(has_media))
+            })
+            .child(self.canvas_toolbar(cx))
     }
 }
 
-/// Label tag text, marked with the review outcome once decided.
 /// Label tag text: the review outcome once decided, and for a model's
 /// suggestion still waiting for review, the model's confidence, so
 /// suggestions stand apart from boxes a person drew.
 fn annotation_tag(name: &str, annotation: &AnnotationRecord) -> SharedString {
-    use notatus_core::ReviewState;
     match annotation.review_state {
         ReviewState::Accepted => format!("{name} ✓").into(),
         ReviewState::Rejected => format!("{name} ✗").into(),
