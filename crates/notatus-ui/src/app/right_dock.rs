@@ -1,4 +1,4 @@
-use crate::app::dock::{DockTabs, dock_frame};
+use crate::app::dock::{DockTabs, DockView, dock_frame};
 use crate::app::window::{NotatusWindow, RightDock};
 use gpui::prelude::*;
 use gpui::{Context, IntoElement, div};
@@ -9,26 +9,30 @@ mod details;
 
 pub(super) use annotations::Labels;
 
+impl DockView for RightDock {
+    const ALL: &'static [Self] = &[Self::Annotations, Self::Details];
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::Annotations => "Annotations",
+            Self::Details => "Details",
+        }
+    }
+}
+
 impl NotatusWindow {
     pub(super) fn right_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();
         let colors = cx.theme().colors;
-        let (selected, content) = match self.right_dock {
-            RightDock::Annotations => (0, self.annotations_panel_content(view.clone(), colors)),
-            RightDock::Details => (1, self.details_panel_content(cx).into_any_element()),
+        let content = match self.right_dock {
+            RightDock::Annotations => self.annotations_panel_content(view.clone(), colors),
+            RightDock::Details => self.details_panel_content(cx).into_any_element(),
         };
         dock_frame(
             DockTabs {
                 id: "right-dock-tabs",
-                titles: &["Annotations", "Details"],
-                selected,
-                on_select: |index, notatus: &mut NotatusWindow| {
-                    notatus.right_dock = if index == 0 {
-                        RightDock::Annotations
-                    } else {
-                        RightDock::Details
-                    };
-                },
+                current: self.right_dock,
+                select: |notatus, dock| notatus.right_dock = dock,
             },
             view,
             div(),
