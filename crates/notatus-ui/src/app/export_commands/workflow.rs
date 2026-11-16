@@ -39,7 +39,7 @@ impl ExportWorkflowIssue {
             Self::Labels => "Create a label before exporting annotations.",
             Self::Media => "Import media before exporting annotations.",
             Self::FinishedMedia => {
-                "No media is marked done. Mark finished media with M or Ctrl+Enter, \
+                "No media is marked done. Mark finished media with M or Done & next, \
                  or turn off \"Finished media only\" in the export dialog."
             }
             Self::Annotations => "Create exportable annotations before exporting.",

@@ -187,7 +187,7 @@ fn keyboard_shortcuts_drive_the_annotation_loop(cx: &mut TestAppContext) {
         assert_eq!(notatus.state.active_tool(), AnnotationTool::Select);
     });
 
-    cx.simulate_keystrokes(window, "ctrl-enter");
+    cx.simulate_keystrokes(window, "secondary-enter");
     view.update(cx, |notatus, _| {
         let asset = notatus.state.dataset().asset_by_id(assets[1]).unwrap();
         assert_eq!(asset.status, notatus_core::AssetStatus::Done);
@@ -198,7 +198,7 @@ fn keyboard_shortcuts_drive_the_annotation_loop(cx: &mut TestAppContext) {
         );
     });
 
-    cx.simulate_keystrokes(window, "ctrl-z");
+    cx.simulate_keystrokes(window, "secondary-z");
     view.update(cx, |notatus, _| {
         let asset = notatus.state.dataset().asset_by_id(assets[1]).unwrap();
         assert_eq!(asset.status, notatus_core::AssetStatus::Pending);
@@ -226,13 +226,13 @@ fn delete_key_removes_selected_annotation_and_undo_restores_it(cx: &mut TestAppC
         assert!(notatus.state.dataset().annotations.is_empty());
     });
 
-    cx.simulate_keystrokes(window, "ctrl-z");
+    cx.simulate_keystrokes(window, "secondary-z");
     view.update(cx, |notatus, _| {
         assert_eq!(notatus.state.selected_annotation(), Some(annotation_id));
         assert_eq!(notatus.state.dataset().annotations.len(), 1);
     });
 
-    cx.simulate_keystrokes(window, "ctrl-shift-z");
+    cx.simulate_keystrokes(window, "secondary-shift-z");
     view.update(cx, |notatus, _| {
         assert!(notatus.state.dataset().annotations.is_empty());
     });
@@ -266,7 +266,7 @@ fn command_palette_runs_the_confirmed_command(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
 
-    cx.simulate_keystrokes(window, "ctrl-k");
+    cx.simulate_keystrokes(window, "secondary-k");
     let open = cx
         .update_window(window, |_, window, cx| window.has_active_dialog(cx))
         .unwrap();
@@ -568,7 +568,7 @@ fn review_keys_accept_and_reject_then_advance(cx: &mut TestAppContext) {
         assert_eq!(notatus.state.selected_annotation(), Some(ids[2]));
     });
 
-    cx.simulate_keystrokes(window, "ctrl-z");
+    cx.simulate_keystrokes(window, "secondary-z");
     view.update(cx, |notatus, _| {
         assert_eq!(
             notatus.state.dataset().annotations[1].review_state,
@@ -710,7 +710,7 @@ fn name_fields_follow_undo_but_keep_a_rejected_edit(cx: &mut TestAppContext) {
             "Truck"
         );
     });
-    cx.simulate_keystrokes(window.into(), "ctrl-z");
+    cx.simulate_keystrokes(window.into(), "secondary-z");
     cx.run_until_parked();
     assert_eq!(field(cx), "Car");
 

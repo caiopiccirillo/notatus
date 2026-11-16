@@ -61,8 +61,9 @@ impl NotatusWindow {
 
     /// Previous/next media, progress, and the done toggle, centered in the bar.
     fn review_controls(&self) -> impl IntoElement {
+        // The empty canvas guides a project without media.
         let Some(progress) = self.progress_summary() else {
-            return div().child("Press Ctrl+K for commands").into_any_element();
+            return div().into_any_element();
         };
         let done = self
             .selected_asset()

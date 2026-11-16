@@ -116,6 +116,9 @@ commands, offers commands on a selection or the current media only while there
 is one, says what Undo and the view toggles will do, and adds a row per label
 and per media.
 
+Modifier shortcuts are bound with gpui's `secondary` modifier, which is Cmd on
+macOS and Ctrl elsewhere; these docs write them with Ctrl.
+
 Commands that open pickers or dialogs (new, open, save, import, export) are
 deferred out of their action listener with `run_outside_update`, because they
 update the window through a weak handle and gpui panics on a nested update.

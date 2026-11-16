@@ -7,9 +7,10 @@ use crate::app::window::NotatusWindow;
 use crate::app::{export_commands, media_import, project_commands};
 use crate::{AnnotationTool, Direction};
 use gpui::prelude::*;
-use gpui::{Action, App, Context, KeyBinding, Window, actions};
+use gpui::{Action, App, Context, KeyBinding, KeyBindingContextPredicate, Window, actions};
 use gpui_component::{ActiveTheme as _, Theme};
 use notatus_core::{AnnotationId, AssetId, AssetStatus, LabelId, ReviewState};
+use std::rc::Rc;
 
 /// Key context set on the main window. Bare-key shortcuts additionally require
 /// that no text input is focused.
@@ -93,68 +94,87 @@ pub(super) struct SelectLabelById(pub(super) LabelId);
 pub(super) struct GoToMedia(pub(super) AssetId);
 
 pub(super) fn bind_keys(cx: &mut App) {
-    let global = Some(CONTEXT);
-    let canvas = Some(CANVAS_CONTEXT);
-    cx.bind_keys([
-        // Ctrl+K is the one the app advertises, so it is bound last: hints
+    let global = CONTEXT;
+    let canvas = CANVAS_CONTEXT;
+    let bindings = [
+        // Ctrl+K (Cmd+K on macOS) is the one the app advertises, so it is bound last: hints
         // show the last binding.
-        KeyBinding::new("ctrl-shift-p", CommandPalette, global),
-        KeyBinding::new("ctrl-k", CommandPalette, global),
-        KeyBinding::new("ctrl-z", Undo, canvas),
-        KeyBinding::new("ctrl-shift-z", Redo, canvas),
-        KeyBinding::new("ctrl-y", Redo, canvas),
-        KeyBinding::new("ctrl-n", NewProject, global),
-        KeyBinding::new("ctrl-o", OpenProject, global),
-        KeyBinding::new("ctrl-s", SaveProject, global),
-        KeyBinding::new("ctrl-shift-s", SaveProjectAs, global),
-        KeyBinding::new("ctrl-i", ImportMedia, global),
-        KeyBinding::new("ctrl-shift-i", ImportFolder, global),
-        KeyBinding::new("ctrl-e", ExportAnnotations, global),
-        KeyBinding::new("ctrl-shift-l", NewLabel, global),
-        KeyBinding::new("l", PickLabel, canvas),
-        KeyBinding::new("v", SelectTool, canvas),
-        KeyBinding::new("b", BoxTool, canvas),
-        KeyBinding::new("p", PolygonTool, canvas),
+        binding(cx, "secondary-shift-p", CommandPalette, global),
+        binding(cx, "secondary-k", CommandPalette, global),
+        binding(cx, "secondary-z", Undo, canvas),
+        binding(cx, "secondary-shift-z", Redo, canvas),
+        binding(cx, "secondary-y", Redo, canvas),
+        binding(cx, "secondary-n", NewProject, global),
+        binding(cx, "secondary-o", OpenProject, global),
+        binding(cx, "secondary-s", SaveProject, global),
+        binding(cx, "secondary-shift-s", SaveProjectAs, global),
+        binding(cx, "secondary-i", ImportMedia, global),
+        binding(cx, "secondary-shift-i", ImportFolder, global),
+        binding(cx, "secondary-e", ExportAnnotations, global),
+        binding(cx, "secondary-shift-l", NewLabel, global),
+        binding(cx, "l", PickLabel, canvas),
+        binding(cx, "v", SelectTool, canvas),
+        binding(cx, "b", BoxTool, canvas),
+        binding(cx, "p", PolygonTool, canvas),
         // The last binding for an action is the one shown in hints.
-        KeyBinding::new("right", NextMedia, canvas),
-        KeyBinding::new("d", NextMedia, canvas),
-        KeyBinding::new("left", PreviousMedia, canvas),
-        KeyBinding::new("a", PreviousMedia, canvas),
-        KeyBinding::new("shift-d", NextPendingMedia, canvas),
-        KeyBinding::new("m", ToggleMediaDone, canvas),
-        KeyBinding::new("ctrl-enter", DoneAndNext, global),
-        KeyBinding::new("tab", NextAnnotation, canvas),
-        KeyBinding::new("shift-tab", PreviousAnnotation, canvas),
-        KeyBinding::new("backspace", DeleteSelection, canvas),
-        KeyBinding::new("delete", DeleteSelection, canvas),
-        KeyBinding::new("escape", Cancel, canvas),
-        KeyBinding::new("f", FitCanvas, canvas),
-        KeyBinding::new("ctrl-0", FitCanvas, global),
-        KeyBinding::new("=", ZoomIn, canvas),
-        KeyBinding::new("ctrl-=", ZoomIn, global),
-        KeyBinding::new("-", ZoomOut, canvas),
-        KeyBinding::new("ctrl--", ZoomOut, global),
-        KeyBinding::new("h", ToggleHideAnnotations, canvas),
-        KeyBinding::new("shift-l", ToggleLabelNames, canvas),
-        KeyBinding::new("c", ToggleCrosshair, canvas),
-        KeyBinding::new("shift-f", ToggleFocusSelected, canvas),
-        KeyBinding::new("?", ShowShortcuts, canvas),
-        KeyBinding::new("ctrl-r", RunModel, global),
-        KeyBinding::new("ctrl-shift-r", RunModelOnUnfinished, global),
-        KeyBinding::new("y", AcceptAnnotation, canvas),
-        KeyBinding::new("x", RejectAnnotation, canvas),
-        KeyBinding::new("u", ResetAnnotationReview, canvas),
-        KeyBinding::new("n", NextDraft, canvas),
-        KeyBinding::new("shift-n", PreviousDraft, canvas),
-    ]);
-    cx.bind_keys((0..9).map(|slot| {
-        const KEYS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-        KeyBinding::new(KEYS[slot], SelectLabelSlot(slot), canvas)
-    }));
+        binding(cx, "right", NextMedia, canvas),
+        binding(cx, "d", NextMedia, canvas),
+        binding(cx, "left", PreviousMedia, canvas),
+        binding(cx, "a", PreviousMedia, canvas),
+        binding(cx, "shift-d", NextPendingMedia, canvas),
+        binding(cx, "m", ToggleMediaDone, canvas),
+        binding(cx, "secondary-enter", DoneAndNext, global),
+        binding(cx, "tab", NextAnnotation, canvas),
+        binding(cx, "shift-tab", PreviousAnnotation, canvas),
+        binding(cx, "backspace", DeleteSelection, canvas),
+        binding(cx, "delete", DeleteSelection, canvas),
+        binding(cx, "escape", Cancel, canvas),
+        binding(cx, "f", FitCanvas, canvas),
+        binding(cx, "secondary-0", FitCanvas, global),
+        binding(cx, "=", ZoomIn, canvas),
+        binding(cx, "secondary-=", ZoomIn, global),
+        binding(cx, "-", ZoomOut, canvas),
+        binding(cx, "secondary--", ZoomOut, global),
+        binding(cx, "h", ToggleHideAnnotations, canvas),
+        binding(cx, "shift-l", ToggleLabelNames, canvas),
+        binding(cx, "c", ToggleCrosshair, canvas),
+        binding(cx, "shift-f", ToggleFocusSelected, canvas),
+        binding(cx, "?", ShowShortcuts, canvas),
+        binding(cx, "secondary-r", RunModel, global),
+        binding(cx, "secondary-shift-r", RunModelOnUnfinished, global),
+        binding(cx, "y", AcceptAnnotation, canvas),
+        binding(cx, "x", RejectAnnotation, canvas),
+        binding(cx, "u", ResetAnnotationReview, canvas),
+        binding(cx, "n", NextDraft, canvas),
+        binding(cx, "shift-n", PreviousDraft, canvas),
+    ];
+    cx.bind_keys(bindings);
+    let slots: Vec<_> = (0..9)
+        .map(|slot| {
+            const KEYS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+            binding(cx, KEYS[slot], SelectLabelSlot(slot), canvas)
+        })
+        .collect();
+    cx.bind_keys(slots);
 }
 
-/// A command that reaches the window through a weak handle, like the dock
-/// buttons use.
+/// Binds `keys` to `action` where `context` matches. Loading through the app
+/// resolves `secondary-` to Cmd on macOS and Ctrl elsewhere.
+fn binding(cx: &App, keys: &str, action: impl Action, context: &str) -> KeyBinding {
+    let context = KeyBindingContextPredicate::parse(context).expect("a valid key context");
+    KeyBinding::load(
+        keys,
+        Box::new(action),
+        Some(Rc::new(context)),
+        false,
+        None,
+        cx,
+    )
+    .expect("a valid keystroke")
+}
+
+/// A command that reaches the window through a weak handle, like the menus
+/// and buttons use.
 type WindowCommand = fn(gpui::WeakEntity<NotatusWindow>, &mut Window, &mut App);
 
 /// Runs `command` right after the current update. Action listeners run while

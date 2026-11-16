@@ -155,7 +155,7 @@ fn ctrl_s_saves_without_panicking(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
 
-    cx.simulate_keystrokes(window.into(), "ctrl-s");
+    cx.simulate_keystrokes(window.into(), "secondary-s");
     cx.run_until_parked();
 
     assert_eq!(saved_label_count(dir.path()), 1);
@@ -166,14 +166,14 @@ fn ctrl_s_saves_without_panicking(cx: &mut TestAppContext) {
 fn project_shortcuts_run_without_panicking(cx: &mut TestAppContext) {
     // Each of these used to update the window from inside its own update.
     for keys in [
-        "ctrl-n",
-        "ctrl-o",
-        "ctrl-shift-s",
-        "ctrl-i",
-        "ctrl-shift-i",
-        "ctrl-r",
-        "ctrl-shift-r",
-        "ctrl-e",
+        "secondary-n",
+        "secondary-o",
+        "secondary-shift-s",
+        "secondary-i",
+        "secondary-shift-i",
+        "secondary-r",
+        "secondary-shift-r",
+        "secondary-e",
     ] {
         let (window, _) = open_test_window(cx);
         cx.simulate_keystrokes(window.into(), keys);

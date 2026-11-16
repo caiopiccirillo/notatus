@@ -131,7 +131,7 @@ fn annotation_tag(name: &str, annotation: &AnnotationRecord) -> SharedString {
 
 /// Guides a new project to its first image, with the keys that do the same.
 fn canvas_empty_state(has_media: bool) -> impl IntoElement {
-    use crate::app::actions::{CommandPalette, ImportFolder, ImportMedia, OpenProject};
+    use crate::app::actions::{self, CommandPalette, ImportFolder, ImportMedia, OpenProject};
     use gpui::Action as _;
     use gpui_component::empty::{
         Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant,
@@ -146,13 +146,15 @@ fn canvas_empty_state(has_media: bool) -> impl IntoElement {
     } else {
         (
             "Import images to start annotating",
-            "Labels can be created while you draw. Press Ctrl+K at any time for every command.",
+            "Labels can be created while you draw.",
         )
     };
+    // Each button's tooltip shows its key, as bound on this platform.
     let action_button = |id: &'static str, label: &'static str, action: Box<dyn gpui::Action>| {
         Button::new(id)
             .small()
             .label(label)
+            .tooltip_with_action(label, action.as_ref(), Some(actions::CONTEXT))
             .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
     };
 
