@@ -11,7 +11,7 @@ use crate::app::runner_settings::RunnerSettings;
 use crate::app::tools::ToolInteractionState;
 use crate::app::view_options::CanvasViewOptions;
 use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
-use crate::{AnnotationTool, UiState};
+use crate::{AnnotationTool, UiMutationError, UiState};
 use gpui::prelude::*;
 use gpui::{
     AnyWindowHandle, Context, CursorStyle, Entity, FocusHandle, IntoElement, Pixels, Render,
@@ -113,11 +113,8 @@ impl NotatusWindow {
                 |this, input, event: &InputEvent, _window, cx| {
                     if matches!(event, InputEvent::Change) {
                         let value = input.read(cx).value().to_string();
-                        match this.state.rename_project(value) {
-                            Ok(()) => this.status_message = None,
-                            Err(error) => this.status_message = Some(error.to_string()),
-                        }
-                        cx.notify();
+                        let result = this.state.rename_project(value);
+                        this.show_result(result, cx);
                     }
                 },
             ),
@@ -129,11 +126,8 @@ impl NotatusWindow {
                         && let Some(label_id) = this.state.selected_label()
                     {
                         let value = input.read(cx).value().to_string();
-                        match this.state.update_label_name(label_id, value) {
-                            Ok(()) => this.status_message = None,
-                            Err(error) => this.status_message = Some(error.to_string()),
-                        }
-                        cx.notify();
+                        let result = this.state.update_label_name(label_id, value);
+                        this.show_result(result, cx);
                     }
                 },
             ),
@@ -149,14 +143,10 @@ impl NotatusWindow {
                         return;
                     };
 
-                    match this
+                    let result = this
                         .state
-                        .update_label_color(label_id, Some(color.to_hex()))
-                    {
-                        Ok(()) => this.status_message = None,
-                        Err(error) => this.status_message = Some(error.to_string()),
-                    }
-                    cx.notify();
+                        .update_label_color(label_id, Some(color.to_hex()));
+                    this.show_result(result, cx);
                 },
             ),
         ];
@@ -195,6 +185,18 @@ impl NotatusWindow {
             app_menu_bar: menus::IN_TITLE_BAR.then(|| AppMenuBar::new(cx)),
             _subscriptions,
         }
+    }
+
+    /// Shows a change's error in the status bar, or clears the last message
+    /// once it succeeded, since the change itself is on screen, and redraws.
+    pub(super) fn show_result<T>(
+        &mut self,
+        result: Result<T, UiMutationError>,
+        cx: &mut Context<Self>,
+    ) -> Option<T> {
+        self.status_message = result.as_ref().err().map(ToString::to_string);
+        cx.notify();
+        result.ok()
     }
 
     pub(super) fn selected_asset(&self) -> Option<&AssetRecord> {

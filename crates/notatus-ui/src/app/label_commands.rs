@@ -47,13 +47,8 @@ impl NotatusWindow {
     }
 
     pub(super) fn select_label(&mut self, label_id: LabelId, cx: &mut Context<Self>) {
-        match self.state.select_label(label_id) {
-            Ok(()) => {
-                self.status_message = None;
-            }
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.select_label(label_id);
+        self.show_result(result, cx);
     }
 
     pub(super) fn update_label_color(
@@ -62,11 +57,8 @@ impl NotatusWindow {
         color: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
-        match self.state.update_label_color(label_id, Some(color.into())) {
-            Ok(()) => self.status_message = None,
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.update_label_color(label_id, Some(color.into()));
+        self.show_result(result, cx);
     }
 
     pub(super) fn prepare_label_color_picker(

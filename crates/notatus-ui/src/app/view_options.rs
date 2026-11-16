@@ -189,7 +189,6 @@ impl NotatusWindow {
     pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
         self.tools.fit_canvas_to_view();
         self.canvas_cursor = None;
-        self.status_message = Some("Fit image to canvas".to_string());
         cx.notify();
     }
 

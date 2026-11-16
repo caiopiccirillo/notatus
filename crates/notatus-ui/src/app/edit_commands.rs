@@ -80,13 +80,8 @@ impl NotatusWindow {
         label_id: LabelId,
         cx: &mut Context<Self>,
     ) {
-        match self.state.update_annotation_label(annotation_id, label_id) {
-            Ok(()) => {
-                self.status_message = Some("Updated annotation label".to_string());
-            }
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.update_annotation_label(annotation_id, label_id);
+        self.show_result(result, cx);
     }
 
     pub(super) fn toggle_image_classification(
@@ -95,16 +90,8 @@ impl NotatusWindow {
         label_id: LabelId,
         cx: &mut Context<Self>,
     ) {
-        match self.state.toggle_image_classification(asset_id, label_id) {
-            Ok(Some(_)) => {
-                self.status_message = Some("Added image classification".to_string());
-            }
-            Ok(None) => {
-                self.status_message = Some("Removed image classification".to_string());
-            }
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.toggle_image_classification(asset_id, label_id);
+        self.show_result(result, cx);
     }
 
     pub(super) fn remove_classification(
@@ -112,11 +99,8 @@ impl NotatusWindow {
         classification_id: ClassificationId,
         cx: &mut Context<Self>,
     ) {
-        match self.state.remove_classification(classification_id) {
-            Ok(()) => self.status_message = Some("Removed image classification".to_string()),
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.remove_classification(classification_id);
+        self.show_result(result, cx);
     }
 
     pub(super) fn update_annotation_bbox(
@@ -125,13 +109,8 @@ impl NotatusWindow {
         bbox: BoundingBox,
         cx: &mut Context<Self>,
     ) {
-        match self.state.update_annotation_bbox(annotation_id, bbox) {
-            Ok(()) => {
-                self.status_message = Some("Updated annotation".to_string());
-            }
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.update_annotation_bbox(annotation_id, bbox);
+        self.show_result(result, cx);
     }
 
     pub(super) fn select_annotation(
@@ -139,13 +118,8 @@ impl NotatusWindow {
         annotation_id: Option<AnnotationId>,
         cx: &mut Context<Self>,
     ) {
-        match self.state.select_annotation(annotation_id) {
-            Ok(()) => {
-                self.status_message = annotation_id.map(|_| "Selected annotation".to_string());
-            }
-            Err(error) => self.status_message = Some(error.to_string()),
-        }
-        cx.notify();
+        let result = self.state.select_annotation(annotation_id);
+        self.show_result(result, cx);
     }
 
     pub(super) fn hover_annotation(
@@ -157,5 +131,25 @@ impl NotatusWindow {
             self.hovered_annotation = annotation_id;
             cx.notify();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::tests::support::open_test_window;
+    use gpui::TestAppContext;
+    use notatus_core::{AnnotationId, LabelId};
+
+    #[gpui::test]
+    fn a_change_on_screen_clears_the_message_and_a_failure_explains(cx: &mut TestAppContext) {
+        let (_, view) = open_test_window(cx);
+        view.update(cx, |notatus, cx| {
+            notatus.status_message = Some("Undid create label".to_string());
+            notatus.select_annotation(None, cx);
+            assert_eq!(notatus.status_message, None);
+
+            notatus.update_annotation_label(AnnotationId::new(), LabelId::new(), cx);
+            assert!(notatus.status_message.is_some());
+        });
     }
 }
