@@ -66,11 +66,7 @@ impl UiState {
 
     /// How many drafts the review queue still has to visit.
     pub fn review_queue_len(&self) -> usize {
-        self.dataset
-            .annotations
-            .iter()
-            .filter(|annotation| self.review_filter.accepts(annotation))
-            .count()
+        self.index().review_queue
     }
 
     /// The first draft in the review queue after `from` on the same media,

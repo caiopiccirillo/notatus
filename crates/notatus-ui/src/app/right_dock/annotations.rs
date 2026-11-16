@@ -29,7 +29,7 @@ impl NotatusWindow {
             return empty_panel("No media selected").into_any_element();
         };
         let labels = self.state.dataset().labels.clone();
-        let annotations = self.annotations_for_asset(asset);
+        let annotations = self.state.annotations_on(asset.id);
         let annotation_count = annotations.len();
         let rows: Vec<_> = annotations
             .into_iter()
@@ -85,7 +85,7 @@ impl NotatusWindow {
         view: gpui::WeakEntity<NotatusWindow>,
         colors: ThemeColor,
     ) -> impl IntoElement {
-        let classifications = self.classifications_for_asset(asset);
+        let classifications = self.state.classifications_on(asset.id);
         let classified: Vec<_> = classifications.iter().map(|c| c.label_id).collect();
         let tags: Vec<_> = classifications
             .iter()

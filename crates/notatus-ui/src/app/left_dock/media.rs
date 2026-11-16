@@ -1,6 +1,7 @@
 //! The media list: virtualized, searchable by name or path, and filtered by
 //! status, so it stays quick with thousands of images.
 
+use crate::UiState;
 use crate::app::actions::{self, ImportFolder, ImportMedia};
 use crate::app::helpers::asset_display_name;
 use crate::app::media_import::{open_folder_picker, open_media_picker};
@@ -13,8 +14,7 @@ use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, IndexPath, Selectable as _, Sizable as _, ThemeColor,
 };
-use notatus_core::{AssetId, AssetStatus, ReviewState};
-use std::collections::HashMap;
+use notatus_core::{AssetId, AssetStatus};
 
 /// Which media the list shows.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -61,29 +61,21 @@ pub(in crate::app) struct MediaRow {
     drafts: usize,
 }
 
-pub(in crate::app) fn media_rows(dataset: &notatus_core::Dataset) -> Vec<MediaRow> {
-    // Counted in one pass rather than once per media.
-    let mut counts: HashMap<AssetId, (usize, usize)> = HashMap::new();
-    for annotation in &dataset.annotations {
-        let entry = counts.entry(annotation.asset_id).or_default();
-        entry.0 += 1;
-        if annotation.review_state == ReviewState::Draft {
-            entry.1 += 1;
-        }
-    }
-    dataset
+pub(in crate::app) fn media_rows(state: &UiState) -> Vec<MediaRow> {
+    let index = state.index();
+    state
+        .dataset()
         .assets
         .iter()
         .map(|asset| {
-            let (annotations, drafts) = counts.get(&asset.id).copied().unwrap_or_default();
             let name = asset_display_name(asset);
             MediaRow {
                 id: asset.id,
                 search_text: format!("{name}\n{}", asset.location.display_path()).to_lowercase(),
                 name: name.into(),
                 done: asset.status == AssetStatus::Done,
-                annotations,
-                drafts,
+                annotations: index.annotation_count(asset.id),
+                drafts: index.draft_count(asset.id),
             }
         })
         .collect()
@@ -255,7 +247,7 @@ impl NotatusWindow {
         }
         let asset_changed = self.media_list_synced.map(|(_, asset)| asset) != Some(key.1);
         self.media_list_synced = Some(key);
-        let rows = media_rows(self.state.dataset());
+        let rows = media_rows(&self.state);
         let selected = self.state.selected_asset();
         self.media_list.update(cx, |list, cx| {
             if list.delegate().rows != rows {
@@ -416,7 +408,7 @@ mod tests {
         let bbox = BoundingBox::from_xywh(1.0, 1.0, 5.0, 5.0).unwrap();
         state.add_human_bbox(ids[1], label, bbox, None).unwrap();
         let mut delegate = MediaListDelegate::default();
-        delegate.set_rows(media_rows(state.dataset()));
+        delegate.set_rows(media_rows(&state));
         (delegate, ids)
     }
 

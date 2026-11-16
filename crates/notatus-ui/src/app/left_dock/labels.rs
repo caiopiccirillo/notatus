@@ -87,11 +87,7 @@ fn label_rows(
     view: gpui::WeakEntity<NotatusWindow>,
     colors: ThemeColor,
 ) -> Vec<gpui::AnyElement> {
-    // Counted in one pass rather than once per label.
-    let mut counts: std::collections::HashMap<LabelId, usize> = Default::default();
-    for annotation in &window.state.dataset().annotations {
-        *counts.entry(annotation.label_id).or_default() += 1;
-    }
+    let index = window.state.index();
     window
         .state
         .dataset()
@@ -102,7 +98,7 @@ fn label_rows(
                 label.id,
                 label.name.clone(),
                 label.color.clone(),
-                counts.get(&label.id).copied().unwrap_or(0),
+                index.label_annotation_count(label.id),
                 window.state.selected_label() == Some(label.id),
                 view.clone(),
                 colors,

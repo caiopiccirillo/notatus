@@ -15,16 +15,8 @@ use gpui_component::{ActiveTheme as _, Sizable as _};
 impl NotatusWindow {
     pub(super) fn details_panel_content(&self, cx: &App) -> impl IntoElement {
         let dataset = self.state.dataset();
-        let done = dataset
-            .assets
-            .iter()
-            .filter(|asset| asset.status == notatus_core::AssetStatus::Done)
-            .count();
-        let draft_count = dataset
-            .annotations
-            .iter()
-            .filter(|annotation| annotation.review_state == notatus_core::ReviewState::Draft)
-            .count();
+        let index = self.state.index();
+        let (done, draft_count) = (index.done_media, index.drafts);
 
         let project = details_list()
             .item("Location", self.project_location.display_name(), 1)

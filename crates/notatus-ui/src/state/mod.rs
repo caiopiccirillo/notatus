@@ -8,6 +8,7 @@ mod annotations;
 mod classifications;
 mod error;
 mod history;
+mod index;
 mod labels;
 mod media;
 mod review;
@@ -16,9 +17,11 @@ mod tests;
 
 pub use error::UiMutationError;
 pub use history::CoalesceKey;
+pub use index::DatasetIndex;
 pub use review::{ModelPredictionSummary, ReviewFilter};
 
 use history::{History, Selection, Snapshot};
+use index::CachedIndex;
 use notatus_core::{AnnotationId, AssetId, Dataset, LabelId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,6 +64,8 @@ pub struct UiState {
     saved_revision: u64,
     history: History,
     batch_depth: usize,
+    /// Built on first read after a change; see [`UiState::index`].
+    index: std::cell::RefCell<Option<CachedIndex>>,
 }
 
 /// A revision no state in this process has used.
@@ -90,6 +95,7 @@ impl UiState {
             saved_revision: revision,
             history: History::default(),
             batch_depth: 0,
+            index: Default::default(),
         }
     }
 

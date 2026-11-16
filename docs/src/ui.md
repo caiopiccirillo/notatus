@@ -32,6 +32,9 @@ The methods are grouped by file under `src/state/`:
   model suggestions
 - `classifications.rs`: tag whole images with labels
 - `history.rs`: the undo stack and edit coalescing for drags and typing
+- `index.rs`: per-media annotations, per-label counts, and the review queue's
+  length, built in one pass and cached until the revision or the review filter
+  changes, so a frame drawn while dragging does not walk every annotation
 
 `UiState` always mutates the canonical dataset. It does not define a separate
 annotation schema.

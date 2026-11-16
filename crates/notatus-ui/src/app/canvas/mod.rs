@@ -31,7 +31,7 @@ impl NotatusWindow {
         let polygon_drawing = self.tools.draw_polygon.clone();
         let canvas_image_layout = self.canvas_image_layout.clone();
         let annotations: Vec<_> = selected_asset
-            .map(|asset| self.annotations_for_asset(asset))
+            .map(|asset| self.state.annotations_on(asset.id))
             .unwrap_or_default();
         let options = self.view_options;
         let state_labels: Vec<_> = annotations

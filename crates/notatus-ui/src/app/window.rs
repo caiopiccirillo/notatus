@@ -24,9 +24,7 @@ use gpui_component::menu::AppMenuBar;
 use gpui_component::resizable::{h_resizable, resizable_panel};
 use gpui_component::slider::SliderState;
 use gpui_component::{ActiveTheme as _, Colorize as _};
-use notatus_core::{
-    AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationRecord, Label, LabelId,
-};
+use notatus_core::{AnnotationId, AssetId, AssetRecord, Label, LabelId};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -209,27 +207,6 @@ impl NotatusWindow {
         self.state
             .selected_label()
             .and_then(|label_id| self.state.dataset().label_by_id(label_id))
-    }
-
-    pub(super) fn annotations_for_asset(&self, asset: &AssetRecord) -> Vec<&AnnotationRecord> {
-        self.state
-            .dataset()
-            .annotations
-            .iter()
-            .filter(|annotation| annotation.asset_id == asset.id)
-            .collect()
-    }
-
-    pub(super) fn classifications_for_asset(
-        &self,
-        asset: &AssetRecord,
-    ) -> Vec<&ClassificationRecord> {
-        self.state
-            .dataset()
-            .classifications
-            .iter()
-            .filter(|classification| classification.asset_id == asset.id)
-            .collect()
     }
 
     fn app_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {

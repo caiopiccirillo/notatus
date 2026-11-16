@@ -10,7 +10,6 @@ use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::progress::Progress;
 use gpui_component::status_bar::StatusBar;
 use gpui_component::{Icon, IconName, Selectable as _, Sizable as _};
-use notatus_core::AssetStatus;
 
 impl NotatusWindow {
     /// Feedback on the left, media navigation in the middle, and the model
@@ -132,10 +131,7 @@ impl NotatusWindow {
         if assets.is_empty() {
             return None;
         }
-        let done = assets
-            .iter()
-            .filter(|asset| asset.status == AssetStatus::Done)
-            .count();
+        let done = self.state.index().done_media;
         let position = self
             .state
             .selected_asset()
@@ -151,8 +147,8 @@ impl NotatusWindow {
     }
 
     pub(super) fn current_annotation_summary(&self) -> Option<String> {
-        let asset = self.selected_asset()?;
-        let count = self.annotations_for_asset(asset).len();
+        let asset_id = self.state.selected_asset()?;
+        let count = self.state.index().annotation_count(asset_id);
         Some(format!("{count} annotation{}", plural(count)))
     }
 }

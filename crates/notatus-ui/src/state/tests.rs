@@ -987,3 +987,52 @@ fn separate_projects_never_share_a_revision() {
     assert_ne!(first.revision(), reopened.revision());
     assert!(!second.is_dirty() && !reopened.is_dirty());
 }
+
+#[test]
+fn the_index_follows_edits_undo_and_the_review_filter() {
+    let mut state = UiState::new_project("demo");
+    let car = state.add_label("car");
+    let person = state.add_label("person");
+    let first = state
+        .add_local_image_asset("images/a.jpg", 640, 480)
+        .unwrap();
+    let second = state
+        .add_local_image_asset("images/b.jpg", 640, 480)
+        .unwrap();
+    let bbox = || BoundingBox::from_xywh(10.0, 20.0, 30.0, 40.0).unwrap();
+    let a = state.add_human_bbox(first, car, bbox(), None).unwrap();
+    let b = state.add_human_bbox(first, person, bbox(), None).unwrap();
+    let c = state.add_human_bbox(second, car, bbox(), None).unwrap();
+    state
+        .set_annotation_review_state(c, ReviewState::Accepted)
+        .unwrap();
+    state.set_asset_status(second, AssetStatus::Done).unwrap();
+
+    let index = state.index();
+    assert_eq!(index.annotation_count(first), 2);
+    assert_eq!(index.annotation_count(second), 1);
+    assert_eq!(index.draft_count(first), 2);
+    assert_eq!(index.label_annotation_count(car), 2);
+    assert_eq!(index.done_media, 1);
+    assert_eq!(index.drafts, 2);
+    assert_eq!(index.review_queue, 2);
+    let on_first: Vec<_> = state.annotations_on(first).iter().map(|a| a.id).collect();
+    assert_eq!(on_first, [a, b]);
+
+    // Reading again without a change reuses the same index.
+    assert!(std::rc::Rc::ptr_eq(&index, &state.index()));
+
+    state.remove_annotation(a).unwrap();
+    assert_eq!(state.index().annotation_count(first), 1);
+    assert_eq!(state.index().label_annotation_count(car), 1);
+
+    state.undo();
+    assert_eq!(state.index().annotation_count(first), 2);
+
+    state.set_review_filter(ReviewFilter {
+        label: Some(person),
+        below_confidence: None,
+    });
+    assert_eq!(state.index().review_queue, 1);
+    assert_eq!(state.review_queue_len(), 1);
+}
