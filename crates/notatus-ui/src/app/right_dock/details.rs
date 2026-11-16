@@ -1,6 +1,9 @@
 //! The Details tab: the project, the dataset's totals, and the current media.
 
-use crate::app::helpers::*;
+use crate::app::helpers::{
+    annotation_count_label, asset_dimensions_label, asset_display_name, asset_kind_label,
+    dataset_split_label, label_count_label, media_count_label, section_title,
+};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{App, IntoElement, div, px};

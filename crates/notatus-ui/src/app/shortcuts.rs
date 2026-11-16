@@ -3,7 +3,7 @@
 //! Rows name actions and show whatever key is bound to them, so the sheet
 //! cannot drift from the real bindings.
 
-use crate::app::actions::*;
+use crate::app::actions::CONTEXT;
 use crate::app::catalog::{Command, GROUPS, Group};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
@@ -91,6 +91,10 @@ fn label_slots_hint(muted: gpui::Hsla) -> impl IntoElement {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::actions::{
+        AcceptAnnotation, BoxTool, DoneAndNext, NextDraft, NextMedia, RejectAnnotation,
+        SaveProject, Undo,
+    };
     use crate::app::tests::support::open_test_window;
     use gpui::TestAppContext;
 

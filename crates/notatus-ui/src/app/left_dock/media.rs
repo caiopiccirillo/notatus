@@ -2,7 +2,7 @@
 //! status, so it stays quick with thousands of images.
 
 use crate::app::actions::{self, ImportFolder, ImportMedia};
-use crate::app::helpers::*;
+use crate::app::helpers::asset_display_name;
 use crate::app::media_import::{open_folder_picker, open_media_picker};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;

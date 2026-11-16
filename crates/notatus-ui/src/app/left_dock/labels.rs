@@ -1,4 +1,6 @@
-use crate::app::helpers::*;
+use crate::app::helpers::{
+    compact_text, hex_color, label_asset_meta, label_color_button, plural, record_element_id,
+};
 use crate::app::window::NotatusWindow;
 use crate::app::{DEFAULT_LABEL_COLOR, LABEL_COLORS};
 use gpui::prelude::*;

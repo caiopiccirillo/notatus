@@ -1,6 +1,7 @@
 use crate::app::actions::{
     self, DoneAndNext, FitCanvas, NextMedia, PreviousMedia, StopModelRun, ToggleMediaDone,
 };
+use crate::app::helpers::plural;
 use crate::app::model_run::ModelProgress;
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
@@ -157,7 +158,7 @@ fn model_progress(progress: ModelProgress) -> impl IntoElement {
             progress.done,
             progress.total,
             progress.added,
-            super::helpers::plural(progress.added)
+            plural(progress.added)
         ))
         .child(
             Progress::new("model-progress-bar")

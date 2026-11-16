@@ -3,6 +3,8 @@ use super::layout::screen_to_image;
 use super::overlay::AnnotationOverlay;
 use crate::AnnotationTool;
 use crate::app::SharedImageLayout;
+use crate::app::commands::{FALLBACK_LABEL_NAME, drawing_label};
+use crate::app::tools::{BboxEditMode, cursor_for_edit_mode, cursor_for_resize_handle};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{
@@ -203,7 +205,7 @@ fn finish_box_gesture(
         && let Some(asset_id) = notatus.state.selected_asset()
     {
         let result = notatus.state.batch("Draw box", |state| {
-            let (label_id, created) = super::super::commands::drawing_label(state);
+            let (label_id, created) = drawing_label(state);
             state
                 .add_human_bbox(asset_id, label_id, bbox, None)
                 .map(|_| created)
@@ -211,7 +213,7 @@ fn finish_box_gesture(
         notatus.status_message = Some(match result {
             Ok(true) => format!(
                 "Created annotation with new label \"{}\"",
-                super::super::commands::FALLBACK_LABEL_NAME
+                FALLBACK_LABEL_NAME
             ),
             Ok(false) => "Created annotation".into(),
             Err(error) => error.to_string(),
@@ -305,8 +307,7 @@ fn attach_draw_polygon_interactions(
                                 Some(polygon) => {
                                     // A label made on the fly undoes with its shape.
                                     let result = notatus.state.batch("Draw polygon", |state| {
-                                        let (label_id, _) =
-                                            super::super::commands::drawing_label(state);
+                                        let (label_id, _) = drawing_label(state);
                                         state.add_human_polygon(asset.id, label_id, polygon, None)
                                     });
                                     match result {
@@ -480,8 +481,6 @@ fn begin_annotation_edit(
     image_pos: (f64, f64),
     cx: &mut Context<NotatusWindow>,
 ) {
-    use super::super::tools::{BboxEditMode, cursor_for_edit_mode};
-
     let (annotation_id, mode) = match target {
         BboxHitTarget::Handle(id, handle) => (id, BboxEditMode::Resize(handle)),
         BboxHitTarget::Body(id) => (id, BboxEditMode::Move),
@@ -509,9 +508,7 @@ fn hover_cursor(
     idle: gpui::CursorStyle,
 ) -> gpui::CursorStyle {
     match hit_test_bbox_edit_target(annotations, image_pos, image_bounds, asset) {
-        Some(BboxHitTarget::Handle(_, handle)) => {
-            super::super::tools::cursor_for_resize_handle(handle)
-        }
+        Some(BboxHitTarget::Handle(_, handle)) => cursor_for_resize_handle(handle),
         Some(BboxHitTarget::Body(_)) => gpui::CursorStyle::OpenHand,
         None => idle,
     }

@@ -1,4 +1,5 @@
 use crate::app::CanvasImageLayout;
+use crate::app::tools::CanvasViewport;
 use gpui::{Bounds, Pixels, Point, bounds, px, size};
 use notatus_core::AssetRecord;
 
@@ -25,7 +26,7 @@ pub(super) fn compute_image_bounds(
 
 pub(super) fn apply_viewport_to_bounds(
     fit_bounds: Bounds<Pixels>,
-    viewport: super::super::tools::CanvasViewport,
+    viewport: CanvasViewport,
 ) -> Bounds<Pixels> {
     let fit_w: f32 = fit_bounds.size.width.into();
     let fit_h: f32 = fit_bounds.size.height.into();
@@ -310,7 +311,7 @@ mod tests {
     #[test]
     fn apply_viewport_scales_around_fit_center_and_applies_pan() {
         let fit_bounds = bounds(gpui::point(px(100.0), px(50.0)), size(px(400.0), px(300.0)));
-        let viewport = super::super::super::tools::CanvasViewport {
+        let viewport = CanvasViewport {
             zoom: 2.0,
             pan_x: 10.0,
             pan_y: -20.0,

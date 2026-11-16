@@ -2,7 +2,10 @@
 //! and its objects.
 
 use crate::app::DEFAULT_LABEL_COLOR;
-use crate::app::helpers::*;
+use crate::app::helpers::{
+    annotation_geometry_label, counted_section_title, empty_panel, hex_color, label_swatch,
+    model_confidence_label, record_element_id, review_tag,
+};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
 use gpui::{IntoElement, div, px};

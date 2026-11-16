@@ -5,6 +5,7 @@
 //! item's suggestions as they arrive, so they can be reviewed with the
 //! review keys while the rest are still coming.
 
+use crate::app::helpers::plural;
 use crate::app::window::NotatusWindow;
 use gpui::{Context, PathPromptOptions, SharedString};
 use notatus_core::AssetLocation;
@@ -298,15 +299,15 @@ impl NotatusWindow {
         let mut message = format!(
             "{stopped}model suggested {} annotation{} on {} image{}",
             job.added,
-            super::helpers::plural(job.added),
+            plural(job.added),
             job.done,
-            super::helpers::plural(job.done)
+            plural(job.done)
         );
         if job.skipped > 0 {
             message.push_str(&format!(
                 "; {} prediction{} did not fit the project",
                 job.skipped,
-                super::helpers::plural(job.skipped)
+                plural(job.skipped)
             ));
         }
         self.status_message = Some(message);

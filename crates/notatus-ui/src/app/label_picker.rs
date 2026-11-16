@@ -1,5 +1,6 @@
 //! Searchable active-label picker that creates labels from the typed name.
 
+use crate::app::helpers::label_swatch;
 use crate::app::window::NotatusWindow;
 use crate::app::{DEFAULT_LABEL_COLOR, commands};
 use gpui::prelude::*;
@@ -36,9 +37,7 @@ impl SearchableListItem for LabelOption {
 
     fn render(&self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let swatch = match self.choice {
-            LabelChoice::Existing(_) => {
-                super::helpers::label_swatch(&self.color, false).into_any_element()
-            }
+            LabelChoice::Existing(_) => label_swatch(&self.color, false).into_any_element(),
             LabelChoice::Create(_) => Icon::new(IconName::Plus).xsmall().into_any_element(),
         };
         div()
@@ -224,15 +223,13 @@ impl NotatusWindow {
                     .items_center()
                     .gap_2()
                     .map(|row| match selected {
-                        Some(option) => row
-                            .child(super::helpers::label_swatch(&option.color, false))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(option.title.clone()),
-                            ),
+                        Some(option) => row.child(label_swatch(&option.color, false)).child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(option.title.clone()),
+                        ),
                         None => row.child(div().flex_1().text_color(muted).child("Label")),
                     })
                     .child(Caret::new(trigger.size()).text_color(muted))

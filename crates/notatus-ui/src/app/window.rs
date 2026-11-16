@@ -1,16 +1,30 @@
+use crate::app::autosave::AutosaveState;
+use crate::app::export_commands::ExportOptions;
 use crate::app::helpers::hex_color;
+use crate::app::label_picker::LabelPickerState;
+use crate::app::left_dock::MediaListState;
+use crate::app::menus;
+use crate::app::model_run::ModelRunState;
 use crate::app::project_session::ProjectLocation;
+use crate::app::runner_settings::RunnerSettings;
 use crate::app::tools::ToolInteractionState;
+use crate::app::view_options::CanvasViewOptions;
 use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
 use crate::{AnnotationTool, UiState};
 use gpui::prelude::*;
-use gpui::{Context, IntoElement, Pixels, Render, Subscription, Window, div, px};
+use gpui::{
+    AnyWindowHandle, Context, CursorStyle, Entity, FocusHandle, IntoElement, Pixels, Render,
+    Subscription, Window, div, px,
+};
 use gpui_component::color_picker::{ColorPickerEvent, ColorPickerState};
+use gpui_component::command::CommandState;
 use gpui_component::input::{InputEvent, InputState};
+use gpui_component::menu::AppMenuBar;
 use gpui_component::resizable::{h_resizable, resizable_panel};
+use gpui_component::slider::SliderState;
 use gpui_component::{ActiveTheme as _, Colorize as _};
 use notatus_core::{
-    AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationRecord, LabelId,
+    AnnotationId, AnnotationRecord, AssetId, AssetRecord, ClassificationRecord, Label, LabelId,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -33,32 +47,32 @@ pub(super) struct NotatusWindow {
     pub(super) right_dock: RightDock,
     pub(super) status_message: Option<String>,
     pub(super) project_location: ProjectLocation,
-    pub(super) project_name_input: gpui::Entity<InputState>,
-    pub(super) label_name_input: gpui::Entity<InputState>,
-    pub(super) label_color_picker: gpui::Entity<ColorPickerState>,
+    pub(super) project_name_input: Entity<InputState>,
+    pub(super) label_name_input: Entity<InputState>,
+    pub(super) label_color_picker: Entity<ColorPickerState>,
     pub(super) label_color_target: Option<LabelId>,
     pub(super) tools: ToolInteractionState,
     pub(super) hovered_annotation: Option<AnnotationId>,
-    pub(super) canvas_cursor: Option<gpui::CursorStyle>,
-    pub(super) export: super::export_commands::ExportOptions,
+    pub(super) canvas_cursor: Option<CursorStyle>,
+    pub(super) export: ExportOptions,
     pub(super) canvas_image_layout: SharedImageLayout,
-    pub(super) focus_handle: gpui::FocusHandle,
-    pub(super) command_state: gpui::Entity<gpui_component::command::CommandState>,
-    pub(super) autosave: super::autosave::AutosaveState,
-    pub(super) window_handle: gpui::AnyWindowHandle,
-    pub(super) model_run: super::model_run::ModelRunState,
-    pub(super) runner_settings: super::runner_settings::RunnerSettings,
-    pub(super) label_picker: gpui::Entity<super::label_picker::LabelPickerState>,
+    pub(super) focus_handle: FocusHandle,
+    pub(super) command_state: Entity<CommandState>,
+    pub(super) autosave: AutosaveState,
+    pub(super) window_handle: AnyWindowHandle,
+    pub(super) model_run: ModelRunState,
+    pub(super) runner_settings: RunnerSettings,
+    pub(super) label_picker: Entity<LabelPickerState>,
     pub(super) label_picker_synced: Option<(u64, Option<LabelId>)>,
     /// The revision and label the name fields last showed.
     pub(super) name_inputs_synced: Option<(u64, Option<LabelId>)>,
-    pub(super) media_list: gpui::Entity<super::left_dock::MediaListState>,
+    pub(super) media_list: Entity<MediaListState>,
     /// The revision and media the list last showed.
     pub(super) media_list_synced: Option<(u64, Option<AssetId>)>,
-    pub(super) view_options: super::view_options::CanvasViewOptions,
-    pub(super) opacity_slider: gpui::Entity<gpui_component::slider::SliderState>,
+    pub(super) view_options: CanvasViewOptions,
+    pub(super) opacity_slider: Entity<SliderState>,
     /// The menus drawn in the title bar, where the platform has no menu bar.
-    pub(super) app_menu_bar: Option<gpui::Entity<gpui_component::menu::AppMenuBar>>,
+    pub(super) app_menu_bar: Option<Entity<AppMenuBar>>,
     pub(super) _subscriptions: Vec<Subscription>,
 }
 
@@ -71,7 +85,7 @@ impl NotatusWindow {
         let label_color_picker = cx.new(|cx| {
             ColorPickerState::new(window, cx).default_value(hex_color(DEFAULT_LABEL_COLOR))
         });
-        let command_state = cx.new(|cx| gpui_component::command::CommandState::new(window, cx));
+        let command_state = cx.new(|cx| CommandState::new(window, cx));
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
         let (label_picker, label_picker_subscription) = Self::new_label_picker(window, cx);
@@ -165,10 +179,10 @@ impl NotatusWindow {
             canvas_image_layout: Rc::new(RefCell::new(None)),
             focus_handle,
             command_state,
-            autosave: super::autosave::AutosaveState::new(),
+            autosave: AutosaveState::new(),
             window_handle: window.window_handle(),
             model_run: Default::default(),
-            runner_settings: super::runner_settings::RunnerSettings::for_user(),
+            runner_settings: RunnerSettings::for_user(),
             label_picker,
             label_picker_synced: None,
             name_inputs_synced: None,
@@ -176,8 +190,7 @@ impl NotatusWindow {
             media_list_synced: None,
             view_options: Default::default(),
             opacity_slider,
-            app_menu_bar: super::menus::IN_TITLE_BAR
-                .then(|| gpui_component::menu::AppMenuBar::new(cx)),
+            app_menu_bar: menus::IN_TITLE_BAR.then(|| AppMenuBar::new(cx)),
             _subscriptions,
         }
     }
@@ -188,7 +201,7 @@ impl NotatusWindow {
             .and_then(|asset_id| self.state.dataset().asset_by_id(asset_id))
     }
 
-    pub(super) fn selected_label(&self) -> Option<&notatus_core::Label> {
+    pub(super) fn selected_label(&self) -> Option<&Label> {
         self.state
             .selected_label()
             .and_then(|label_id| self.state.dataset().label_by_id(label_id))

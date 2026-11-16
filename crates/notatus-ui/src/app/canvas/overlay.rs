@@ -1,6 +1,7 @@
 use super::color::{hex_to_rgba, rgba_with_alpha};
 use super::hit_test::bbox_handle_points;
 use super::layout::{image_bbox_to_screen, image_point_to_screen};
+use crate::app::tools::{DrawingState, PolygonDrawingState};
 use gpui::{
     App, Bounds, Pixels, Point, SharedString, Window, bounds, fill, outline, px, rgb, size,
 };
@@ -381,7 +382,7 @@ fn paint_polygon_vertices(points: &[Point<Pixels>], color: &str, window: &mut Wi
 }
 
 pub(super) fn paint_drawing_preview(
-    drawing: super::super::tools::DrawingState,
+    drawing: DrawingState,
     img_bounds: Bounds<Pixels>,
     img_width: f64,
     img_height: f64,
@@ -409,7 +410,7 @@ pub(super) fn paint_drawing_preview(
 }
 
 pub(super) fn paint_polygon_preview(
-    drawing: &super::super::tools::PolygonDrawingState,
+    drawing: &PolygonDrawingState,
     img_bounds: Bounds<Pixels>,
     img_width: f64,
     img_height: f64,

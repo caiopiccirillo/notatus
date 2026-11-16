@@ -1,5 +1,5 @@
 use crate::AnnotationTool;
-use crate::app::helpers::*;
+use crate::app::helpers::{canvas_message, model_confidence_label};
 use crate::app::window::NotatusWindow;
 use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
 use gpui::prelude::*;
@@ -15,6 +15,8 @@ mod interaction;
 mod layout;
 mod overlay;
 
+use crate::app::tools::{CanvasViewport, DrawingState, PolygonDrawingState};
+use crate::app::view_options::CanvasViewOptions;
 use interaction::attach_canvas_interactions;
 use layout::{apply_viewport_to_bounds, canvas_image_layout, compute_image_bounds};
 use overlay::{
@@ -120,18 +122,16 @@ fn annotation_tag(name: &str, annotation: &AnnotationRecord) -> SharedString {
     match annotation.review_state {
         ReviewState::Accepted => format!("{name} ✓").into(),
         ReviewState::Rejected => format!("{name} ✗").into(),
-        ReviewState::Draft | ReviewState::Reviewed => {
-            match super::helpers::model_confidence_label(annotation) {
-                Some(confidence) => format!("{name} {confidence}").into(),
-                None => SharedString::from(name.to_string()),
-            }
-        }
+        ReviewState::Draft | ReviewState::Reviewed => match model_confidence_label(annotation) {
+            Some(confidence) => format!("{name} {confidence}").into(),
+            None => SharedString::from(name.to_string()),
+        },
     }
 }
 
 /// Guides a new project to its first image, with the keys that do the same.
 fn canvas_empty_state(has_media: bool) -> impl IntoElement {
-    use super::actions::{CommandPalette, ImportFolder, ImportMedia, OpenProject};
+    use crate::app::actions::{CommandPalette, ImportFolder, ImportMedia, OpenProject};
     use gpui::Action as _;
     use gpui_component::empty::{
         Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant,
@@ -200,15 +200,15 @@ fn canvas_empty_state(has_media: bool) -> impl IntoElement {
 struct InteractiveImageCanvas<'a> {
     asset: &'a AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
-    drawing: Option<super::tools::DrawingState>,
-    polygon_drawing: Option<super::tools::PolygonDrawingState>,
+    drawing: Option<DrawingState>,
+    polygon_drawing: Option<PolygonDrawingState>,
     shared_image_layout: SharedImageLayout,
     annotations: &'a [AnnotationOverlay],
     active_tool: AnnotationTool,
-    viewport: super::tools::CanvasViewport,
+    viewport: CanvasViewport,
     canvas_cursor: Option<gpui::CursorStyle>,
     preview_color: String,
-    options: super::view_options::CanvasViewOptions,
+    options: CanvasViewOptions,
     crosshair: Option<(f64, f64)>,
 }
 

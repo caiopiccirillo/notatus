@@ -1,3 +1,4 @@
+use crate::app::helpers::plural;
 use crate::app::project_session::ProjectLocation;
 use crate::app::window::{LeftDock, NotatusWindow, RightDock};
 use crate::{AnnotationTool, UiState};
@@ -388,7 +389,7 @@ fn load_report_notice(report: &notatus_storage::LoadReport) -> Option<String> {
     let count = report.issues.len();
     let mut notice = format!(
         "{count} record{} could not be used and {} left out",
-        super::helpers::plural(count),
+        plural(count),
         if count == 1 { "was" } else { "were" }
     );
     if let Some(dir) = &report.recovery_dir {
