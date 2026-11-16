@@ -6,7 +6,6 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use time::OffsetDateTime;
-use tracing;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -158,7 +157,11 @@ impl Dataset {
     ))]
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.manifest.schema_version != CURRENT_SCHEMA_VERSION {
-            tracing::warn!(found = self.manifest.schema_version, supported = CURRENT_SCHEMA_VERSION, "unsupported schema version");
+            tracing::warn!(
+                found = self.manifest.schema_version,
+                supported = CURRENT_SCHEMA_VERSION,
+                "unsupported schema version"
+            );
             return Err(ValidationError::UnsupportedSchemaVersion {
                 found: self.manifest.schema_version,
                 supported: CURRENT_SCHEMA_VERSION,
@@ -184,9 +187,14 @@ impl Dataset {
             }
         }
 
-        let mut asset_ids = BTreeSet::new();
+        // Sizes by id, so checking each annotation's geometry is a lookup
+        // rather than a scan of every asset.
+        let mut asset_dimensions = BTreeMap::new();
         for asset in &self.assets {
-            if !asset_ids.insert(asset.id) {
+            if asset_dimensions
+                .insert(asset.id, asset.dimensions)
+                .is_some()
+            {
                 tracing::warn!(asset_id = %asset.id, "duplicate asset id");
                 return Err(ValidationError::DuplicateAsset { asset_id: asset.id });
             }
@@ -208,13 +216,13 @@ impl Dataset {
                     annotation_id: annotation.id,
                 });
             }
-            if !asset_ids.contains(&annotation.asset_id) {
+            let Some(dimensions) = asset_dimensions.get(&annotation.asset_id) else {
                 tracing::warn!(annotation_id = %annotation.id, asset_id = %annotation.asset_id, "unknown asset reference");
                 return Err(ValidationError::UnknownAsset {
                     annotation_id: annotation.id,
                     asset_id: annotation.asset_id,
                 });
-            }
+            };
             if !label_ids.contains(&annotation.label_id) {
                 tracing::warn!(annotation_id = %annotation.id, label_id = %annotation.label_id, "unknown label reference");
                 return Err(ValidationError::UnknownLabel {
@@ -232,12 +240,9 @@ impl Dataset {
                 });
             }
 
-            let asset = self
-                .asset_by_id(annotation.asset_id)
-                .expect("asset id already validated");
             annotation
                 .geometry
-                .validate_within_image(asset.dimensions)
+                .validate_within_image(*dimensions)
                 .map_err(|source| ValidationError::InvalidGeometry {
                     annotation_id: annotation.id,
                     source,
@@ -252,7 +257,7 @@ impl Dataset {
                     classification_id: classification.id,
                 });
             }
-            if !asset_ids.contains(&classification.asset_id) {
+            if !asset_dimensions.contains_key(&classification.asset_id) {
                 tracing::warn!(classification_id = %classification.id, asset_id = %classification.asset_id, "unknown classification asset");
                 return Err(ValidationError::UnknownClassificationAsset {
                     classification_id: classification.id,
@@ -345,6 +350,14 @@ pub enum DatasetSplit {
     Unassigned,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetStatus {
+    #[default]
+    Pending,
+    Done,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AssetRecord {
     pub id: AssetId,
@@ -353,6 +366,8 @@ pub struct AssetRecord {
     pub dimensions: ImageDimensions,
     pub content_hash: Option<String>,
     pub split: DatasetSplit,
+    #[serde(default)]
+    pub status: AssetStatus,
     #[serde(default)]
     pub metadata: Metadata,
 }
@@ -371,6 +386,7 @@ impl AssetRecord {
             dimensions: ImageDimensions::new(width, height)?,
             content_hash: None,
             split: DatasetSplit::Unassigned,
+            status: AssetStatus::Pending,
             metadata: Metadata::new(),
         };
         tracing::debug!(asset_id = %record.id, "created image asset");
@@ -421,6 +437,11 @@ pub struct AnnotationRecord {
     pub source: AnnotationSource,
     pub confidence: Option<f32>,
     pub review_state: ReviewState,
+    /// Whether a person changed the shape or label of an annotation a model
+    /// or import created. `source` keeps saying who created it, so model
+    /// output accepted as is can be told apart from model output corrected.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub human_edited: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -508,7 +529,19 @@ impl AnnotationRecord {
     #[tracing::instrument(level = "debug", skip_all, fields(annotation_id = %self.id))]
     pub fn accept(&mut self) {
         tracing::debug!(annotation_id = %self.id, "accepting annotation");
-        self.review_state = ReviewState::Accepted;
+        self.set_review_state(ReviewState::Accepted);
+    }
+
+    pub fn set_review_state(&mut self, review_state: ReviewState) {
+        self.review_state = review_state;
+        self.updated_at = now_utc();
+    }
+
+    /// Records that a person changed this annotation's shape or label.
+    pub fn record_human_edit(&mut self) {
+        if !matches!(self.source, AnnotationSource::Human { .. }) {
+            self.human_edited = true;
+        }
         self.updated_at = now_utc();
     }
 
@@ -530,6 +563,7 @@ impl AnnotationRecord {
             source,
             confidence,
             review_state,
+            human_edited: false,
             created_at: now,
             updated_at: now,
             metadata: Metadata::new(),
@@ -722,6 +756,57 @@ mod tests {
         dataset.add_annotation(annotation);
 
         assert!(dataset.validate().is_ok());
+    }
+
+    #[test]
+    fn human_edits_mark_model_output_but_not_human_work() {
+        let asset_id = AssetId::new();
+        let label_id = LabelId::new();
+        let bbox = AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 2.0, 2.0).unwrap());
+        let model = ModelProvenance {
+            name: "detector".to_string(),
+            version: None,
+            invocation_id: None,
+            metadata: Metadata::new(),
+        };
+        let mut predicted =
+            AnnotationRecord::new_model(asset_id, label_id, bbox.clone(), model, Some(0.9));
+        let mut drawn = AnnotationRecord::new_human(asset_id, label_id, bbox, None);
+        let before = predicted.updated_at;
+
+        predicted.record_human_edit();
+        drawn.record_human_edit();
+
+        assert!(predicted.human_edited);
+        assert!(predicted.updated_at >= before);
+        assert!(matches!(predicted.source, AnnotationSource::Model(_)));
+        assert!(!drawn.human_edited);
+    }
+
+    #[test]
+    fn human_edited_is_optional_in_saved_records() {
+        let record = AnnotationRecord::new_human(
+            AssetId::new(),
+            LabelId::new(),
+            AnnotationGeometry::Bbox(BoundingBox::from_xywh(1.0, 1.0, 2.0, 2.0).unwrap()),
+            None,
+        );
+        let value = serde_json::to_value(&record).unwrap();
+        assert!(value.get("human_edited").is_none(), "omitted while false");
+
+        let parsed: AnnotationRecord = serde_json::from_value(value).unwrap();
+        assert!(!parsed.human_edited);
+    }
+
+    #[test]
+    fn asset_status_defaults_to_pending_for_older_records() {
+        let asset = AssetRecord::new_image(AssetLocation::local("images/a.jpg"), 640, 480).unwrap();
+        let mut value = serde_json::to_value(&asset).unwrap();
+        value.as_object_mut().unwrap().remove("status");
+
+        let parsed: AssetRecord = serde_json::from_value(value).unwrap();
+
+        assert_eq!(parsed.status, AssetStatus::Pending);
     }
 
     #[test]

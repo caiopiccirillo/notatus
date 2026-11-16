@@ -20,6 +20,20 @@ pub enum ExportError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("could not export the image for media {asset_id} from {}: {source}", path.display())]
+    Image {
+        asset_id: AssetId,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("media {asset_id} is stored at {location}, which export cannot read yet")]
+    UnsupportedLocation { asset_id: AssetId, location: String },
+    #[error(
+        "{} already exists and was not written by Notatus; choose another folder or remove it",
+        path.display()
+    )]
+    OutputExists { path: PathBuf },
     #[error("unknown asset {asset_id}")]
     UnknownAsset { asset_id: AssetId },
     #[error("unknown label {label_id}")]

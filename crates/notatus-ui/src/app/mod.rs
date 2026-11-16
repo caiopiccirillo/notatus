@@ -1,53 +1,44 @@
-use super::{AnnotationTool, UiState};
 use gpui::prelude::*;
 use gpui::{
-    App, Application, Bounds, Context, FontWeight, IntoElement, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ObjectFit, PathPromptOptions, Pixels, Point, Render, ScrollWheelEvent,
-    SharedString, Subscription, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
-    bounds, div, fill, img, outline, px, rgb, size,
+    App, Bounds, Pixels, WindowBackgroundAppearance, WindowBounds, WindowOptions, px, size,
 };
-use gpui_component::{
-    Colorize as _, Icon, IconName, Root, Selectable as _, Sizable as _, TitleBar, WindowExt,
-    button::{Button, ButtonVariant, ButtonVariants as _},
-    color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState},
-    dialog::DialogButtonProps,
-    input::{Input, InputEvent, InputState},
-    menu::{ContextMenuExt as _, DropdownMenu, PopupMenu, PopupMenuItem},
-    notification::Notification,
-    resizable::{h_resizable, resizable_panel},
-    scroll::ScrollableElement as _,
-    sidebar::{SidebarMenu, SidebarMenuItem},
-};
-use notatus_core::{
-    AnnotationGeometry, AnnotationId, AnnotationRecord, AssetId, AssetKind, AssetLocation,
-    AssetRecord, BoundingBox, ClassificationId, ClassificationRecord, Label, LabelId, Polygon,
-};
-use notatus_storage::{LocalProjectStore, MANIFEST_FILE, ProjectStore};
+use gpui_component::{Root, Theme, TitleBar};
 use std::cell::RefCell;
-use std::env;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use window::NotatusWindow;
 
-mod bottom_bar;
+mod actions;
+mod assets;
+mod autosave;
 mod canvas;
-mod commands;
+mod catalog;
+mod dock;
+mod edit_commands;
 mod export_commands;
+mod failures;
 mod helpers;
+mod label_commands;
+mod label_picker;
 mod left_dock;
 mod media_import;
+mod media_navigation;
+mod menus;
+mod model_run;
+mod palette;
 mod project_commands;
 mod project_session;
+mod review_queue;
 mod right_dock;
+mod runner_settings;
+mod shortcuts;
+mod status_bar;
 mod titlebar;
 mod tools;
+mod view_options;
 mod window;
 
 #[cfg(test)]
-mod gpui_tests;
-
-use project_session::ProjectLocation;
-use tools::ToolInteractionState;
-use window::{LeftDock, NotatusWindow, RightDock};
+mod tests;
 
 const DEFAULT_LABEL_COLOR: &str = "#2563eb";
 const LABEL_COLORS: [&str; 8] = [
@@ -63,13 +54,21 @@ struct CanvasImageLayout {
 
 type SharedImageLayout = Rc<RefCell<Option<CanvasImageLayout>>>;
 
-pub fn launch_gpui() {
-    Application::new()
-        .with_assets(gpui_component_assets::Assets)
-        .run(|cx: &mut App| {
-            gpui_component::init(cx);
+/// Registers the components, key bindings, and menus. The app and its tests
+/// both start here.
+fn init(cx: &mut App) {
+    gpui_component::init(cx);
+    actions::bind_keys(cx);
+    menus::install(cx);
+}
 
-            cx.on_window_closed(|cx| {
+pub fn launch_gpui() {
+    gpui_platform::application()
+        .with_assets(assets::AppAssets)
+        .run(|cx: &mut App| {
+            init(cx);
+
+            cx.on_window_closed(|cx, _window_id| {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }
@@ -86,8 +85,10 @@ pub fn launch_gpui() {
                     ..Default::default()
                 },
                 |window, cx| {
+                    Theme::sync_system_appearance(Some(window), cx);
                     let view = cx.new(|cx| {
-                        cx.observe_window_appearance(window, |_, window, _| {
+                        cx.observe_window_appearance(window, |_, window, cx| {
+                            Theme::sync_system_appearance(Some(window), cx);
                             window.refresh();
                         })
                         .detach();

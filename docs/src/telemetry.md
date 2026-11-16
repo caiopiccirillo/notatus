@@ -22,10 +22,13 @@ The subscriber always includes:
 - an `EnvFilter` built from `RUST_LOG`, defaulting to `notatus=info`
 - a `tracing_subscriber::fmt` layer for human-readable console output
 
-If an OTLP exporter can be built, an OpenTelemetry layer is appended so spans
-flow into the configured collector. If the exporter build fails or
-`OTEL_EXPORTER_OTLP_ENDPOINT` is unset, the binary logs a single info line
-and continues with the console layer only. Telemetry export failure must
+Exporters are built only when `OTEL_EXPORTER_OTLP_ENDPOINT`,
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
+is set, because the OTLP exporter otherwise falls back to `localhost:4318` and
+logs failed exports every few seconds when no collector runs there. Then an
+OpenTelemetry layer is appended so spans flow into the configured collector.
+If no endpoint is set or the exporter build fails, the binary logs a single
+info line and continues with the console layer only. Telemetry export failure must
 never break the desktop app.
 
 ## Exporters

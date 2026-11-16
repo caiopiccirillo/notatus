@@ -8,7 +8,7 @@ rust-version.workspace = true
 
 [features]
 default = ["gpui-ui"]
-gpui-ui = ["dep:gpui", "dep:gpui-component", "dep:gpui-component-assets", "dep:image"]
+gpui-ui = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component", "dep:gpui-kit-assets", "dep:image"]
 
 [dependencies]
 notatus-core.workspace = true
@@ -16,11 +16,20 @@ notatus-export.workspace = true
 notatus-infer.workspace = true
 notatus-storage.workspace = true
 notatus-telemetry.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
-gpui = { version = "0.2", optional = true }
-gpui-component = { version = "0.5.1", optional = true }
-gpui-component-assets = { version = "0.5.1", optional = true }
-image = { version = "0.25", optional = true }
+# GPUI is published by the gpui-kit project as a `gpui-pre-*` snapshot family.
+# These versions must match the exact pin used by gpui-component.
+gpui = { package = "gpui-pre", version = "=0.3.12", optional = true }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit", "x11", "wayland", "runtime_shaders"], optional = true }
+gpui-component = { version = "0.9.1", optional = true }
+gpui-kit-assets = { version = "0.9.1", optional = true }
+image = { version = "0.25.10", optional = true }
 
 [dev-dependencies]
-gpui = { version = "0.2", features = ["test-support"] }
+gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["test-support"] }
+gpui_wgpu = { package = "gpui-pre-wgpu", version = "=0.3.12", features = ["test-support"] }
+gpui-component = { version = "0.9.1", features = ["test-support"] }
+tempfile.workspace = true

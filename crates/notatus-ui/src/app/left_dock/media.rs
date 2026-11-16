@@ -1,153 +1,496 @@
-use super::*;
-use crate::app::helpers::*;
-use crate::app::media_import::open_media_picker;
+//! The media list: virtualized, searchable by name or path, and filtered by
+//! status, so it stays quick with thousands of images.
 
-impl NotatusWindow {
-    pub(super) fn media_dock(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let view = cx.weak_entity();
-        let import_view = cx.weak_entity();
+use crate::UiState;
+use crate::app::actions::{self, ImportFolder, ImportMedia};
+use crate::app::helpers::{asset_display_name, plural, record_element_id};
+use crate::app::media_import::{open_folder_picker, open_media_picker};
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, Context, IntoElement, SharedString, Subscription, Task, Window, div, px};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::list::{List, ListDelegate, ListEvent, ListItem, ListState};
+use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem};
+use gpui_component::tooltip::Tooltip;
+use gpui_component::{
+    ActiveTheme as _, Icon, IconName, IndexPath, Selectable as _, Sizable as _, ThemeColor,
+};
+use notatus_core::{AssetId, AssetStatus};
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(rgb(0xe5e7eb))
-                    .child(section_title("Media"))
-                    .child(
-                        Button::new("media-import")
-                            .small()
-                            .icon(Icon::new(IconName::Plus))
-                            .tooltip("Import media")
-                            .on_click(move |_, window, cx| {
-                                open_media_picker(import_view.clone(), window, cx);
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .p_2()
-                    .child(self.media_content(view)),
-            )
-    }
+/// Which media the list shows.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::app) enum MediaFilter {
+    #[default]
+    All,
+    Unfinished,
+    Done,
+    /// Media with drafts nobody has reviewed yet.
+    ToReview,
+}
 
-    fn media_content(&self, view: gpui::WeakEntity<NotatusWindow>) -> impl IntoElement {
-        if self.state.dataset.assets.is_empty() {
-            let import_view = view.clone();
-            div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap_3()
-                .p_4()
-                .text_sm()
-                .text_color(rgb(0x6b7280))
-                .child("Import media after setting up project labels")
-                .child(
-                    Button::new("media-empty-import")
-                        .small()
-                        .icon(Icon::new(IconName::Plus))
-                        .label("Import media")
-                        .on_click(move |_, window, cx| {
-                            open_media_picker(import_view.clone(), window, cx);
-                        }),
-                )
-                .into_any_element()
-        } else {
-            SidebarMenu::new()
-                .children(self.asset_items(view))
-                .into_any_element()
+impl MediaFilter {
+    const ALL: [Self; 4] = [Self::All, Self::Unfinished, Self::Done, Self::ToReview];
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::All => "All media",
+            Self::Unfinished => "Not done",
+            Self::Done => "Done",
+            Self::ToReview => "With drafts to review",
         }
     }
 
-    fn asset_items(&self, view: gpui::WeakEntity<NotatusWindow>) -> Vec<SidebarMenuItem> {
-        if self.state.dataset.assets.is_empty() {
-            vec![SidebarMenuItem::new("No media yet").disable(true)]
-        } else {
-            self.state
-                .dataset
-                .assets
-                .iter()
-                .map(|asset| {
-                    let asset_id = asset.id;
-                    let annotation_count = self
-                        .state
-                        .dataset
-                        .annotations
-                        .iter()
-                        .filter(|annotation| annotation.asset_id == asset_id)
-                        .count();
-                    let select_view = view.clone();
-                    let remove_view = view.clone();
-                    SidebarMenuItem::new(compact_asset_name(asset))
-                        .suffix(media_asset_actions(
-                            &asset.kind,
-                            annotation_count,
-                            asset_id,
-                            remove_view,
-                        ))
-                        .active(self.state.selected_asset == Some(asset_id))
-                        .on_click(move |_, _, cx| {
-                            let _ = select_view.update(cx, |window, cx| {
-                                if let Err(error) = window.state.select_asset(asset_id) {
-                                    window.status_message = Some(error.to_string());
-                                } else {
-                                    window.tools.fit_canvas_to_view();
-                                }
-                                cx.notify();
-                            });
-                        })
-                })
-                .collect()
+    fn accepts(self, row: &MediaRow) -> bool {
+        match self {
+            Self::All => true,
+            Self::Unfinished => !row.done,
+            Self::Done => row.done,
+            Self::ToReview => row.drafts > 0,
         }
     }
 }
 
-fn media_asset_actions(
-    kind: &AssetKind,
-    annotation_count: usize,
-    asset_id: AssetId,
-    view: gpui::WeakEntity<NotatusWindow>,
-) -> impl IntoElement {
+/// What a media row shows, taken from the dataset when it changes.
+#[derive(Clone, Debug, PartialEq)]
+pub(in crate::app) struct MediaRow {
+    id: AssetId,
+    name: SharedString,
+    /// Lowercased name and path, for search.
+    search_text: String,
+    done: bool,
+    annotations: usize,
+    drafts: usize,
+}
+
+pub(in crate::app) fn media_rows(state: &UiState) -> Vec<MediaRow> {
+    let index = state.index();
+    state
+        .dataset()
+        .assets
+        .iter()
+        .map(|asset| {
+            let name = asset_display_name(asset);
+            MediaRow {
+                id: asset.id,
+                search_text: format!("{name}\n{}", asset.location.display_path()).to_lowercase(),
+                name: name.into(),
+                done: asset.status == AssetStatus::Done,
+                annotations: index.annotation_count(asset.id),
+                drafts: index.draft_count(asset.id),
+            }
+        })
+        .collect()
+}
+
+#[derive(Default)]
+pub(in crate::app) struct MediaListDelegate {
+    rows: Vec<MediaRow>,
+    /// Indexes into `rows` that match the query and filter, in order.
+    visible: Vec<usize>,
+    query: String,
+    filter: MediaFilter,
+}
+
+impl MediaListDelegate {
+    fn refilter(&mut self) {
+        let query = self.query.to_lowercase();
+        self.visible = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| self.filter.accepts(row) && row.search_text.contains(&query))
+            .map(|(index, _)| index)
+            .collect();
+    }
+
+    pub(in crate::app) fn set_rows(&mut self, rows: Vec<MediaRow>) {
+        self.rows = rows;
+        self.refilter();
+    }
+
+    pub(in crate::app) fn filter(&self) -> MediaFilter {
+        self.filter
+    }
+
+    pub(in crate::app) fn set_filter(&mut self, filter: MediaFilter) {
+        self.filter = filter;
+        self.refilter();
+    }
+
+    pub(in crate::app) fn asset_at(&self, row: usize) -> Option<AssetId> {
+        self.visible.get(row).map(|&index| self.rows[index].id)
+    }
+
+    pub(in crate::app) fn position_of(&self, asset_id: AssetId) -> Option<usize> {
+        self.visible
+            .iter()
+            .position(|&index| self.rows[index].id == asset_id)
+    }
+}
+
+/// The row's annotation count, after a dot while drafts wait for review,
+/// with the details on hover.
+fn media_row_count(row: &MediaRow, colors: ThemeColor) -> impl IntoElement {
+    let annotations = format!("{} annotation{}", row.annotations, plural(row.annotations));
+    let tooltip: SharedString = match row.drafts {
+        0 => annotations.into(),
+        drafts => format!("{annotations}, {drafts} to review").into(),
+    };
     div()
+        .id(record_element_id("media-count", row.id.as_uuid().as_u128()))
         .flex_none()
         .flex()
         .items_center()
+        .justify_end()
         .gap_1()
-        .child(media_asset_meta(kind, annotation_count))
-        .child(
-            Button::new(asset_element_id("media-remove", asset_id))
-                .xsmall()
-                .ghost()
-                .danger()
-                .icon(Icon::new(IconName::Delete))
-                .tooltip("Remove media and its annotations")
-                .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    let _ = view.update(cx, |notatus, cx| {
-                        notatus.remove_asset(asset_id, cx);
-                    });
-                }),
-        )
+        .min_w(px(28.0))
+        .text_xs()
+        .text_color(colors.muted_foreground)
+        .when(row.drafts > 0, |count| {
+            count.child(div().size(px(6.0)).rounded_full().bg(colors.warning))
+        })
+        .child(row.annotations.to_string())
+        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
 }
 
-fn asset_element_id(prefix: &'static str, asset_id: AssetId) -> gpui::ElementId {
-    let value = asset_id.as_uuid().as_u128();
-    let high = (value >> 64) as u64;
-    let low = (value as u64).to_string();
-    (gpui::ElementId::from((prefix, high)), low).into()
+impl ListDelegate for MediaListDelegate {
+    type Item = ListItem;
+
+    fn perform_search(
+        &mut self,
+        query: &str,
+        _: &mut Window,
+        _: &mut Context<ListState<Self>>,
+    ) -> Task<()> {
+        self.query = query.to_string();
+        self.refilter();
+        Task::ready(())
+    }
+
+    fn items_count(&self, _: usize, _: &App) -> usize {
+        self.visible.len()
+    }
+
+    fn render_item(
+        &mut self,
+        ix: IndexPath,
+        _: &mut Window,
+        cx: &mut Context<ListState<Self>>,
+    ) -> Option<Self::Item> {
+        let row = self.visible.get(ix.row).map(|&index| &self.rows[index])?;
+        let colors = cx.theme().colors;
+        // Done or not leads the row, so the remaining work can be scanned
+        // down the list.
+        let status = if row.done {
+            Icon::new(IconName::CircleCheck).text_color(colors.success)
+        } else {
+            Icon::new(gpui_kit_assets::IconName::Circle).text_color(colors.muted_foreground)
+        };
+        // Everything sits in the item's one child: its suffix slot comes
+        // after a full-width wrapper and would be pushed out of view.
+        Some(
+            ListItem::new(ix.row).h(px(32.0)).px_2().rounded_md().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .text_sm()
+                    .child(status.small())
+                    .child(div().flex_1().min_w_0().truncate().child(row.name.clone()))
+                    .child(media_row_count(row, colors)),
+            ),
+        )
+    }
+
+    fn render_empty(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<ListState<Self>>,
+    ) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .text_sm()
+            .text_color(cx.theme().muted_foreground)
+            .child("No media matches")
+    }
+
+    fn set_selected_index(
+        &mut self,
+        _: Option<IndexPath>,
+        _: &mut Window,
+        _: &mut Context<ListState<Self>>,
+    ) {
+    }
+}
+
+pub(in crate::app) type MediaListState = ListState<MediaListDelegate>;
+
+impl NotatusWindow {
+    pub(in crate::app) fn new_media_list(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (gpui::Entity<MediaListState>, Subscription) {
+        let list =
+            cx.new(|cx| ListState::new(MediaListDelegate::default(), window, cx).searchable(true));
+        let subscription = cx.subscribe_in(&list, window, |this, list, event, _, cx| {
+            if let ListEvent::Confirm(ix) = event
+                && let Some(asset_id) = list.read(cx).delegate().asset_at(ix.row)
+            {
+                this.go_to_media(asset_id, cx);
+            }
+        });
+        (list, subscription)
+    }
+
+    /// Brings the list up to date with the dataset and the current media,
+    /// scrolling to the media when it changed. Cheap when neither did.
+    pub(in crate::app) fn sync_media_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let key = (self.state.revision(), self.state.selected_asset());
+        if self.media_list_synced == Some(key) {
+            return;
+        }
+        let asset_changed = self.media_list_synced.map(|(_, asset)| asset) != Some(key.1);
+        self.media_list_synced = Some(key);
+        let rows = media_rows(&self.state);
+        let selected = self.state.selected_asset();
+        self.media_list.update(cx, |list, cx| {
+            if list.delegate().rows != rows {
+                list.delegate_mut().set_rows(rows);
+            }
+            let row = selected.and_then(|asset| list.delegate().position_of(asset));
+            list.set_selected_index(row.map(IndexPath::new), window, cx);
+            if asset_changed {
+                list.scroll_to_selected_item(window, cx);
+            }
+            cx.notify();
+        });
+    }
+
+    fn set_media_filter(&mut self, filter: MediaFilter, cx: &mut Context<Self>) {
+        self.media_list.update(cx, |list, cx| {
+            list.delegate_mut().set_filter(filter);
+            cx.notify();
+        });
+        // Reselect the current media at its new position.
+        self.media_list_synced = None;
+        cx.notify();
+    }
+
+    /// Filter and import buttons, at the end of the dock's tab bar.
+    pub(super) fn media_actions(
+        &self,
+        view: gpui::WeakEntity<NotatusWindow>,
+        cx: &App,
+    ) -> impl IntoElement {
+        let folder_view = view.clone();
+        let filter_view = view.clone();
+        let current = self.media_list.read(cx).delegate().filter();
+        let has_media = !self.state.dataset().assets.is_empty();
+        div()
+            .flex()
+            .gap_1()
+            .when(has_media, |actions| {
+                actions.child(
+                    Button::new("media-filter")
+                        .xsmall()
+                        .ghost()
+                        .icon(Icon::new(gpui_kit_assets::IconName::ListFilter))
+                        .selected(current != MediaFilter::All)
+                        .tooltip(current.title())
+                        .dropdown_menu(move |menu, _, _| {
+                            MediaFilter::ALL.into_iter().fold(menu, |menu, filter| {
+                                let view = filter_view.clone();
+                                menu.item(
+                                    PopupMenuItem::new(filter.title())
+                                        .checked(filter == current)
+                                        .on_click(move |_, _, cx| {
+                                            let _ = view.update(cx, |notatus, cx| {
+                                                notatus.set_media_filter(filter, cx);
+                                            });
+                                        }),
+                                )
+                            })
+                        }),
+                )
+            })
+            .child(
+                Button::new("media-import")
+                    .xsmall()
+                    .ghost()
+                    .icon(Icon::new(IconName::Plus))
+                    .tooltip_with_action("Import images", &ImportMedia, Some(actions::CONTEXT))
+                    .on_click(move |_, window, cx| {
+                        open_media_picker(view.clone(), window, cx);
+                    }),
+            )
+            .child(
+                Button::new("media-import-folder")
+                    .xsmall()
+                    .ghost()
+                    .icon(Icon::new(IconName::FolderOpen))
+                    .tooltip_with_action("Import folder", &ImportFolder, Some(actions::CONTEXT))
+                    .on_click(move |_, window, cx| {
+                        open_folder_picker(folder_view.clone(), window, cx);
+                    }),
+            )
+    }
+
+    pub(super) fn media_content(
+        &self,
+        view: gpui::WeakEntity<NotatusWindow>,
+        cx: &App,
+    ) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        if self.state.dataset().assets.is_empty() {
+            return media_empty_state(colors).into_any_element();
+        }
+        let list = self.media_list.clone();
+        div()
+            .id("media-list")
+            .size_full()
+            .child(
+                List::new(&self.media_list)
+                    .small()
+                    .p_1()
+                    .search_placeholder("Search media"),
+            )
+            .context_menu(move |menu, _, cx| {
+                let list = list.read(cx);
+                let Some(asset_id) = list
+                    .right_clicked_index()
+                    .and_then(|ix| list.delegate().asset_at(ix.row))
+                else {
+                    return menu;
+                };
+                let view = view.clone();
+                menu.item(
+                    PopupMenuItem::new("Remove media and its annotations")
+                        .icon(Icon::new(IconName::Delete))
+                        .on_click(move |_, _, cx| {
+                            let _ = view.update(cx, |notatus, cx| {
+                                notatus.remove_asset(asset_id, cx);
+                            });
+                        }),
+                )
+            })
+            .into_any_element()
+    }
+}
+
+/// The canvas holds the import buttons while the project has no media, so
+/// the dock only says why it is empty.
+fn media_empty_state(colors: ThemeColor) -> gpui::Div {
+    div()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .text_sm()
+        .text_color(colors.muted_foreground)
+        .child("No media yet")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::UiState;
+    use notatus_core::BoundingBox;
+
+    fn delegate() -> (MediaListDelegate, Vec<AssetId>) {
+        let mut state = UiState::new_project("Media");
+        let label = state.add_label("Thing");
+        let ids: Vec<_> = ["/data/cat.png", "/data/dog.png", "/other/bird.png"]
+            .into_iter()
+            .map(|path| {
+                state
+                    .add_local_image_asset(path.to_string(), 100, 100)
+                    .unwrap()
+            })
+            .collect();
+        state.set_asset_status(ids[0], AssetStatus::Done).unwrap();
+        let bbox = BoundingBox::from_xywh(1.0, 1.0, 5.0, 5.0).unwrap();
+        state.add_human_bbox(ids[1], label, bbox, None).unwrap();
+        let mut delegate = MediaListDelegate::default();
+        delegate.set_rows(media_rows(&state));
+        (delegate, ids)
+    }
+
+    fn shown(delegate: &MediaListDelegate) -> Vec<AssetId> {
+        (0..delegate.visible.len())
+            .filter_map(|row| delegate.asset_at(row))
+            .collect()
+    }
+
+    #[test]
+    fn search_matches_names_and_folders() {
+        let (mut delegate, ids) = delegate();
+        delegate.query = "DOG".into();
+        delegate.refilter();
+        assert_eq!(shown(&delegate), vec![ids[1]]);
+
+        delegate.query = "/data/".into();
+        delegate.refilter();
+        assert_eq!(shown(&delegate), vec![ids[0], ids[1]]);
+    }
+
+    #[test]
+    fn filters_narrow_by_status_and_drafts() {
+        let (mut delegate, ids) = delegate();
+        delegate.set_filter(MediaFilter::Done);
+        assert_eq!(shown(&delegate), vec![ids[0]]);
+        delegate.set_filter(MediaFilter::Unfinished);
+        assert_eq!(shown(&delegate), vec![ids[1], ids[2]]);
+        delegate.set_filter(MediaFilter::ToReview);
+        assert_eq!(shown(&delegate), vec![ids[1]]);
+        assert_eq!(delegate.position_of(ids[1]), Some(0));
+        assert_eq!(delegate.position_of(ids[0]), None);
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use crate::app::tests::support::open_test_window;
+    use gpui::TestAppContext;
+    use gpui_component::IndexPath;
+    use gpui_component::list::ListEvent;
+
+    #[gpui::test]
+    fn the_list_follows_the_current_media_and_opens_what_is_clicked(cx: &mut TestAppContext) {
+        let (window, view) = open_test_window(cx);
+        let ids = view.update(cx, |notatus, cx| {
+            let ids: Vec<_> = ["/tmp/a.png", "/tmp/b.png", "/tmp/c.png"]
+                .into_iter()
+                .map(|path| notatus.state.add_local_image_asset(path, 10, 10).unwrap())
+                .collect();
+            notatus.state.select_asset(ids[0]).unwrap();
+            cx.notify();
+            ids
+        });
+        cx.run_until_parked();
+
+        cx.simulate_keystrokes(window.into(), "d");
+        cx.run_until_parked();
+        let selected_row = view.update(cx, |notatus, cx| {
+            notatus
+                .media_list
+                .read(cx)
+                .selected_index()
+                .map(|ix| ix.row)
+        });
+        assert_eq!(selected_row, Some(1), "the list marks the media D went to");
+
+        // A click on a row confirms it.
+        let list = view.read_with(cx, |notatus, _| notatus.media_list.clone());
+        list.update(cx, |_, cx| cx.emit(ListEvent::Confirm(IndexPath::new(2))));
+        cx.run_until_parked();
+        view.read_with(cx, |notatus, _| {
+            assert_eq!(notatus.state.selected_asset(), Some(ids[2]));
+        });
+    }
 }

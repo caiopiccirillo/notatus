@@ -1,20 +1,26 @@
-use super::*;
+use super::options::ExportFormat;
 use crate::app::helpers::exportable_annotation_count;
+use crate::app::window::{LeftDock, NotatusWindow};
+use gpui::{App, Context, Window};
+use gpui_component::WindowExt as _;
+use gpui_component::notification::Notification;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum ExportWorkflowIssue {
     Labels,
     Media,
     Annotations,
+    FinishedMedia,
     Format,
 }
 
 impl ExportWorkflowIssue {
-    fn target_dock(self) -> LeftDock {
+    /// The dock that fixes the issue, when one does.
+    fn target_dock(self) -> Option<LeftDock> {
         match self {
-            Self::Labels => LeftDock::Dataset,
-            Self::Media => LeftDock::Media,
-            Self::Annotations | Self::Format => LeftDock::Dataset,
+            Self::Labels => Some(LeftDock::Labels),
+            Self::Media | Self::FinishedMedia | Self::Annotations => Some(LeftDock::Media),
+            Self::Format => None,
         }
     }
 
@@ -22,6 +28,7 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Labels required",
             Self::Media => "Media required",
+            Self::FinishedMedia => "No finished media",
             Self::Annotations => "Annotations required",
             Self::Format => "Format required",
         }
@@ -31,6 +38,10 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Create a label before exporting annotations.",
             Self::Media => "Import media before exporting annotations.",
+            Self::FinishedMedia => {
+                "No media is marked done. Mark finished media with M or Done & next, \
+                 or turn off \"Finished media only\" in the export dialog."
+            }
             Self::Annotations => "Create exportable annotations before exporting.",
             Self::Format => "Select at least one export format.",
         }
@@ -40,6 +51,7 @@ impl ExportWorkflowIssue {
         match self {
             Self::Labels => "Create a label before exporting",
             Self::Media => "Import media before exporting",
+            Self::FinishedMedia => "Mark media done before exporting",
             Self::Annotations => "No exportable annotations",
             Self::Format => "Select an export format",
         }
@@ -48,15 +60,24 @@ impl ExportWorkflowIssue {
 
 impl NotatusWindow {
     pub(in crate::app) fn export_workflow_issue(&self) -> Option<ExportWorkflowIssue> {
-        if self.state.dataset.labels.is_empty() {
+        if self.state.dataset().labels.is_empty() {
             Some(ExportWorkflowIssue::Labels)
-        } else if self.state.dataset.assets.is_empty() {
+        } else if self.state.dataset().assets.is_empty() {
             Some(ExportWorkflowIssue::Media)
-        } else if exportable_annotation_count(&self.state.dataset) == 0
-            && exportable_classification_count(&self.state.dataset) == 0
+        } else if exportable_annotation_count(self.state.dataset()) == 0
+            && exportable_classification_count(self.state.dataset()) == 0
         {
             Some(ExportWorkflowIssue::Annotations)
-        } else if !self.export_yolo && !self.export_coco && !self.export_classifications {
+        } else if self.export.finished_only
+            && !self
+                .state
+                .dataset()
+                .assets
+                .iter()
+                .any(|asset| asset.status == notatus_core::AssetStatus::Done)
+        {
+            Some(ExportWorkflowIssue::FinishedMedia)
+        } else if !self.export.has_format() {
             Some(ExportWorkflowIssue::Format)
         } else {
             None
@@ -68,50 +89,39 @@ impl NotatusWindow {
         issue: ExportWorkflowIssue,
         cx: &mut Context<Self>,
     ) {
-        self.left_dock = issue.target_dock();
+        if let Some(dock) = issue.target_dock() {
+            self.left_dock = dock;
+        }
         self.status_message = Some(issue.status().to_string());
         cx.notify();
     }
 
-    pub(in crate::app) fn toggle_export_yolo(&mut self, cx: &mut Context<Self>) {
-        self.export_yolo = !self.export_yolo;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_yolo = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
+    pub(in crate::app) fn toggle_export_format(
+        &mut self,
+        format: ExportFormat,
+        cx: &mut Context<Self>,
+    ) {
+        self.status_message = if self.export.toggle(format) {
+            None
         } else {
-            self.status_message = None;
-        }
+            Some(ExportWorkflowIssue::Format.status().to_string())
+        };
         cx.notify();
     }
 
-    pub(in crate::app) fn toggle_export_coco(&mut self, cx: &mut Context<Self>) {
-        self.export_coco = !self.export_coco;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_coco = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
-        } else {
-            self.status_message = None;
-        }
-        cx.notify();
-    }
-
-    pub(in crate::app) fn toggle_export_classifications(&mut self, cx: &mut Context<Self>) {
-        self.export_classifications = !self.export_classifications;
-        if !self.export_yolo && !self.export_coco && !self.export_classifications {
-            self.export_classifications = true;
-            self.status_message = Some(ExportWorkflowIssue::Format.status().to_string());
-        } else {
-            self.status_message = None;
-        }
+    pub(in crate::app) fn toggle_export_finished_only(&mut self, cx: &mut Context<Self>) {
+        self.export.finished_only = !self.export.finished_only;
+        self.status_message = None;
         cx.notify();
     }
 }
 
 fn exportable_classification_count(dataset: &notatus_core::Dataset) -> usize {
+    let filter = notatus_export::AnnotationFilter::ready_for_training();
     dataset
         .classifications
         .iter()
-        .filter(|classification| classification.review_state != notatus_core::ReviewState::Rejected)
+        .filter(|classification| filter.accepts_classification(classification))
         .count()
 }
 

@@ -4,174 +4,219 @@ The UI implementation lives in `crates/notatus-ui`.
 
 The crate has two layers:
 
-- `UiState`, which is renderer-independent and testable.
-- `app`, which is compiled by default through the `gpui-ui` feature.
+- `state`: `UiState`, which is renderer-independent and testable.
+- `app`: the GPUI application, compiled by default through the `gpui-ui`
+  feature.
 
 ## UI State
 
 `UiState` wraps the canonical `Dataset` and tracks UI-specific state:
 
-- active annotation tool (`Select`, `Draw Box`, `Pan/Zoom`)
-- selected asset
-- selected annotation
-- selected label
-- dirty flag
+- active annotation tool (Select, Draw Box, Draw Polygon)
+- selected media, annotation, and label (the label new shapes get)
+- undo and redo history
+- the revision last saved, from which `is_dirty()` follows
 
-Implemented mutations:
+Its fields are private and read through accessors such as `dataset()` and
+`selected_asset()`. Every change is a method that validates it, records an
+undo step, and moves to a new revision, so autosave and the close guard see
+every edit. `batch` groups several changes into one undo step.
 
-- create a new project
-- create UI state from an existing validated dataset
-- rename the project
-- set active tool
-- mark saved
-- add label
-- select label
-- update label name
-- update label color
-- remove label
-- add local image asset
-- select asset
-- remove media asset
-- select annotation
-- update annotation label
-- add human bounding-box annotation
+The methods are grouped by file under `src/state/`:
+
+- `labels.rs`: create, rename, recolor, and remove labels
+- `media.rs`: import, select, remove, and finish media, and step between media
+- `annotations.rs`: draw boxes and polygons, select, relabel, move, and remove
+  annotations, and step between them
+- `review.rs`: review states, the review queue and its filter, and applying
+  model suggestions
+- `classifications.rs`: tag whole images with labels
+- `history.rs`: the undo stack and edit coalescing for drags and typing
+- `index.rs`: per-media annotations, per-label counts, and the review queue's
+  length, built in one pass and cached until the revision or the review filter
+  changes, so a frame drawn while dragging does not walk every annotation
 
 `UiState` always mutates the canonical dataset. It does not define a separate
 annotation schema.
 
-## GPUI Feature
+## GPUI App
 
-The native desktop shell runs by default:
+The native desktop app runs by default:
 
 ```sh
 cargo run -p notatus-ui
 ```
 
-The feature enables:
+The `gpui-ui` feature enables `gpui`, `gpui_platform`, `gpui-component`,
+`gpui-kit-assets` (Lucide icons), and `image` (reading image sizes on import).
 
-- `gpui`
-- `gpui-component`
-- `gpui-component-assets`
-- `image`
+`NotatusWindow` (`app/window.rs`) is the one view; its behavior is split into
+modules under `src/app/` by feature. Each module imports what it uses by
+name, with sibling modules spelled `crate::app::…`, so its dependencies show at
+the top of the file:
 
-The `image` crate is used to probe dimensions for selected image files before
-adding them as assets. The `gpui-component-assets` crate provides the SVG icons
-used by component controls such as the dock buttons.
+- `catalog.rs`: every command's name, icon, and group
+- `actions.rs`: actions, key bindings, and which method each action runs
+- `edit_commands.rs`: undo, selection, relabeling, and deleting annotations
+- `label_commands.rs`: creating, choosing, and removing labels
+- `media_navigation.rs`: moving between media and marking them done
+- `palette.rs`, `shortcuts.rs`: the command palette and the shortcut sheet
+- `failures.rs`: failures shown as notifications that stay until dismissed
+- `autosave.rs`, `project_commands.rs`, `project_session.rs`: saving, opening,
+  and closing projects
+- `media_import.rs`: importing files and folders
+- `model_run.rs`, `runner_settings.rs`: running models and remembering each
+  project's runner
+- `review_queue.rs`: accepting and rejecting, stepping through drafts across
+  media, and the queue's filter
+- `export_commands/`: the export dialog and writing exports
+- `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
+- `tools/`: tool definitions, in-progress drawing state, and the toolbar
+- `menus.rs`: the application menus
+- `dock.rs`, `left_dock/`, `right_dock/`, `status_bar.rs`, `titlebar.rs`,
+  `label_picker.rs`: the panels around the canvas
+- `view_options.rs`: zoom, fit, theme, and what the canvas shows
+- `assets.rs`: icons beyond the default set
+- `tests/`: tests that open the real window in GPUI's test platform
 
 ## Window Chrome
 
-The current shell uses `gpui-component::TitleBar` with GPUI's default platform
-decoration behavior. The titlebar is intentionally informational: it shows the
-application identity, current project name, and saved/unsaved status.
+The shell uses `gpui-component::TitleBar`. It holds the application menus
+(File, Edit, View, Annotate, Review, Model, Help) on the left, and the project
+name and save state on the right, the one place the save state is shown. The
+menus are gpui `Menu`s of actions: macOS shows them in its own menu bar, and
+Linux and Windows draw them with `gpui-component::menu::AppMenuBar`. Each item
+shows the key bound to its action. The catalog says what each command needs (a
+current media, a selection, drafts to review, a running model, a step to undo)
+and which toggle it shows; the window rebuilds the menus whenever that changes,
+so items that cannot run are greyed out and toggles that are on are ticked. On
+Linux the window may draw its own
+title bar; its close button goes through the same check as a compositor close
+request: pending changes are saved first, and a project never saved to a
+folder asks before it is discarded.
 
 ## Workflow Navigation
 
-Commands live in the workflow docks instead of the titlebar. The bottom bar
-switches the primary left dock in the order users usually work:
+Each dock has a tab bar naming its views, with the current view's buttons at
+its end: the left dock switches between Media and Labels, and the right dock
+between Annotations and Details. Nothing has to happen in a fixed order:
+media can be imported before labels exist, and drawing without a label creates
+one.
 
-- Dataset
-- Media
+Project persistence uses `notatus-storage::LocalProjectStore` through the
+autosave pipeline described in [Storage](storage.md). A project can be unsaved
+in memory or backed by a local folder.
 
-The Dataset dock owns project persistence, label management, and dataset handoff
-to external annotation formats. The Media dock owns media import and media
-selection.
+## Status Bar
 
-Project persistence uses `notatus-storage::LocalProjectStore`. A project can be
-unsaved in memory or backed by a local folder. Creating or opening a project
-while the current project is dirty asks before discarding changes.
+The status bar keeps the media navigation centered under the canvas: previous
+and next, the media's position and how many are done, and marking the media
+done. Annotation and review counts stay in the Annotations tab. Its left
+side shows the last command's feedback; its right side shows a running model's
+progress, with a stop button, and the zoom level, which fits the image when
+clicked.
 
-Attempts to jump ahead in the workflow, such as importing media before labels
-exist or drawing without an active label, redirect to the needed dock and show a
-GPUI component notification.
+## Keyboard
+
+The annotation loop is keyboard-driven. Every command is named and grouped
+once, in `catalog.rs`; the menus, the shortcut sheet, and the command palette
+are built from that list, and each shows the key bound to the command's action
+in `actions.rs`, so none of them can drift from the others or from the
+bindings. `?` opens the sheet, grouped like the menus and listing the commands
+that have a key. Ctrl+K opens the palette, which leads with the annotation
+commands, lists only the commands that can run now, ticks toggles that are on,
+says what Undo and Redo will undo or redo, and adds a row per label and per
+media.
+
+Modifier shortcuts are bound with gpui's `secondary` modifier, which is Cmd on
+macOS and Ctrl elsewhere; these docs write them with Ctrl.
+
+Commands that open pickers or dialogs (new, open, save, import, export) are
+deferred out of their action listener with `run_outside_update`, because they
+update the window through a weak handle and gpui panics on a nested update.
 
 ## Media Import
 
-The Media dock has an Import media command. It opens a file picker and currently
-accepts image files by probing dimensions with the `image` crate.
-
-Unsupported files are skipped and reported through the Info dock status field.
-The command is media-oriented so video and folder import can be added without
-changing the left dock structure.
+Import images (Ctrl+I) picks image files. Import folder (Ctrl+Shift+I) searches
+the chosen folders recursively for JPEG, PNG, BMP, GIF, WebP, and TIFF files,
+skipping hidden files and folders and not entering symlinked folders. Both read
+image sizes off the UI thread, recording the size after EXIF orientation so
+rotated phone photos match what the canvas shows. Files already in the project
+are skipped and reported in the status message.
 
 ## Left Docks
 
-The left panel is switched by bottom-bar dock buttons.
+- Media, the default: the media list, with import buttons in the tab bar
+- Labels: the label list, with an add button in the tab bar
 
-It contains separate docks for:
+The media list is gpui-component's virtualized `List`, so only the rows on
+screen are built, however large the project. A search field above it matches
+names and folders, and the filter button narrows it to media not done, done,
+or with drafts to review. Each row starts with a green check when the media is
+done or a hollow circle when it is not, then its name and annotation count,
+after an amber dot while drafts wait for review; hovering the count gives both
+numbers. The list marks the current media
+and scrolls to it when it changes. Removing media, which also removes its
+annotations, is in the row's right-click menu.
 
-- Dataset: project identity, persistence commands, label management, and export
-- Media: media import and media selection
-
-Media rows show their asset type, annotation count, and a compact remove action.
-They are selectable and update `UiState::selected_asset`. Removing media also
-removes annotations for that media. Annotation rows live in the right-side
-Annotations dock so media navigation stays compact.
-
-Label rows show their color swatch and annotation count. They are selectable and
-update `UiState::selected_label`. The selected-label editor can remove a label,
-which also removes annotations using that label.
-
-The Dataset dock exposes YOLO and COCO toggles, dataset/exportable annotation
-counts, and an export action. Export writes selected formats into subfolders
-under a user-selected output folder.
-
-Long filenames are shortened with a middle truncation helper before rendering.
-This keeps repeated screenshot-style filenames readable in a narrow panel.
-
-## Bottom Bar
-
-The bottom bar is the persistent dock switcher:
-
-- Dataset
-- Media
-- Annotations
-- Info
-
-The left group controls Dataset and Media. The right group controls the right
-dock.
+Label rows show their color swatch first, like the other label lists, then the
+name and annotation count; renaming, recoloring, and
+removing are in the row's options and right-click menus.
 
 ## Canvas Area
 
-The center panel previews the selected image with GPUI's `img` element:
+The center panel shows the selected image with GPUI's `img` element, fitted to
+the canvas, which fills the whole panel; S3 media is not previewed yet. A
+`gpui-component::toolbar::Toolbar` floats over its corner: the tools as one
+group, the active label, display options, the model, and fit. Tooltips show
+the keys bound to each command's action. Tool metadata and interaction state
+live in the app layer, and completed changes go through `UiState`.
 
-- local images are loaded from their selected path
-- object fit is `Contain`
-- loading and fallback messages are provided
-- S3 object previews currently show a not-implemented message
+- Box (B) draws on empty space and moves or resizes existing boxes; Alt always
+  draws. Drags shorter than four screen pixels are treated as clicks.
+- Polygon (P) adds a point per click and closes the shape on double-click.
+- Select (V) selects, moves, and resizes without drawing, and pans on empty
+  space.
+- The scroll wheel zooms around the pointer, up to 32 times the fit-to-view
+  size; F or a double-click fits the image again.
 
-The canvas has a tool-oriented interaction layer. Tool metadata and interaction
-state live in the app layer, while completed mutations go through `UiState`.
-The initial tools are:
+Every drag also ends when the button is released outside the canvas, so a box
+dragged past the edge is created at the edge and a move stays one undo step.
 
-- Draw Box maps window coordinates to image pixel coordinates, draws a preview
-  while dragging, clamps positions to image bounds, and creates
-  `AnnotationGeometry::Bbox` through `UiState`.
-- Select hit-tests bounding boxes in image space, selects the topmost matching
-  annotation, and keeps selection changes out of dataset dirty state.
-- Pan/Zoom drags the shared image viewport and zooms the viewport with the
-  scroll wheel.
-- Fit resets the viewport to the canvas-contained image bounds. It is available
-  as a toolbar button and by double-clicking the canvas.
-- Active Label selects the label used by Draw Box without switching away from
-  the canvas.
+## Model Suggestions
 
-Future segmentation tools should add new handlers to the canvas tool layer and
-commit completed polygons through the canonical core schema.
+Ctrl+R runs the project's model runner on the current image and Ctrl+Shift+R
+on every unfinished image; the sparkle button in the canvas toolbar does the
+former. Suggestions arrive as drafts whose tags show the model's confidence,
+ready for the Y/X review keys. See [Pre-Annotation](inference.md).
+
+## Review Queue
+
+The review queue is every draft in the project: media in list order, and each
+media's annotations in the order they were made. N goes to the next draft and
+Shift+N to the previous one, moving to its media, wrapping around at the end.
+With no annotation selected, the queue starts at the current media.
+
+Y and X review the selected annotation and move to the next draft on the same
+media. When none is left there, the app stays on the image and the status bar
+says so, so moving on is a choice: N goes on to the next media with drafts.
+
+The "To review" section of the Annotations dock shows how many drafts are left,
+with previous and next buttons and two filters: one label, and model
+suggestions below a confidence (90%, 75%, 50%, or 25%), which leaves out shapes
+a person drew. The filter also limits which draft Y and X move to. It lasts for
+the session and resets when another project opens.
 
 ## Right Docks
 
-The right panel is split into:
-
-- Annotations
-- Info
-
-The Annotations dock lists annotations for the selected media, highlights the
-matching canvas annotation while a row is hovered, and exposes compact row
-actions for changing an annotation label. The Info dock shows cross-cutting
-context such as active tool, active label, counts, review queue, status messages,
-and selected-media metadata.
-
-Label customization lives in the Labels left dock.
+- Annotations, the default: the review queue, then the selected media's image
+  labels, shown as tags in their label's color that can be removed, and its
+  objects. Each object row shows its label, which opens a menu to change it,
+  its shape and review state, and accept and reject toggles. Y accepts, X
+  rejects, and U resets the selected annotation; accepting or rejecting moves
+  to the next draft on the same media.
+- Details: the project's name, location, and creation date, the dataset's
+  totals, and the selected media's metadata.
 
 ## Layout
 
@@ -180,7 +225,7 @@ The main workspace uses `gpui-component` resizable panels:
 - left dock panel
 - center canvas
 - right dock panel
-- bottom dock switcher
+- status bar
 
 The panel group stores its state by element ID, so resizing is handled by the
 component library.

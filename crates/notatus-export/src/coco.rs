@@ -125,6 +125,9 @@ pub fn export_detection(
         if let Some(confidence) = annotation.confidence {
             attributes.insert("confidence".to_string(), Value::from(confidence));
         }
+        if annotation.human_edited {
+            attributes.insert("human_edited".to_string(), Value::Bool(true));
+        }
 
         annotations.push(CocoAnnotation {
             id: annotations.len() as u64 + 1,

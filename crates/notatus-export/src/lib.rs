@@ -5,6 +5,7 @@
 
 mod error;
 mod filter;
+mod selection;
 
 pub mod classification;
 pub mod coco;
@@ -12,6 +13,7 @@ pub mod yolo;
 
 pub use error::ExportError;
 pub use filter::AnnotationFilter;
+pub use selection::finished_media;
 
 #[cfg(test)]
 mod tests;

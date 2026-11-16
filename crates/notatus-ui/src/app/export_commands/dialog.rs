@@ -1,32 +1,46 @@
+//! The export dialog: formats, which media, and what will be written.
+//!
+//! The dialog layer rebuilds its content on every render, so the content
+//! reads the window's options and dataset each time rather than keeping a
+//! copy that could drift.
+
+use super::options::{ExportFormat, ExportOptions};
 use super::runner::export_annotations;
-use super::*;
-use crate::app::helpers::*;
+use crate::app::helpers::{
+    annotation_count_label, exportable_annotation_count, label_count_label, media_count_label,
+    section_title, themed,
+};
+use crate::app::window::NotatusWindow;
+use gpui::prelude::*;
+use gpui::{App, IntoElement, SharedString, Window, div, px};
+use gpui_component::checkbox::Checkbox;
+use gpui_component::description_list::DescriptionList;
+use gpui_component::dialog::DialogButtonProps;
+use gpui_component::switch::Switch;
+use gpui_component::{Sizable as _, WindowExt as _};
 
 pub(in crate::app) fn open_export_dialog(
     view: gpui::WeakEntity<NotatusWindow>,
     window: &mut Window,
     cx: &mut App,
 ) {
-    let Some(snapshot) = export_dialog_snapshot(view.clone(), cx) else {
-        return;
-    };
-    let snapshot = Rc::new(RefCell::new(snapshot));
-
-    window.open_dialog(cx, move |dialog, _, _| {
-        let content_snapshot = snapshot.clone();
+    window.open_alert_dialog(cx, move |dialog, _, cx| {
         let export_view = view.clone();
-
+        let content = view
+            .upgrade()
+            .map(|notatus| {
+                export_dialog_content(&ExportSummary::of(notatus.read(cx)), view.clone())
+                    .into_any_element()
+            })
+            .unwrap_or_else(|| div().into_any_element());
         dialog
             .confirm()
-            .w(px(420.0))
+            .width(px(440.0))
             .title("Export annotations")
-            .child(export_dialog_content(
-                view.clone(),
-                content_snapshot.clone(),
-            ))
+            .child(content)
             .button_props(
                 DialogButtonProps::default()
-                    .ok_text("Export")
+                    .ok_text("Choose folder and export")
                     .cancel_text("Cancel"),
             )
             .on_ok(move |_, window, cx| {
@@ -37,180 +51,123 @@ pub(in crate::app) fn open_export_dialog(
     });
 }
 
-fn export_dialog_snapshot(
-    view: gpui::WeakEntity<NotatusWindow>,
-    cx: &mut App,
-) -> Option<ExportDialogSnapshot> {
-    view.update(cx, |notatus, _| ExportDialogSnapshot {
-        media_count: notatus.state.dataset.assets.len(),
-        label_count: notatus.state.dataset.labels.len(),
-        annotation_count: notatus.state.dataset.annotations.len(),
-        classification_count: notatus.state.dataset.classifications.len(),
-        exportable_count: exportable_annotation_count(&notatus.state.dataset),
-        yolo: notatus.export_yolo,
-        coco: notatus.export_coco,
-        classifications: notatus.export_classifications,
-    })
-    .ok()
+/// What the dialog shows, read from the window.
+struct ExportSummary {
+    options: ExportOptions,
+    media: usize,
+    done: usize,
+    exportable_objects: usize,
+    image_labels: usize,
+    labels: usize,
+}
+
+impl ExportSummary {
+    fn of(notatus: &NotatusWindow) -> Self {
+        let dataset = notatus.state.dataset();
+        Self {
+            options: notatus.export,
+            media: dataset.assets.len(),
+            done: notatus.state.index().done_media,
+            exportable_objects: exportable_annotation_count(dataset),
+            image_labels: dataset.classifications.len(),
+            labels: dataset.labels.len(),
+        }
+    }
+
+    fn media_label(&self) -> String {
+        if self.options.finished_only {
+            format!("{} done, of {}", self.done, media_count_label(self.media))
+        } else {
+            media_count_label(self.media)
+        }
+    }
 }
 
 fn export_dialog_content(
+    summary: &ExportSummary,
     view: gpui::WeakEntity<NotatusWindow>,
-    snapshot: Rc<RefCell<ExportDialogSnapshot>>,
-) -> gpui::AnyElement {
-    let snapshot_read = snapshot.borrow();
+) -> impl IntoElement {
+    let formats = ExportFormat::ALL.into_iter().map(|format| {
+        let view = view.clone();
+        Checkbox::new(SharedString::from(format!("export-format-{format:?}")))
+            .checked(summary.options.includes(format))
+            .label(format.title())
+            .child(themed(move |theme| {
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format.description())
+            }))
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |notatus, cx| notatus.toggle_export_format(format, cx));
+            })
+    });
+
     div()
         .flex()
         .flex_col()
-        .gap_4()
+        .gap_5()
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap_2()
+                .gap_3()
                 .child(section_title("Formats"))
-                .child(export_dialog_format_buttons(
-                    view.clone(),
-                    snapshot.clone(),
-                    snapshot_read.yolo,
-                    snapshot_read.coco,
-                    snapshot_read.classifications,
-                )),
+                .children(formats),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_4()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(div().text_sm().child("Only media marked done"))
+                        .child(themed(|theme| {
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child("Unfinished images would be exported as empty")
+                        })),
+                )
+                .child(
+                    Switch::new("export-finished-only")
+                        .checked(summary.options.finished_only)
+                        .on_click(move |_, _, cx| {
+                            let _ = view
+                                .update(cx, |notatus, cx| notatus.toggle_export_finished_only(cx));
+                        }),
+                ),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(section_title("Summary"))
-                .child(metric(
-                    "Media",
-                    media_count_label(snapshot_read.media_count),
-                ))
-                .child(metric(
-                    "Labels",
-                    label_count_label(snapshot_read.label_count),
-                ))
-                .child(metric(
-                    "Annotations",
-                    annotation_count_label(snapshot_read.annotation_count),
-                ))
-                .child(metric(
-                    "Image labels",
-                    label_count_label(snapshot_read.classification_count),
-                ))
-                .child(metric(
-                    "Exportable objects",
-                    annotation_count_label(snapshot_read.exportable_count),
-                ))
-                .child(metric("Filter", "All non-rejected".to_string()))
-                .child(metric("Output", snapshot_read.output_label())),
+                .child(section_title("Will export"))
+                .child(
+                    DescriptionList::new()
+                        .columns(1)
+                        .bordered(false)
+                        .label_width(px(120.0))
+                        .small()
+                        .item("Media", summary.media_label(), 1)
+                        .item(
+                            "Objects",
+                            annotation_count_label(summary.exportable_objects),
+                            1,
+                        )
+                        .item("Image labels", summary.image_labels.to_string(), 1)
+                        .item("Labels", label_count_label(summary.labels), 1)
+                        .item("Formats", summary.options.formats_label(), 1),
+                )
+                .child(themed(|theme| {
+                    div().text_xs().text_color(theme.muted_foreground).child(
+                        "Rejected annotations and unreviewed model suggestions are left out.",
+                    )
+                })),
         )
-        .into_any_element()
-}
-
-fn export_dialog_format_buttons(
-    view: gpui::WeakEntity<NotatusWindow>,
-    snapshot: Rc<RefCell<ExportDialogSnapshot>>,
-    yolo: bool,
-    coco: bool,
-    classifications: bool,
-) -> impl IntoElement {
-    let yolo_view = view.clone();
-    let yolo_snapshot = snapshot.clone();
-    let coco_view = view.clone();
-    let coco_snapshot = snapshot.clone();
-    let classification_view = view;
-    let classification_snapshot = snapshot;
-    div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .child(
-            Button::new("export-dialog-format-yolo")
-                .small()
-                .label("YOLO")
-                .selected(yolo)
-                .on_click(move |_, _, cx| {
-                    {
-                        let mut snapshot = yolo_snapshot.borrow_mut();
-                        snapshot.yolo = !snapshot.yolo;
-                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
-                            snapshot.yolo = true;
-                        }
-                    }
-                    let _ = yolo_view.update(cx, |notatus, cx| {
-                        notatus.toggle_export_yolo(cx);
-                    });
-                }),
-        )
-        .child(
-            Button::new("export-dialog-format-coco")
-                .small()
-                .label("COCO")
-                .selected(coco)
-                .on_click(move |_, _, cx| {
-                    {
-                        let mut snapshot = coco_snapshot.borrow_mut();
-                        snapshot.coco = !snapshot.coco;
-                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
-                            snapshot.coco = true;
-                        }
-                    }
-                    let _ = coco_view.update(cx, |notatus, cx| {
-                        notatus.toggle_export_coco(cx);
-                    });
-                }),
-        )
-        .child(
-            Button::new("export-dialog-format-classification")
-                .small()
-                .label("Classification")
-                .selected(classifications)
-                .on_click(move |_, _, cx| {
-                    {
-                        let mut snapshot = classification_snapshot.borrow_mut();
-                        snapshot.classifications = !snapshot.classifications;
-                        if !snapshot.yolo && !snapshot.coco && !snapshot.classifications {
-                            snapshot.classifications = true;
-                        }
-                    }
-                    let _ = classification_view.update(cx, |notatus, cx| {
-                        notatus.toggle_export_classifications(cx);
-                    });
-                }),
-        )
-}
-
-struct ExportDialogSnapshot {
-    media_count: usize,
-    label_count: usize,
-    annotation_count: usize,
-    classification_count: usize,
-    exportable_count: usize,
-    yolo: bool,
-    coco: bool,
-    classifications: bool,
-}
-
-impl ExportDialogSnapshot {
-    fn output_label(&self) -> String {
-        let mut formats = Vec::new();
-        if self.yolo {
-            formats.push("YOLO");
-        }
-        if self.coco {
-            formats.push("COCO");
-        }
-        if self.classifications {
-            formats.push("Classification");
-        }
-
-        match formats.len() {
-            0 => "None".to_string(),
-            1 => formats[0].to_string(),
-            2 => format!("{} and {}", formats[0], formats[1]),
-            _ => format!("{}, {}, and {}", formats[0], formats[1], formats[2]),
-        }
-    }
 }

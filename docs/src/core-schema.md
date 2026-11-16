@@ -24,11 +24,12 @@ pub struct Dataset {
     pub labels: Vec<Label>,
     pub assets: Vec<AssetRecord>,
     pub annotations: Vec<AnnotationRecord>,
+    pub classifications: Vec<ClassificationRecord>,
 }
 ```
 
-It provides helpers to add labels, assets, and annotations, and lookup helpers
-for assets and labels.
+It provides helpers to add labels, assets, annotations, and classifications,
+and lookup helpers for assets and labels.
 
 ## Project Manifest
 
@@ -121,7 +122,11 @@ bounds.
 - source provenance
 - optional confidence
 - review state
-- timestamps
+- `human_edited`: whether a person changed the shape or label of an
+  annotation a model or import created. `source` keeps naming the creator, so
+  model output accepted as is can be told apart from model output corrected.
+  It is omitted from saved records while false.
+- timestamps; `updated_at` changes on every edit and review decision
 - arbitrary metadata
 
 Supported sources:
@@ -137,6 +142,13 @@ Supported review states:
 - `Accepted`
 - `Rejected`
 
+## Classifications
+
+`ClassificationRecord` labels a whole image rather than a region of it: an
+asset ID and a label ID, with the same provenance, optional confidence, review
+state, timestamps, and metadata as an annotation. An image can carry several
+classification labels.
+
 ## Validation
 
 `Dataset::validate()` checks:
@@ -148,6 +160,8 @@ Supported review states:
 - valid image dimensions
 - duplicate annotations
 - annotation references to known assets and labels
+- duplicate classifications, and classification references to known assets
+  and labels
 - confidence values in `0.0..=1.0`
 - geometry bounds against the referenced asset dimensions
 

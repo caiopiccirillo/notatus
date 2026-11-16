@@ -1,4 +1,6 @@
-use super::super::*;
+use crate::{AnnotationTool, UiState};
+use gpui::{Bounds, Pixels, Point};
+use notatus_core::{AnnotationId, AssetRecord, BoundingBox, Polygon};
 
 #[derive(Clone, Copy, Debug)]
 pub(in crate::app) struct DrawingState {
@@ -31,7 +33,10 @@ impl Default for CanvasViewport {
 
 impl CanvasViewport {
     const MIN_ZOOM: f32 = 0.25;
-    const MAX_ZOOM: f32 = 8.0;
+    /// Relative to fit-to-view. High enough that a 4000 pixel image shrunk
+    /// to fit can be zoomed to several screen pixels per image pixel, for
+    /// placing box edges exactly.
+    const MAX_ZOOM: f32 = 32.0;
 
     pub(in crate::app) fn reset(&mut self) {
         *self = Self::default();
@@ -92,6 +97,8 @@ pub(in crate::app) struct ToolInteractionState {
     pub(in crate::app) bbox_edit: Option<super::BboxEditState>,
     pub(in crate::app) pan: Option<PanState>,
     pub(in crate::app) viewport: CanvasViewport,
+    /// Pointer position in image space, tracked for the crosshair.
+    pub(in crate::app) pointer_image_pos: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -126,6 +133,24 @@ impl ToolInteractionState {
         self.pan = None;
     }
 
+    /// Drops any box or polygon being drawn.
+    pub(in crate::app) fn cancel_drawing(&mut self) {
+        self.draw_box = None;
+        self.draw_polygon = None;
+        self.cancel_interactions();
+    }
+
+    /// Removes the most recent polygon vertex, abandoning the polygon when
+    /// none remain.
+    pub(in crate::app) fn remove_last_polygon_point(&mut self) {
+        if let Some(polygon) = &mut self.draw_polygon {
+            polygon.points.pop();
+            if polygon.points.is_empty() {
+                self.draw_polygon = None;
+            }
+        }
+    }
+
     pub(in crate::app) fn begin_draw_box(&mut self, image_pos: (f64, f64)) {
         self.draw_box = Some(DrawingState {
             start_image_pos: image_pos,
@@ -139,7 +164,9 @@ impl ToolInteractionState {
         }
     }
 
-    pub(in crate::app) fn finish_draw_box(&mut self) -> Option<DrawBoxCompletion> {
+    /// Ends the drawing. Boxes narrower or shorter than `min_extent` image
+    /// pixels are dropped, as they come from clicks rather than drags.
+    pub(in crate::app) fn finish_draw_box(&mut self, min_extent: f64) -> Option<DrawBoxCompletion> {
         let drawing = self.draw_box.take()?;
         let (x1, y1) = drawing.start_image_pos;
         let (x2, y2) = drawing.current_image_pos;
@@ -147,7 +174,7 @@ impl ToolInteractionState {
         let min_y = y1.min(y2);
         let w = (x2 - x1).abs();
         let h = (y2 - y1).abs();
-        let bbox = if w > 1.0 && h > 1.0 {
+        let bbox = if w >= min_extent && h >= min_extent {
             BoundingBox::from_xywh(min_x, min_y, w, h).ok()
         } else {
             None
@@ -227,6 +254,7 @@ impl ToolInteractionState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui::{px, size};
 
     #[test]
     fn finishing_draw_box_returns_bbox_for_large_drag() {
@@ -234,7 +262,7 @@ mod tests {
 
         tools.begin_draw_box((30.0, 40.0));
         tools.update_draw_box((10.0, 20.0));
-        let completion = tools.finish_draw_box().unwrap();
+        let completion = tools.finish_draw_box(1.0).unwrap();
 
         assert_eq!(
             completion.bbox,
@@ -249,9 +277,22 @@ mod tests {
 
         tools.begin_draw_box((10.0, 10.0));
         tools.update_draw_box((10.5, 12.0));
-        let completion = tools.finish_draw_box().unwrap();
+        let completion = tools.finish_draw_box(1.0).unwrap();
 
         assert_eq!(completion.bbox, None);
+    }
+
+    #[test]
+    fn finishing_draw_box_uses_the_given_minimum() {
+        let mut tools = ToolInteractionState::default();
+
+        tools.begin_draw_box((10.0, 10.0));
+        tools.update_draw_box((22.0, 30.0));
+        assert_eq!(tools.finish_draw_box(15.0).unwrap().bbox, None);
+
+        tools.begin_draw_box((10.0, 10.0));
+        tools.update_draw_box((25.0, 30.0));
+        assert!(tools.finish_draw_box(15.0).unwrap().bbox.is_some());
     }
 
     #[test]
@@ -345,6 +386,19 @@ mod tests {
         assert_eq!(viewport.zoom, 4.0);
         assert_eq!(viewport.pan_x, 200.0);
         assert_eq!(viewport.pan_y, 150.0);
+    }
+
+    #[test]
+    fn removing_polygon_points_abandons_empty_polygon() {
+        let mut tools = ToolInteractionState::default();
+        tools.add_polygon_point((1.0, 1.0));
+        tools.add_polygon_point((5.0, 1.0));
+
+        tools.remove_last_polygon_point();
+        assert_eq!(tools.polygon_point_count(), 1);
+
+        tools.remove_last_polygon_point();
+        assert!(tools.draw_polygon.is_none());
     }
 
     #[test]

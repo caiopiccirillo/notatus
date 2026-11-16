@@ -1,101 +1,56 @@
 # Roadmap
 
-This page documents likely next steps based on the current implementation.
+Likely next steps, most valuable first, based on the current implementation.
 
 ## Near Term
 
-### Canvas Tools
+### More Model Tasks
 
-Extend the canvas tool architecture:
+Runners can only suggest boxes and polygons for object detection. Next:
+image classification, interactive segmentation (click to get a mask), and
+running a model in the background while annotating.
 
-- add annotation edit handles
-- add keyboard shortcuts and cursor affordances for tools
-- add zoom reset and fit-to-screen controls
-- keep new canvas interactions routed through the GPUI tool layer
+### Undo Without Copying the Dataset
 
-### Label Management
+Undo snapshots the whole dataset on every change, up to 200 times. Recording
+only the records each change touches keeps memory flat on large projects and
+is a first step toward an operation log.
 
-Build on the initial label dock controls:
+### Media Thumbnails
 
-- selecting an active label for new annotations
-- deleting and reordering labels
-- validation for duplicate label names
-
-### Project Workflow
-
-Build on the local project commands:
-
-- recent projects
-- richer save/discard/cancel prompts
-- autosave preferences
-- project folder validation and migration UX
-
-### Export Commands
-
-Add UI commands around the implemented adapters:
-
-- export YOLO detection dataset
-- import YOLO detections
-- export COCO detection dataset
+The media list is virtualized, searchable, and filtered by status, but shows
+names only. Thumbnails need a cache of downscaled images, built off the UI
+thread, so scrolling thousands of images stays smooth.
 
 ## Medium Term
 
-### Polygon Segmentation
+### Polygon Editing
 
-The core schema already includes polygons. The UI needs:
+Polygons can be drawn and relabeled but not reshaped: vertex dragging,
+inserting, and deleting are missing.
 
-- a segmentation tool entry
-- point placement
-- polygon closure
-- vertex editing
-- polygon validation
+### Label Management
 
-### Model Runner Integration
-
-Build a process manager around `notatus-infer`:
-
-- configure runner specs
-- send JSON-lines requests
-- receive predictions
-- convert predictions to draft annotations
-- surface diagnostics
+- reordering labels, which also sets YOLO class indices
+- warning about duplicate label names
 
 ### Object Storage
 
-The schema can represent S3-compatible object locations. Future work should add:
-
-- credential configuration
-- object listing
-- local cache
-- content hashing
-- version-aware references
+The schema can represent S3-compatible locations. Future work: credentials,
+object listing, a local cache, content hashing, and version-aware references.
 
 ## Longer Term
 
 ### Video Annotation
 
-Extend assets and UI workflows for video:
-
-- frame extraction or timeline rendering
-- temporal annotation spans
-- object tracks
-- interpolation
-- tracking model integration
+Frame extraction or timeline rendering, temporal spans, object tracks,
+interpolation, and tracking-model integration.
 
 ### Dataset Versioning
 
-Build on the local-first project format:
+Dataset snapshots, manifest-level version metadata, and integration points for
+DVC, lakeFS, Git, or object-store version IDs.
 
-- dataset snapshots
-- manifest-level version metadata
-- integration points for DVC, lakeFS, Git, or object-store version IDs
+### Collaboration
 
-### Review Workflow
-
-Add higher-level quality controls:
-
-- review queues
-- accept/reject shortcuts
-- annotator attribution
-- model-vs-human comparison
-- audit trail views
+Annotator attribution, model-versus-human comparison, and audit-trail views.

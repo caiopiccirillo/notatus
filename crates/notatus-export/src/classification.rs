@@ -1,5 +1,5 @@
-use crate::ExportError;
-use notatus_core::{ClassificationId, Dataset, ReviewState};
+use crate::{AnnotationFilter, ExportError};
+use notatus_core::{ClassificationId, Dataset};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,6 +25,7 @@ pub struct ClassificationExportSummary {
 ))]
 pub fn export_classifications(
     dataset: &Dataset,
+    filter: &AnnotationFilter,
 ) -> Result<Vec<ClassificationExportRow>, ExportError> {
     dataset.validate()?;
 
@@ -32,7 +33,7 @@ pub fn export_classifications(
     for classification in dataset
         .classifications
         .iter()
-        .filter(|classification| classification.review_state != ReviewState::Rejected)
+        .filter(|classification| filter.accepts_classification(classification))
     {
         let asset =
             dataset
@@ -65,12 +66,13 @@ pub fn export_classifications(
 #[tracing::instrument(level = "info", skip_all, fields(output_dir = %output_dir.as_ref().display()))]
 pub fn write_classification_export(
     dataset: &Dataset,
+    filter: &AnnotationFilter,
     output_dir: impl AsRef<Path>,
 ) -> Result<ClassificationExportSummary, ExportError> {
     let output_dir = output_dir.as_ref();
     create_dir_all(output_dir)?;
 
-    let rows = export_classifications(dataset)?;
+    let rows = export_classifications(dataset, filter)?;
     let json_path = output_dir.join("classifications.json");
     let json = serde_json::to_string_pretty(&rows).map_err(|source| ExportError::Json {
         path: json_path.clone(),
@@ -85,7 +87,10 @@ pub fn write_classification_export(
         classification_count: rows.len(),
     };
 
-    tracing::info!(count = summary.classification_count, "classification export written");
+    tracing::info!(
+        count = summary.classification_count,
+        "classification export written"
+    );
     Ok(summary)
 }
 

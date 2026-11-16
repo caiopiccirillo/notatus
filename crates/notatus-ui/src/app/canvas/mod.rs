@@ -1,5 +1,13 @@
-use super::helpers::*;
-use super::*;
+use crate::AnnotationTool;
+use crate::app::helpers::{canvas_message, model_confidence_label};
+use crate::app::window::NotatusWindow;
+use crate::app::{DEFAULT_LABEL_COLOR, SharedImageLayout};
+use gpui::prelude::*;
+use gpui::{Context, IntoElement, ObjectFit, SharedString, div, img};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _};
+use notatus_core::{AnnotationRecord, AssetLocation, AssetRecord, ReviewState};
+use std::path::PathBuf;
 
 mod color;
 mod hit_test;
@@ -7,9 +15,14 @@ mod interaction;
 mod layout;
 mod overlay;
 
+use crate::app::tools::{CanvasViewport, DrawingState, PolygonDrawingState};
+use crate::app::view_options::CanvasViewOptions;
 use interaction::attach_canvas_interactions;
 use layout::{apply_viewport_to_bounds, canvas_image_layout, compute_image_bounds};
-use overlay::{AnnotationOverlay, paint_annotations, paint_drawing_preview, paint_polygon_preview};
+use overlay::{
+    AnnotationOverlay, paint_annotations, paint_crosshair, paint_drawing_preview,
+    paint_polygon_preview,
+};
 
 impl NotatusWindow {
     pub(super) fn canvas_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -18,109 +31,183 @@ impl NotatusWindow {
         let polygon_drawing = self.tools.draw_polygon.clone();
         let canvas_image_layout = self.canvas_image_layout.clone();
         let annotations: Vec<_> = selected_asset
-            .map(|asset| self.annotations_for_asset(asset))
+            .map(|asset| self.state.annotations_on(asset.id))
             .unwrap_or_default();
+        let options = self.view_options;
         let state_labels: Vec<_> = annotations
             .iter()
+            .filter(|_| !options.hide_annotations)
             .map(|ann| {
-                let label = self.state.dataset.label_by_id(ann.label_id);
+                let label = self.state.dataset().label_by_id(ann.label_id);
                 let color = label
                     .and_then(|l| l.color.as_deref())
                     .unwrap_or(DEFAULT_LABEL_COLOR);
+                let selected = self.state.selected_annotation() == Some(ann.id);
                 AnnotationOverlay {
                     id: ann.id,
                     geometry: ann.geometry.clone(),
                     color: color.to_string(),
-                    selected: self.state.selected_annotation == Some(ann.id),
+                    selected,
                     hovered: self.hovered_annotation == Some(ann.id),
+                    label: options
+                        .show_labels
+                        .then(|| label.map(|l| annotation_tag(&l.name, ann)))
+                        .flatten(),
+                    dimmed: options.focus_selected
+                        && self.state.selected_annotation().is_some()
+                        && !selected,
+                    rejected: ann.review_state == ReviewState::Rejected,
                 }
             })
             .collect();
-        let active_tool = self.state.active_tool;
+        let active_tool = self.state.active_tool();
         let viewport = self.tools.viewport;
         let canvas_cursor = self.canvas_cursor;
-        let (empty_title, empty_message) = if self.state.dataset.labels.is_empty() {
-            ("Create labels to continue", "No labels in this project")
-        } else if self.state.dataset.assets.is_empty() {
-            ("Import media to continue", "No media in this project")
-        } else {
-            ("Select media to annotate", "No media selected")
-        };
+        let has_media = !self.state.dataset().assets.is_empty();
         let preview_color = self
             .selected_label()
             .and_then(|l| l.color.as_deref())
             .unwrap_or(DEFAULT_LABEL_COLOR)
             .to_string();
         let view = cx.weak_entity();
+        let colors = cx.theme().colors;
 
+        // The image fills the whole center panel, with the toolbar floating
+        // over its corner.
         div()
             .size_full()
-            .p_6()
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0xf3f4f6))
-            .child(
-                div()
-                    .size_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .border_1()
-                    .border_color(rgb(0xcbd5e1))
-                    .bg(rgb(0xffffff))
-                    .overflow_hidden()
-                    .relative()
-                    .when_some(selected_asset, |canvas, asset| {
-                        canvas.child(interactive_image_canvas(InteractiveImageCanvas {
-                            asset,
-                            view,
-                            drawing,
-                            polygon_drawing,
-                            shared_image_layout: canvas_image_layout,
-                            annotations: &state_labels,
+            .bg(colors.muted)
+            .overflow_hidden()
+            .relative()
+            .when_some(selected_asset, |canvas, asset| {
+                canvas.child(interactive_image_canvas(InteractiveImageCanvas {
+                    asset,
+                    view,
+                    drawing,
+                    polygon_drawing,
+                    shared_image_layout: canvas_image_layout,
+                    annotations: &state_labels,
+                    active_tool,
+                    viewport,
+                    canvas_cursor,
+                    preview_color: preview_color.clone(),
+                    options,
+                    crosshair: (options.crosshair
+                        && matches!(
                             active_tool,
-                            viewport,
-                            canvas_cursor,
-                            preview_color: preview_color.clone(),
-                        }))
-                    })
-                    .when(selected_asset.is_none(), |canvas| {
-                        canvas.child(canvas_empty_state(empty_title, empty_message))
-                    })
-                    .child(self.canvas_toolbar(cx)),
-            )
+                            AnnotationTool::DrawBox | AnnotationTool::DrawPolygon
+                        ))
+                    .then_some(self.tools.pointer_image_pos)
+                    .flatten(),
+                }))
+            })
+            .when(selected_asset.is_none(), |canvas| {
+                canvas.child(canvas_empty_state(has_media))
+            })
+            .child(self.canvas_toolbar(cx))
     }
 }
 
-fn canvas_empty_state(title: &'static str, message: &'static str) -> impl IntoElement {
-    div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap_1()
-        .text_center()
-        .child(
-            div()
-                .text_lg()
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(title),
+/// Label tag text: the review outcome once decided, and for a model's
+/// suggestion still waiting for review, the model's confidence, so
+/// suggestions stand apart from boxes a person drew.
+fn annotation_tag(name: &str, annotation: &AnnotationRecord) -> SharedString {
+    match annotation.review_state {
+        ReviewState::Accepted => format!("{name} ✓").into(),
+        ReviewState::Rejected => format!("{name} ✗").into(),
+        ReviewState::Draft | ReviewState::Reviewed => match model_confidence_label(annotation) {
+            Some(confidence) => format!("{name} {confidence}").into(),
+            None => SharedString::from(name.to_string()),
+        },
+    }
+}
+
+/// Guides a new project to its first image, with the keys that do the same.
+fn canvas_empty_state(has_media: bool) -> impl IntoElement {
+    use crate::app::actions::{self, CommandPalette, ImportFolder, ImportMedia, OpenProject};
+    use gpui::Action as _;
+    use gpui_component::empty::{
+        Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant,
+        EmptyTitle,
+    };
+
+    let (title, description) = if has_media {
+        (
+            "Select media to annotate",
+            "Pick an image from the Media list, or press D to start with the first one.",
         )
-        .child(div().text_sm().text_color(rgb(0x4b5563)).child(message))
+    } else {
+        (
+            "Import images to start annotating",
+            "Labels can be created while you draw.",
+        )
+    };
+    // Each button's tooltip shows its key, as bound on this platform.
+    let action_button = |id: &'static str, label: &'static str, action: Box<dyn gpui::Action>| {
+        Button::new(id)
+            .small()
+            .label(label)
+            .tooltip_with_action(label, action.as_ref(), Some(actions::CONTEXT))
+            .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+    };
+
+    Empty::new()
+        .header(
+            EmptyHeader::new()
+                .media(
+                    EmptyMedia::new()
+                        .with_variant(EmptyMediaVariant::Icon)
+                        .child(Icon::new(IconName::GalleryVerticalEnd)),
+                )
+                .title(EmptyTitle::new().child(title))
+                .description(EmptyDescription::new().child(description)),
+        )
+        .content(
+            EmptyContent::new().child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        action_button("empty-import", "Import images", ImportMedia.boxed_clone())
+                            .primary(),
+                    )
+                    .child(action_button(
+                        "empty-import-folder",
+                        "Import folder",
+                        ImportFolder.boxed_clone(),
+                    ))
+                    .when(!has_media, |row| {
+                        row.child(action_button(
+                            "empty-open",
+                            "Open project",
+                            OpenProject.boxed_clone(),
+                        ))
+                    })
+                    .child(action_button(
+                        "empty-palette",
+                        "Commands",
+                        CommandPalette.boxed_clone(),
+                    )),
+            ),
+        )
 }
 
 struct InteractiveImageCanvas<'a> {
     asset: &'a AssetRecord,
     view: gpui::WeakEntity<NotatusWindow>,
-    drawing: Option<super::tools::DrawingState>,
-    polygon_drawing: Option<super::tools::PolygonDrawingState>,
+    drawing: Option<DrawingState>,
+    polygon_drawing: Option<PolygonDrawingState>,
     shared_image_layout: SharedImageLayout,
     annotations: &'a [AnnotationOverlay],
     active_tool: AnnotationTool,
-    viewport: super::tools::CanvasViewport,
+    viewport: CanvasViewport,
     canvas_cursor: Option<gpui::CursorStyle>,
     preview_color: String,
+    options: CanvasViewOptions,
+    crosshair: Option<(f64, f64)>,
 }
 
 fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElement {
@@ -135,6 +222,8 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
         viewport,
         canvas_cursor,
         preview_color,
+        options,
+        crosshair,
     } = args;
 
     let image_path = match &asset.location {
@@ -186,14 +275,19 @@ fn interactive_image_canvas(args: InteractiveImageCanvas<'_>) -> impl IntoElemen
                     }
                     img_bounds
                 },
-                move |_bounds, img_bounds, window, _cx| {
+                move |_bounds, img_bounds, window, cx| {
                     paint_annotations(
                         &annotations_for_paint,
                         img_bounds,
                         img_width,
                         img_height,
+                        options.fill_opacity,
                         window,
+                        cx,
                     );
+                    if let Some(pos) = crosshair {
+                        paint_crosshair(pos, img_bounds, img_width, img_height, window);
+                    }
                     if let Some(drawing) = drawing {
                         paint_drawing_preview(
                             drawing,

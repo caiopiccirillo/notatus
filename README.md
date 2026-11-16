@@ -3,9 +3,9 @@
 Local-first visual data annotation in Rust.
 
 Notatus is being built as a desktop annotation tool for computer-vision
-datasets, starting with image bounding boxes and a schema that can grow into
-segmentation, video tracking, remote object storage, and model-assisted
-pre-annotation.
+datasets: boxes, polygons, and whole-image labels on images, model-assisted
+pre-annotation, and YOLO/COCO export, with a schema that can grow into video
+tracking and remote object storage.
 
 ## Current Shape
 
@@ -15,12 +15,14 @@ This repository is a Rust workspace split by responsibility:
   state, and validation.
 - `notatus-storage`: local project folder persistence using deterministic
   JSON/JSONL files.
-- `notatus-export`: YOLO detection import/export and COCO detection export.
+- `notatus-export`: YOLO detection import/export, COCO detection export, and
+  image classification export.
 - `notatus-infer`: JSON-lines protocol for external pre-annotation model
-  runners.
+  runners, and the process manager that runs them.
 - `notatus-telemetry`: OpenTelemetry tracing and metrics init with OTLP/HTTP
   export and a console fallback when no endpoint is configured.
-- `notatus-ui`: testable desktop UI state plus an optional GPUI launch feature.
+- `notatus-ui`: the GPUI desktop app, around a renderer-independent and
+  testable `UiState`.
 
 The core design rule is that YOLO, COCO, CVAT, model outputs, and UI state are
 adapters around the Notatus schema. They are not the source of truth.
@@ -35,6 +37,8 @@ A local project folder contains:
   optional content hash.
 - `annotations.jsonl`: annotation records with geometry, provenance, confidence,
   review state, timestamps, and metadata.
+- `classifications.jsonl`: whole-image labels, with the same provenance and
+  review state.
 
 Geometry is stored in original image pixel coordinates. Exporters convert to
 format-specific coordinates, such as YOLO normalized center coordinates.
@@ -45,12 +49,28 @@ Pre-annotation is intentionally an external-process boundary in v1. A runner can
 use Python, ONNX Runtime, TensorRT, a container, or a remote shim as long as it
 speaks the JSON-lines request/response protocol in `notatus-infer`.
 
+In the app, choose a runner with Model → "Choose model runner…", then press
+Ctrl+R to suggest annotations on the current image or Ctrl+Shift+R on every
+unfinished one. `examples/runners/ultralytics_runner.py` runs Ultralytics
+YOLO models. See `docs/src/inference.md`.
+
 Model predictions become draft annotations with model provenance and confidence.
-They are never silently treated as accepted ground truth.
+They are never silently treated as accepted ground truth: they show their
+confidence until reviewed, and exports leave out suggestions nobody reviewed.
 
 ## Development
 
 Requires Rust 1.96.0 or newer.
+
+On Linux, the desktop UI links against the X11 keyboard libraries, so building
+`notatus-ui` (including its tests) needs their development packages:
+
+```sh
+sudo apt install libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+```
+
+Fontconfig is loaded at runtime (see `.cargo/config.toml`), so it needs no
+development package.
 
 Run all tests with default features:
 
@@ -78,9 +98,8 @@ mdbook serve docs
 
 ## Near-Term Roadmap
 
-- Add image-folder import and content hashing (single-image import with
-  dimension probing already ships in the Media dock).
-- Add an external model runner process manager around the existing
-  `notatus-infer` protocol.
-- Add polygon annotation in the canvas tool layer once the bounding-box
-  workflow is reliable.
+- Model tasks beyond detection: image classification and click-to-segment.
+- Thumbnails in the media list.
+- Make undo record changes instead of copying the dataset.
+
+See `docs/src/roadmap.md` for the longer list.

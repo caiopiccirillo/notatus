@@ -1,11 +1,15 @@
-//! Desktop application state for the Notatus GPUI client.
+//! The Notatus desktop app.
 //!
-//! The GPUI windowing code is intentionally thin. The mutable annotation state
-//! lives here so the same behavior can be tested without a renderer.
+//! `state` holds the project being edited, its selection, and undo history,
+//! independent of any renderer so it can be tested on its own. `app` is the
+//! GPUI window around it, compiled through the default `gpui-ui` feature.
 
 mod state;
 
-pub use state::{AnnotationTool, UiMutationError, UiState};
+pub use state::{
+    AnnotationTool, CoalesceKey, DatasetIndex, Direction, ModelPredictionSummary, ReviewFilter,
+    UiMutationError, UiState,
+};
 
 #[cfg(feature = "gpui-ui")]
 mod app;
