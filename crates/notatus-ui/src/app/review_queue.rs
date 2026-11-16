@@ -10,7 +10,7 @@ use gpui::{Context, div};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_component::{Disableable as _, Icon, IconName, Sizable as _};
-use notatus_core::{Label, LabelId};
+use notatus_core::{Label, LabelId, ReviewState};
 
 /// Confidences the filter offers, from 0 to 1.
 const CONFIDENCE_THRESHOLDS: [f32; 4] = [0.9, 0.75, 0.5, 0.25];
@@ -122,6 +122,53 @@ impl NotatusWindow {
                     ))
                     .child(confidence_filter_menu(filter.below_confidence, view)),
             )
+    }
+
+    /// Reviews the selected annotation, or the first one on this media when
+    /// none is selected. Accepting or rejecting then selects the next draft
+    /// in the review queue on the same media, so a review pass is one key per
+    /// shape. It stays on the media when none is left there, so moving on
+    /// is a choice: N goes to the next draft on other media.
+    pub(super) fn review_selection(&mut self, review_state: ReviewState, cx: &mut Context<Self>) {
+        let target = self
+            .state
+            .selected_annotation()
+            .or_else(|| self.state.adjacent_annotation(Direction::Next));
+        let Some(annotation_id) = target else {
+            self.status_message = Some("No annotation to review".to_string());
+            cx.notify();
+            return;
+        };
+        if let Err(error) = self
+            .state
+            .set_annotation_review_state(annotation_id, review_state)
+        {
+            self.status_message = Some(error.to_string());
+            cx.notify();
+            return;
+        }
+        let done = match review_state {
+            ReviewState::Accepted => "Accepted annotation",
+            ReviewState::Rejected => "Rejected annotation",
+            ReviewState::Reviewed => "Marked reviewed",
+            ReviewState::Draft => "Reset to draft",
+        };
+        let next = (review_state != ReviewState::Draft)
+            .then(|| self.state.next_draft_annotation(annotation_id))
+            .flatten();
+        if let Some(next) = next {
+            self.select_annotation(Some(next), cx);
+        }
+        self.status_message = Some(match (review_state, next) {
+            (ReviewState::Draft, _) | (_, Some(_)) => done.to_string(),
+            (_, None) => match self.state.review_queue_len() {
+                0 => format!("{done}. {}", self.review_queue_summary()),
+                left => format!(
+                    "{done}. No drafts left on this media; press N for the next one ({left} left)"
+                ),
+            },
+        });
+        cx.notify();
     }
 }
 

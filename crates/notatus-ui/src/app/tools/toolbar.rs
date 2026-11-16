@@ -2,6 +2,7 @@
 //! options, the model, and fitting the image.
 
 use super::{CanvasToolDefinition, canvas_tool_definitions};
+use crate::AnnotationTool;
 use crate::app::actions::{self, FitCanvas, RunModel};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
@@ -78,5 +79,13 @@ impl NotatusWindow {
                     notatus.set_canvas_tool(tool, cx);
                 });
             })
+    }
+
+    pub(in crate::app) fn set_canvas_tool(&mut self, tool: AnnotationTool, cx: &mut Context<Self>) {
+        self.tools.clear_for_tool(tool);
+        self.canvas_cursor = None;
+        self.state.set_tool(tool);
+        self.status_message = None;
+        cx.notify();
     }
 }

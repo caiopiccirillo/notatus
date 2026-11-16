@@ -261,6 +261,35 @@ impl NotatusWindow {
             )
             .child(self.status_bar(cx))
     }
+
+    /// Keeps the project and label name fields showing the names they edit,
+    /// after undo, opening a project, or choosing another label. Runs when
+    /// the dataset or the active label changed, and rewrites a field only when
+    /// it shows something else, so typing is never interrupted and a name
+    /// rejected mid-edit (an empty one) stays in the field.
+    pub(super) fn sync_name_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let key = (self.state.revision(), self.state.selected_label());
+        if self.name_inputs_synced == Some(key) {
+            return;
+        }
+        self.name_inputs_synced = Some(key);
+        let project = self.state.dataset().manifest.project.name.clone();
+        let label = self
+            .selected_label()
+            .map(|label| label.name.clone())
+            .unwrap_or_default();
+        for (input, name) in [
+            (self.project_name_input.clone(), project),
+            (self.label_name_input.clone(), label),
+        ] {
+            input.update(cx, |input, cx| {
+                // set_value emits no change event, so this edits nothing.
+                if input.value() != name.as_str() {
+                    input.set_value(name, window, cx);
+                }
+            });
+        }
+    }
 }
 
 impl Render for NotatusWindow {

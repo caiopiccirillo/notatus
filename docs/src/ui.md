@@ -53,22 +53,26 @@ name, with sibling modules spelled `crate::app::…`, so its dependencies show a
 the top of the file:
 
 - `catalog.rs`: every command's name, icon, and group
-- `actions.rs`: actions, key bindings, and their handlers
-- `commands.rs`, `palette.rs`, `shortcuts.rs`: shared commands, the command
-  palette, and the shortcut sheet
+- `actions.rs`: actions, key bindings, and which method each action runs
+- `edit_commands.rs`: undo, selection, relabeling, and deleting annotations
+- `label_commands.rs`: creating, choosing, and removing labels
+- `media_navigation.rs`: moving between media and marking them done
+- `palette.rs`, `shortcuts.rs`: the command palette and the shortcut sheet
 - `failures.rs`: failures shown as notifications that stay until dismissed
 - `autosave.rs`, `project_commands.rs`, `project_session.rs`: saving, opening,
   and closing projects
 - `media_import.rs`: importing files and folders
 - `model_run.rs`, `runner_settings.rs`: running models and remembering each
   project's runner
-- `review_queue.rs`: stepping through drafts across media, and its filter
+- `review_queue.rs`: accepting and rejecting, stepping through drafts across
+  media, and the queue's filter
 - `export_commands/`: the export dialog and writing exports
 - `canvas/`: drawing the image and overlays, hit testing, and mouse gestures
 - `tools/`: tool definitions, in-progress drawing state, and the toolbar
 - `menus.rs`: the application menus
 - `dock.rs`, `left_dock/`, `right_dock/`, `status_bar.rs`, `titlebar.rs`,
-  `label_picker.rs`, `view_options.rs`: the panels around the canvas
+  `label_picker.rs`: the panels around the canvas
+- `view_options.rs`: zoom, fit, theme, and what the canvas shows
 - `assets.rs`: icons beyond the default set
 - `tests/`: tests that open the real window in GPUI's test platform
 

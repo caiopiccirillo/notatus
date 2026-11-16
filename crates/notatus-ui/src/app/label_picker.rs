@@ -2,7 +2,7 @@
 
 use crate::app::helpers::label_swatch;
 use crate::app::window::NotatusWindow;
-use crate::app::{DEFAULT_LABEL_COLOR, commands};
+use crate::app::{DEFAULT_LABEL_COLOR, label_commands};
 use gpui::prelude::*;
 use gpui::{App, Context, IntoElement, SharedString, Subscription, Task, Window, div, px};
 use gpui_component::combobox::{Caret, Combobox, ComboboxEvent, ComboboxState};
@@ -171,7 +171,7 @@ impl NotatusWindow {
     /// Creates a label from a typed name and makes it active, relabeling the
     /// selected annotation like choosing an existing label does.
     fn create_label_named(&mut self, name: String, cx: &mut Context<Self>) {
-        let label_id = commands::add_colored_label(&mut self.state, Some(name));
+        let label_id = label_commands::add_colored_label(&mut self.state, Some(name));
         self.status_message = Some("Created label".to_string());
         self.choose_label(label_id, cx);
     }

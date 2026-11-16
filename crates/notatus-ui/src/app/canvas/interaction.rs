@@ -3,7 +3,7 @@ use super::layout::screen_to_image;
 use super::overlay::AnnotationOverlay;
 use crate::AnnotationTool;
 use crate::app::SharedImageLayout;
-use crate::app::commands::{FALLBACK_LABEL_NAME, drawing_label};
+use crate::app::label_commands::{FALLBACK_LABEL_NAME, drawing_label};
 use crate::app::tools::{BboxEditMode, cursor_for_edit_mode, cursor_for_resize_handle};
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
@@ -616,4 +616,17 @@ fn apply_canvas_zoom(
         }
         cx.notify();
     });
+}
+
+impl NotatusWindow {
+    pub(in crate::app) fn set_canvas_cursor(
+        &mut self,
+        cursor: Option<gpui::CursorStyle>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.canvas_cursor != cursor {
+            self.canvas_cursor = cursor;
+            cx.notify();
+        }
+    }
 }

@@ -2,12 +2,12 @@
 
 use crate::app::window::NotatusWindow;
 use gpui::prelude::*;
-use gpui::{Context, IntoElement, SharedString, Subscription, Window, div, px};
+use gpui::{App, Context, IntoElement, SharedString, Subscription, Window, div, px};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::popover::Popover;
 use gpui_component::slider::{Slider, SliderEvent, SliderState};
 use gpui_component::switch::Switch;
-use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _, v_flex};
+use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _, Theme, ThemeMode, v_flex};
 
 /// How annotations are drawn over the image. Display only, never saved.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,6 +79,17 @@ impl ViewToggle {
     pub(super) fn set(self, options: &mut CanvasViewOptions, value: bool) {
         *self.slot(options) = value;
     }
+}
+
+/// Switches between the light and dark theme.
+pub(super) fn toggle_theme(window: &mut Window, cx: &mut App) {
+    let mode = if cx.theme().is_dark() {
+        ThemeMode::Light
+    } else {
+        ThemeMode::Dark
+    };
+    Theme::change(mode, Some(window), cx);
+    window.refresh();
 }
 
 impl NotatusWindow {
@@ -173,6 +184,27 @@ impl NotatusWindow {
                 }
                 panel
             })
+    }
+
+    pub(super) fn fit_canvas_to_view(&mut self, cx: &mut Context<Self>) {
+        self.tools.fit_canvas_to_view();
+        self.canvas_cursor = None;
+        self.status_message = Some("Fit image to canvas".to_string());
+        cx.notify();
+    }
+
+    pub(super) fn zoom_canvas(&mut self, factor: f32, cx: &mut Context<Self>) {
+        let layout = *self.canvas_image_layout.borrow();
+        match layout {
+            Some(layout) => {
+                let center = layout.fit_bounds.center();
+                self.tools
+                    .viewport
+                    .zoom_at(center, layout.fit_bounds, factor);
+            }
+            None => self.tools.viewport.zoom_by(factor),
+        }
+        cx.notify();
     }
 }
 

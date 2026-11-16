@@ -10,6 +10,7 @@ use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::progress::Progress;
 use gpui_component::status_bar::StatusBar;
 use gpui_component::{Icon, IconName, Selectable as _, Sizable as _};
+use notatus_core::AssetStatus;
 
 impl NotatusWindow {
     /// Feedback on the left, media navigation in the middle, and the model
@@ -123,6 +124,36 @@ impl NotatusWindow {
                 )
             })
             .into_any_element()
+    }
+
+    /// One-line summary of review progress for the status bar.
+    pub(super) fn progress_summary(&self) -> Option<String> {
+        let assets = &self.state.dataset().assets;
+        if assets.is_empty() {
+            return None;
+        }
+        let done = assets
+            .iter()
+            .filter(|asset| asset.status == AssetStatus::Done)
+            .count();
+        let position = self
+            .state
+            .selected_asset()
+            .and_then(|id| assets.iter().position(|asset| asset.id == id))
+            .map(|index| format!("{} of {}", index + 1, assets.len()))
+            .unwrap_or_else(|| format!("{} media", assets.len()));
+        let to_review = self.state.review_queue_len();
+        Some(if to_review == 0 {
+            format!("{position} · {done} done")
+        } else {
+            format!("{position} · {done} done · {to_review} to review")
+        })
+    }
+
+    pub(super) fn current_annotation_summary(&self) -> Option<String> {
+        let asset = self.selected_asset()?;
+        let count = self.annotations_for_asset(asset).len();
+        Some(format!("{count} annotation{}", plural(count)))
     }
 }
 
